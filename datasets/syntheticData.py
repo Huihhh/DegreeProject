@@ -29,7 +29,7 @@ class Dataset(object):
             X.append(np.concatenate([x, y], 0))
             labels.append(l)
 
-        return [np.concatenate(X, 1).transpose(1, 0), np.concatenate(labels)]
+        self.data = [np.concatenate(X, 1).transpose(1, 0), np.concatenate(labels)]
 
     def plot(self):
         r1 = 0.75
@@ -50,7 +50,8 @@ class Dataset(object):
         plt.show()
 
     def get_dataloader(self, n_train, n_val, n_test):
-        X, Y = self.gen_circle_data()
+        self.gen_circle_data()
+        X, Y = self.data
         X = torch.from_numpy(X).float()
         Y = torch.from_numpy(Y).long()
         dataset = Data.TensorDataset(X, Y)

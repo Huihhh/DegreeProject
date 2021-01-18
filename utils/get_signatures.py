@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 gpu = True
-device = torch.device('cuda' if gpu else 'cpu')
+device = torch.device('cuda' if gpu and torch.cuda.is_available() else 'cpu')
 
 
 ##
@@ -19,7 +19,7 @@ device = torch.device('cuda' if gpu else 'cpu')
 #  * sizes: all Qi with the preserved structure of the network
 ##
 def get_signatures(data, net):
-    if type(net) is nn.Sequential:
+    if type(net) is nn.Sequential or issubclass(type(net), nn.Sequential):
         # Sequential: go over each layer and record activation patterns
         signatures = []
         sizes = []

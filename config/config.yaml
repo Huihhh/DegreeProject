@@ -1,7 +1,21 @@
 EXPERIMENT:
+  name: 'ToyExperiment'
+  out_model: './checkpoints/'
+  log_path: './outputs/'
+  resume: false
+
   wdecay: 0.001
   optim_lr: 0.001
   optim_momentum: 0.9
   used_nesterov: False
-
   use_gpu: true
+
+  n_epoch: 100
+  save_every: 30
+  save_model: false
+
+  plot_every: 10
+
+hydra:
+  run:
+    dir: ./
