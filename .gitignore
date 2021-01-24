@@ -8,3 +8,5 @@ outputs/
 .hydra/
 checkpoints/
 *.log
+*.png
+test*
