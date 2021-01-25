@@ -125,22 +125,6 @@ class Experiment(object):
         for key in signatures_samples:
             pos_percent[key] = int(positive_sig[key] / signatures_samples[key] * 100)
 
-        # if self.map_color:
-        #     # removed regions
-        #     removedSignatures = set(self.map_color.keys()) - set(signatures)
-        #     for rs in removedSignatures:
-        #         self.map_color.pop(rs)
-
-        #     # new regions
-        #     maxIdx = max(self.map_color.values())
-        #     newSignatures = set(signatures) - set(self.map_color.keys())
-        #     for i, ns in enumerate(newSignatures):
-        #         self.map_color.update({ns: i + maxIdx + 1})
-        # else:
-        #     self.map_color = {c: 0 for c in signatures}
-        #     self.map_color = {c: i for i, c in enumerate(
-        #         sorted(list(set(signatures_samples))))}
-
         colors = np.array([signatures_c[c]
                            for c in signatures]).reshape(xx.shape)
         plt.imshow(colors, interpolation="nearest",
@@ -169,8 +153,8 @@ class Experiment(object):
         self.map_color = {}
         for epoch_idx in range(start_epoch, self.cfg.n_epoch):
             # get signatures
-            # if epoch_idx % self.cfg.plot_every == 0:
-            #     self.plot_signatures(epoch_idx)
+            if epoch_idx ==0 or (epoch_idx +1) % self.cfg.plot_every == 0:
+                self.plot_signatures(epoch_idx)
 
             # training
             start = time.time()

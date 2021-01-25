@@ -26,11 +26,11 @@ EXPERIMENT:
   used_nesterov: False
   use_gpu: true
 
-  n_epoch: 1000
-  save_every: 100
+  n_epoch: 100
+  save_every: 10
   save_model: false
 
-  plot_every: 100
+  plot_every: 10
 
 hydra:
   run:
