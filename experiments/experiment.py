@@ -63,9 +63,10 @@ class Experiment(object):
         for batch_idx, (batch_x, batch_y) in enumerate(self.dataset.train_loader):
             batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
             y_pred = self.model(batch_x)
-            print(batch_idx, y_pred)
+            # print(batch_idx, y_pred)
             loss = self.loss_func(y_pred, batch_y)
-            acc, = accuracy(y_pred, batch_y)
+            y_pred =torch.where(y_pred>0.5, 1, 0)
+            acc = accuracy(y_pred, batch_y)
 
             # compute gradient and backprop
             self.optimizer.zero_grad()
@@ -93,7 +94,7 @@ class Experiment(object):
                 # compute loss and accuracy
                 loss = self.loss_func(y_pred, batch_y)
                 y_pred =torch.where(y_pred>0.5, 1, 0)
-                acc, = accuracy(y_pred, batch_y)
+                acc = accuracy(y_pred, batch_y)
 
                 # update recording
                 val_losses_meter.update(loss.item(), batch_x.shape[0])
