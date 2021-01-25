@@ -28,7 +28,7 @@ def get_signatures(data, net):
             signatures.append(op_sig)
             sizes.append(sz)
         return data, torch.cat(signatures, dim=1), sizes
-    elif type(net) is nn.Linear:
+    elif (type(net) is nn.Linear) or (type(net) is nn.BatchNorm1d):
         # Linear: no non-linearities occur
         return net(data), torch.zeros(data.shape[0], 0, device=device, dtype=torch.int8), 0
     elif type(net) is nn.ReLU or type(net) is nn.LeakyReLU:

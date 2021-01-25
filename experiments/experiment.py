@@ -14,6 +14,8 @@ import os
 import sys
 
 from torch._C import device
+from torch.nn.modules.activation import ReLU, Sigmoid
+from torch.nn.modules.linear import Linear
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 from utils.utils import AverageMeter, accuracy, randomcolor
@@ -22,22 +24,31 @@ from utils.get_signatures import get_signatures
 
 logger = logging.getLogger(__name__)
 
+def cross_entropy(P, Y):
+    """Cross-Entropy loss function.
+    Y and P are lists of labels and estimations
+    returns the float corresponding to their cross-entropy.
+    """
+    Y = Y.float()
+    P = P.float()
+    return -torch.sum(Y * torch.log(P) + (1 - Y) * torch.log(1 - P)) / len(Y)
+
 
 class Experiment(object):
     def __init__(self, model, dataset, cfg) -> None:
         super().__init__()
-        self.model = model
         self.dataset = dataset
         self.cfg = cfg
         params = [{'params': model.parameters(), 'weigh_decay': self.cfg.wdecay}]
-        self.optimizer = optim.SGD(params, lr=self.cfg.optim_lr,
-                                   momentum=self.cfg.optim_momentum, nesterov=self.cfg.used_nesterov)
-        self.loss_func = nn.MSELoss()
+        self.optimizer = optim.Adam(params, lr=self.cfg.optim_lr,)
+                                #    momentum=self.cfg.optim_momentum, nesterov=self.cfg.used_nesterov)
+        self.loss_func = cross_entropy
 
         # used Gpu or not
         self.use_gpu = cfg.use_gpu
         self.device = torch.device(
             'cuda' if torch.cuda.is_available() and self.use_gpu else 'cpu')
+        self.model = model.to(self.device)
 
         # log path
         self.summary_logdir = os.path.join(self.cfg.log_path, 'summaries')
@@ -45,13 +56,16 @@ class Experiment(object):
     def train_step(self):
         logger.info("----- Running training -----")
         train_losses_meter = AverageMeter()
+        train_acc_meter = AverageMeter()
 
         # start traning
         self.model.train()
         for batch_idx, (batch_x, batch_y) in enumerate(self.dataset.train_loader):
-            batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device).float()
+            batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
             y_pred = self.model(batch_x)
-            loss = self.loss_func(y_pred.view(-1), batch_y)
+            print(batch_idx, y_pred)
+            loss = self.loss_func(y_pred, batch_y)
+            acc, = accuracy(y_pred, batch_y)
 
             # compute gradient and backprop
             self.optimizer.zero_grad()
@@ -60,7 +74,8 @@ class Experiment(object):
 
             # update recording
             train_losses_meter.update(loss.item())
-        return train_losses_meter.avg
+            train_acc_meter.update(acc.item())
+        return train_losses_meter.avg, train_acc_meter.avg
 
     def valation_step(self):
         logger.info("----- Running valation -----")
@@ -76,7 +91,8 @@ class Experiment(object):
                 y_pred = self.model(batch_x)
 
                 # compute loss and accuracy
-                loss = self.loss_func(y_pred.view(-1), batch_y)
+                loss = self.loss_func(y_pred, batch_y)
+                y_pred =torch.where(y_pred>0.5, 1, 0)
                 acc, = accuracy(y_pred, batch_y)
 
                 # update recording
@@ -90,7 +106,7 @@ class Experiment(object):
         xx, yy = np.meshgrid(np.arange(self.dataset.minX, self.dataset.maxX, h),
                              np.arange(self.dataset.minY, self.dataset.maxY, h))
         inputData = np.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], 1)
-        signatures = get_signatures(torch.tensor(inputData).float(), self.model)[1]
+        signatures = get_signatures(torch.tensor(inputData).float().to(self.device), self.model)[1]
         signatures = np.array([''.join(str(x) for x in s.tolist()) for s in signatures])
 
         # for calculating #negtive points/#positive points in each region
@@ -151,12 +167,12 @@ class Experiment(object):
         self.map_color = {}
         for epoch_idx in range(start_epoch, self.cfg.n_epoch):
             # get signatures
-            if epoch_idx % self.cfg.plot_every == 0:
-                self.plot_signatures(epoch_idx)
+            # if epoch_idx % self.cfg.plot_every == 0:
+            #     self.plot_signatures(epoch_idx)
 
             # training
             start = time.time()
-            train_loss = self.train_step()
+            train_loss, train_acc = self.train_step()
             end = time.time()
             print("epoch {}: use {} seconds".format(epoch_idx, end - start))
 
@@ -165,13 +181,13 @@ class Experiment(object):
 
             # saving data in tensorboard
             self.swriter.add_scalars(
-                'train/loss', {'train_loss': train_loss, 'val_loss': val_loss}, epoch_idx)
+                'loss', {'train_loss': train_loss, 'val_loss': val_loss}, epoch_idx)
             self.swriter.add_scalars(
-                'validation/', {'accuracy': val_acc}, epoch_idx)
+                'accuracy/', {'train': train_acc, 'val': val_acc}, epoch_idx)
             logger.info('Epoch {}. [Train] time:{} seconds, '
                         'train_loss: {:.4f}, val_loss: {:.4f}, '
-                        'val acc: {}'.format(
-                            epoch_idx, end-start, train_loss, val_loss, val_acc)
+                        'train acc: {}, val acc: {}'.format(
+                            epoch_idx, end-start, train_loss, val_loss, train_acc, val_acc)
                         )
 
             # saving model
@@ -217,6 +233,14 @@ if __name__ == "__main__":
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG), '\n')
+        # model = nn.Sequential(
+        #     nn.Linear(2, 16),
+        #     nn.ReLU(),
+        #     nn.Linear(16, 10),
+        #     nn.ReLU(),
+        #     nn.Linear(10, 1),
+        #     nn.Sigmoid()
+        # )
         model = SimpleNet()
         dataset = Dataset(CFG.DATASET)
         experiment = Experiment(model, dataset, CFG.EXPERIMENT)
