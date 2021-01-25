@@ -30,8 +30,8 @@ def cross_entropy(P, Y):
     returns the float corresponding to their cross-entropy.
     """
     Y = Y.float()
-    P = P.float()
-    return -torch.sum(torch.log(Y @ P[None, :]).diagonal()) / len(Y)
+    P = P.float().view(-1)
+    return -torch.sum(Y * torch.log(P) + (1 - Y) * torch.log(1 - P)) / len(Y)
 
 
 class Experiment(object):
@@ -66,6 +66,7 @@ class Experiment(object):
             # print(batch_idx, y_pred)
             loss = self.loss_func(y_pred, batch_y)
             y_pred =torch.where(y_pred>0.5, 1, 0)
+            # print('#positive points:', y_pred.sum())
             acc = accuracy(y_pred, batch_y)
 
             # compute gradient and backprop

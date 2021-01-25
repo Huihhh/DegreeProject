@@ -14,9 +14,9 @@ class SimpleNet(nn.Sequential):
             nn.init.constant_(fc.bias, 0)
             # setattr(self, 'fc%i'%i, fc)
             ac = nn.ReLU()
-            bn = nn.BatchNorm1d(h_nodes[i+1])
+            # bn = nn.BatchNorm1d(h_nodes[i+1])
             # setattr(self, 'ac%i'%i, ac)
-            self.layers.append(nn.Sequential(fc, ac, bn))
+            self.layers.append(nn.Sequential(fc, ac))
 
         predict = nn.Linear(h_nodes[-1], out_dim)
         nn.init.xavier_normal_(predict.weight)

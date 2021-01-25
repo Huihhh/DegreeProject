@@ -3,8 +3,8 @@ DATASET:
   n_train: 1400
   n_val: 400
   n_test: 200
-  noise: 0.2
-  equal_density: true
+  noise: 0
+  equal_density: false
 
   batch_size: 32
   num_workers: 4
@@ -20,7 +20,7 @@ EXPERIMENT:
   log_path: './outputs/'
   resume: false
 
-  wdecay: 0.001
+  wdecay: 0
   optim_lr: 0.0001
   optim_momentum: 0.9
   used_nesterov: False
