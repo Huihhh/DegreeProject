@@ -31,7 +31,7 @@ def cross_entropy(P, Y):
     """
     Y = Y.float()
     P = P.float()
-    return -torch.sum(Y * torch.log(P) + (1 - Y) * torch.log(1 - P)) / len(Y)
+    return -torch.sum(torch.log(Y @ P[None, :]).diagonal()) / len(Y)
 
 
 class Experiment(object):
