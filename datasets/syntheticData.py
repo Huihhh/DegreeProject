@@ -5,7 +5,7 @@ import torch.utils.data as Data
 
 
 class Dataset(object):
-    def __init__(self, cfg, r1=0.75, r2=1.25) -> None:
+    def __init__(self, cfg, r1=(0, 0.75), r2=(1.25, 3)) -> None:
         super().__init__()
         self.cfg = cfg
         self.num_samples = cfg.num_samples
@@ -14,31 +14,42 @@ class Dataset(object):
         self.seed = cfg.seed
         self.noise = cfg.noise
         self.r1, self.r2 = r1, r2
-        self.get_dataloader()
+        self.xrange = [-2, 2]
+        self.yrange = [-2, 2]
+        self.gen_circle_data()
 
 
     def gen_circle_data(self):
         np.random.seed(self.seed)
+
+        # h = 0.01
+        # x = np.arange(*self.xrange, h)
+        # y = np.arange(*self.yrange, h)
+        # assert x.size * y.size > self.num_samples, f'cannot generate {self.num_samples} points in grid with size {x.size} * {y.size}'
+        # xx, yy = np.meshgrid(x, y)
+        # color_labels = 
+        # plt.imshow(color_labels, interpolation="nearest",
+        #     extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+        #     cmap=plt.get_cmap('Greens'), aspect="auto", origin="lower")
+
+
         # each class has the same density 
         if self.cfg.equal_density:
-            ratio = (self.r2**2 - self.r1**2) / self.r1**2
+            ratio = (self.r2[0]**2 - self.r1[1]**2) / self.r1[1]**2
             num_class1 = int(1 / (1+ratio) * self.num_samples)
         else: # even the number of samples per class
             num_class1 = self.num_samples // 2
 
         num_class2 = self.num_samples - num_class1
         X, labels = [], []
-        for i, n in enumerate([num_class1, num_class2]):
-            t1 = np.random.random(n) # random numbers between [0, 1] that control the phase
-            t2 = np.random.random(n) # random numbers between [0, 1] that control the amplitude
-            if i == 0:
-                r = self.r1 * t2
-                label = np.ones(num_class1)
-            else: 
-                r = self.r2 + t2
-                label = np.zeros(num_class2)
-            x = [r * np.cos(2 * np.pi * t1) + self.noise * ( -self.r1 + 2*self.r1 * np.random.random(n))]
-            y = [r * np.sin(2 * np.pi * t1) + self.noise * ( -self.r1 + 2*self.r1 * np.random.random(n))]
+        for i, (n, rang) in enumerate(zip([num_class1, num_class2], [self.r1, self.r2])):
+            theta = np.random.uniform(0, 2*np.pi, n)
+            r = np.random.uniform(*rang, n) ** 0.5
+            
+            x = [r * np.cos(theta)]
+            y = [r * np.sin(theta)]
+            label = i * np.ones(n)
+
             X.append(np.concatenate([x, y], 0))
             labels.append(label)
 
@@ -54,7 +65,7 @@ class Dataset(object):
         plt.plot(x[:, 0], x[:, 1], 'bo', markersize=1)
         plt.plot(x[idxs, 0], x[idxs, 1], 'ro', markersize=1)
         _t = np.arange(0, 7, 0.1)
-        for r in [self.r1, self.r2]:
+        for r in [self.r1[1], self.r2[0]]:
             _x = r * np.cos(_t)
             _y = r * np.sin(_t)
             plt.plot(_x, _y, 'g-')
@@ -88,7 +99,7 @@ if __name__ == '__main__':
 
         dataset = Dataset(CFG.DATASET)
         dataset.plot()
-        x, y = next(iter(dataset.train_loader))
-        print(x)
-        print(y)
+        # x, y = next(iter(dataset.train_loader))
+        # print(x)
+        # print(y)
     main()

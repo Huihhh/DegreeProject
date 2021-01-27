@@ -138,7 +138,7 @@ class Experiment(object):
         sigs_data_positive = Counter(sigs_data_positive)   
         pos_ratio = Counter()
         for key in sigs_data:
-            pos_ratio[key] = int(sigs_data_positive[key] / sigs_data[key] * 100)
+            pos_ratio[key] = sigs_data_positive[key] / sigs_data[key] * 100
 
         color_labels = np.array([pos_ratio[c]
                            for c in sigs_grid]).reshape(xx.shape)
