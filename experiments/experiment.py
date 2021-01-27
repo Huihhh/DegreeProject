@@ -112,13 +112,21 @@ class Experiment(object):
         plt.imshow(color_labels, interpolation="nearest",
                    extent=(xx.min(), xx.max(), yy.min(), yy.max()),
                    cmap=plt.get_cmap('Greens'), aspect="auto", origin="lower")
+        # save plot
+        if not exists(self.cfg.log_path):
+            mkdir(self.cfg.log_path)
+        save_folder = os.path.join(self.cfg.log_path, 'scatter_plots_random/')
+        if not exists(save_folder):
+            mkdir(save_folder)
+        plt.savefig(f'{save_folder}epoch{epoch_idx}.png')
+        
 
         # plot linear regions with blue-red colors sorted by the proportion of red points
         # input_x = torch.tensor(self.dataset.data[0]).to(self.device).float() ## all data
         # y = self.dataset.data[1]
         sigs_data, labels = [], []
         for x, y in self.dataset.train_loader:
-            sig_batch = get_signatures(x, self.model)[1]
+            sig_batch = get_signatures(x.to(self.device), self.model)[1]
             sigs_data += [''.join(str(x) for x in s.tolist()) for s in sig_batch]
             labels += list(y.numpy())
         labels = np.array(labels)
@@ -136,7 +144,7 @@ class Experiment(object):
                            for c in sigs_grid]).reshape(xx.shape)
         plt.imshow(color_labels, interpolation="nearest",
                    extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=0.6)
+                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
 
         # save plot
         if not exists(self.cfg.log_path):
