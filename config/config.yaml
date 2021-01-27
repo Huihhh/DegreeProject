@@ -3,8 +3,8 @@ DATASET:
   n_train: 1400
   n_val: 400
   n_test: 200
-  noise: 0
-  equal_density: false
+  noise: 0.3
+  equal_density: True
 
   batch_size: 32
   num_workers: 4
@@ -13,6 +13,12 @@ DATASET:
 MODEL:
   h_nodes: [2, 32, 32]
   out_dim: 1
+  activation: 'relu' # or leakyRelU
+  use_bn: False
+  fc_winit: 'normal'
+  fc_binit: 'zeros'
+  bn_winit: 'ones'
+  bn_binit: 'zeros'
 
 EXPERIMENT:
   name: 'ToyExperiment'
@@ -20,17 +26,19 @@ EXPERIMENT:
   log_path: './outputs/'
   resume: false
 
-  wdecay: 0
+  TH: 0.5
+
+  wdecay: 0.0001
   optim_lr: 0.0001
   optim_momentum: 0.9
   used_nesterov: False
-  use_gpu: true
+  use_gpu: True
 
-  n_epoch: 100
+  n_epoch: 10
   save_every: 10
-  save_model: false
-
+  save_model: False
   plot_every: 10
+
 
 hydra:
   run:

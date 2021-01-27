@@ -2,23 +2,18 @@ import torch
 import time
 from os.path import exists
 from os import mkdir
-from torch import optim, nn
+from torch import optim
 import logging
 from tensorboardX import SummaryWriter
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import Counter
 
 import os
 import sys
-
-from torch._C import device
-from torch.nn.modules.activation import ReLU, Sigmoid
-from torch.nn.modules.linear import Linear
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import AverageMeter, accuracy, randomcolor
+from utils.utils import AverageMeter, accuracy
 from utils.get_signatures import get_signatures
 
 
@@ -65,7 +60,7 @@ class Experiment(object):
             y_pred = self.model(batch_x)
             # print(batch_idx, y_pred)
             loss = self.loss_func(y_pred, batch_y)
-            y_pred =torch.where(y_pred>0.5, 1, 0)
+            y_pred =torch.where(y_pred>self.cfg.TH, 1, 0)
             # print('#positive points:', y_pred.sum())
             acc = accuracy(y_pred, batch_y)
 
@@ -94,7 +89,7 @@ class Experiment(object):
 
                 # compute loss and accuracy
                 loss = self.loss_func(y_pred, batch_y)
-                y_pred =torch.where(y_pred>0.5, 1, 0)
+                y_pred =torch.where(y_pred>self.cfg.TH, 1, 0)
                 acc = accuracy(y_pred, batch_y)
 
                 # update recording
@@ -103,41 +98,53 @@ class Experiment(object):
             return val_losses_meter.avg, val_acc_meter.avg
 
     def plot_signatures(self, epoch_idx):
-        # For ploting linear regions
+        # plot linear regions with random green colors
         h = 0.01
         xx, yy = np.meshgrid(np.arange(self.dataset.minX, self.dataset.maxX, h),
                              np.arange(self.dataset.minY, self.dataset.maxY, h))
-        inputData = np.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], 1)
-        signatures = get_signatures(torch.tensor(inputData).float().to(self.device), self.model)[1]
-        signatures = np.array([''.join(str(x) for x in s.tolist()) for s in signatures])
+        input_grid = np.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], 1)
+        sigs_grid = get_signatures(torch.tensor(input_grid).float().to(self.device), self.model)[1]
+        sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
+        sigs_grid_counter = Counter(sigs_grid)
 
-        # for calculating #negtive points/#positive points in each region
-        input_x = torch.tensor(self.dataset.data[0]).to(self.device).float()
-        y = self.dataset.data[1]
-        signatures_samples = get_signatures(input_x, self.model)[1]
-        signatures_samples = np.array([''.join(str(x) for x in s.tolist()) for s in signatures_samples])
-        positive_sig = signatures_samples[np.where(y==1)]
-
-        signatures_samples = Counter(signatures_samples)
-        signatures_c = Counter(signatures)
-        positive_sig = Counter(positive_sig)   
-        pos_percent = Counter()
-        for key in signatures_samples:
-            pos_percent[key] = int(positive_sig[key] / signatures_samples[key] * 100)
-
-        colors = np.array([signatures_c[c]
-                           for c in signatures]).reshape(xx.shape)
-        plt.imshow(colors, interpolation="nearest",
+        color_labels = np.array([sigs_grid_counter[c]
+                           for c in sigs_grid]).reshape(xx.shape)
+        plt.imshow(color_labels, interpolation="nearest",
                    extent=(xx.min(), xx.max(), yy.min(), yy.max()),
                    cmap=plt.get_cmap('Greens'), aspect="auto", origin="lower")
-        colors_samples = np.array([pos_percent[c]
-                           for c in signatures]).reshape(xx.shape)
-        plt.imshow(colors_samples, interpolation="nearest",
+
+        # plot linear regions with blue-red colors sorted by the proportion of red points
+        # input_x = torch.tensor(self.dataset.data[0]).to(self.device).float() ## all data
+        # y = self.dataset.data[1]
+        sigs_data, labels = [], []
+        for x, y in self.dataset.train_loader:
+            sig_batch = get_signatures(x, self.model)[1]
+            sigs_data += [''.join(str(x) for x in s.tolist()) for s in sig_batch]
+            labels += list(y.numpy())
+        labels = np.array(labels)
+        sigs_data = np.array(sigs_data)
+        sigs_data_positive = sigs_data[np.where(labels==1)]
+
+        sigs_data = Counter(sigs_data)
+        
+        sigs_data_positive = Counter(sigs_data_positive)   
+        pos_ratio = Counter()
+        for key in sigs_data:
+            pos_ratio[key] = int(sigs_data_positive[key] / sigs_data[key] * 100)
+
+        color_labels = np.array([pos_ratio[c]
+                           for c in sigs_grid]).reshape(xx.shape)
+        plt.imshow(color_labels, interpolation="nearest",
                    extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=0.4)
-        # plt.scatter(xx, yy, c=colors, s=1)
-        # plt.title(f'Epoch{epoch_idx}')
-        plt.savefig(f'./outputs/scatter_plots/epoch{epoch_idx}.png')
+                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=0.6)
+
+        # save plot
+        if not exists(self.cfg.log_path):
+            mkdir(self.cfg.log_path)
+        save_folder = os.path.join(self.cfg.log_path, 'scatter_plots/')
+        if not exists(save_folder):
+            mkdir(save_folder)
+        plt.savefig(f'{save_folder}epoch{epoch_idx}.png')
 
 
     def fitting(self):
@@ -227,7 +234,7 @@ if __name__ == "__main__":
         #     nn.Linear(10, 1),
         #     nn.Sigmoid()
         # )
-        model = SimpleNet()
+        model = SimpleNet(CFG.MODEL)
         dataset = Dataset(CFG.DATASET)
         experiment = Experiment(model, dataset, CFG.EXPERIMENT)
         experiment.run()
