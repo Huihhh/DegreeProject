@@ -6,6 +6,7 @@ from torch import optim
 import logging
 from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
+from matplotlib.path import Path
 import numpy as np
 from collections import Counter
 
@@ -13,7 +14,7 @@ import os
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import AverageMeter, accuracy
+from utils.utils import AverageMeter, accuracy, is_in_poly
 from utils.get_signatures import get_signatures
 
 
@@ -98,6 +99,11 @@ class Experiment(object):
             return val_losses_meter.avg, val_acc_meter.avg
 
     def plot_signatures(self, epoch_idx):
+        input_data = torch.tensor(self.dataset.data[0]).to(self.device).float() ## all data
+        y = self.dataset.data[1]
+        pos_data = input_data[np.where(y == 1)]
+        neg_data = input_data[np.where(y == 0)]
+
         # plot linear regions with random green colors
         h = 0.01
         xx, yy = np.meshgrid(np.arange(self.dataset.minX, self.dataset.maxX, h),
@@ -106,45 +112,27 @@ class Experiment(object):
         sigs_grid = get_signatures(torch.tensor(input_grid).float().to(self.device), self.model)[1]
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_counter = Counter(sigs_grid)
+        sorted_regions = {}
+        for key in sigs_grid_counter:
+            idx = np.where(sigs_grid == key)
+            path = Path(input_grid[idx])
+            pos_points_in_region = sum(path.contains_points(pos_data))
+            neg_points_in_region = sum(path.contains_points(neg_data))
+            sorted_regions[key] = pos_points_in_region / (pos_points_in_region + neg_points_in_region)
+        
+
 
         color_labels = np.array([sigs_grid_counter[c]
                            for c in sigs_grid]).reshape(xx.shape)
         plt.imshow(color_labels, interpolation="nearest",
                    extent=(xx.min(), xx.max(), yy.min(), yy.max()),
                    cmap=plt.get_cmap('Greens'), aspect="auto", origin="lower")
-        # save plot
-        if not exists(self.cfg.log_path):
-            mkdir(self.cfg.log_path)
-        save_folder = os.path.join(self.cfg.log_path, 'scatter_plots_random/')
-        if not exists(save_folder):
-            mkdir(save_folder)
-        plt.savefig(f'{save_folder}epoch{epoch_idx}.png')
-        
 
-        # plot linear regions with blue-red colors sorted by the proportion of red points
-        # input_x = torch.tensor(self.dataset.data[0]).to(self.device).float() ## all data
-        # y = self.dataset.data[1]
-        sigs_data, labels = [], []
-        for x, y in self.dataset.train_loader:
-            sig_batch = get_signatures(x.to(self.device), self.model)[1]
-            sigs_data += [''.join(str(x) for x in s.tolist()) for s in sig_batch]
-            labels += list(y.numpy())
-        labels = np.array(labels)
-        sigs_data = np.array(sigs_data)
-        sigs_data_positive = sigs_data[np.where(labels==1)]
-
-        sigs_data = Counter(sigs_data)
-        
-        sigs_data_positive = Counter(sigs_data_positive)   
-        pos_ratio = Counter()
-        for key in sigs_data:
-            pos_ratio[key] = sigs_data_positive[key] / sigs_data[key] * 100
-
-        color_labels = np.array([pos_ratio[c]
+        color_labels = np.array([sorted_regions[c]
                            for c in sigs_grid]).reshape(xx.shape)
         plt.imshow(color_labels, interpolation="nearest",
                    extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
+                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=0.5)
 
         # save plot
         if not exists(self.cfg.log_path):
@@ -168,7 +156,7 @@ class Experiment(object):
         self.map_color = {}
         for epoch_idx in range(start_epoch, self.cfg.n_epoch):
             # get signatures
-            if epoch_idx ==0 or (epoch_idx +1) % self.cfg.plot_every == 0:
+            if epoch_idx ==0:
                 self.plot_signatures(epoch_idx)
 
             # training
@@ -177,6 +165,9 @@ class Experiment(object):
             end = time.time()
             print("epoch {}: use {} seconds".format(epoch_idx, end - start))
 
+            # plot linear regions
+            if (epoch_idx +1) % self.cfg.plot_every == 0:
+                self.plot_signatures(epoch_idx)
             # valating
             val_loss, val_acc = self.valation_step()
 
