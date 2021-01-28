@@ -1,14 +1,14 @@
 DATASET:
-  num_samples: 2000
-  n_train: 1400
-  n_val: 400
-  n_test: 200
+  num_samples: 200
+  n_train: 140
+  n_val: 40
+  n_test: 20
   noise: 0.3
-  equal_density: True
+  equal_density: False
 
   batch_size: 32
   num_workers: 4
-  seed: 0
+  seed: 1265
 
 MODEL:
   h_nodes: [2, 32, 32]
