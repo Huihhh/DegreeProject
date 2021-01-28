@@ -4,9 +4,7 @@ import os
 from datetime import datetime
 import sys
 import random
-import numpy as np
-import matplotlib.patches as patches
-import matplotlib.path as mpath
+
 
 def accuracy(output, target):
     correct_n = (output.view(-1) == target).sum()
@@ -93,46 +91,33 @@ def randomcolor(seed=0):
         color += colorArr[random.randint(0,14)]
     return "#"+color
 
+import functools
 
 
-def get_path(region):
-    # region: np.array (N, 2) coordinates of points in region
-    if (len(region[:, 0]) - len(set(region[:, 0]))) <=1 and (len(region[:, 1]) - len(set(region[:, 1]))) <= 1:
-      return patches.Polygon(region)
-    f_path, b_path = [], []
-    if len(set(region[:, 0])) < len(set(region[:, 1])):
-      idx = 0
-      uniqueIdx = set(region[:, 0])
-    else: 
-      idx = 1 
-      uniqueIdx = set(region[:, 1])
-    
+def convex_hull_graham(points):
+    '''
+    https://gist.github.com/arthur-e/5cf52962341310f438e96c1f3c3398b8
+    Returns points on convex hull in CCW order according to Graham's scan algorithm. 
+    By Tom Switzer <thomas.switzer@gmail.com>.
+    '''
+    TURN_LEFT, TURN_RIGHT, TURN_NONE = (1, -1, 0)
 
-    for i, v in enumerate(uniqueIdx):
-        h_line = [p for p in region if p[idx] == v]
-        if i==0 and len(h_line) > 1:
-            f_path.append(h_line[0][None, :])
-            f_path.append(h_line[-1][None, :])
-        elif i == 0 and len(h_line) == 1:
-            f_path.append(h_line[0][None, :])
-        elif i > 0 and len(h_line) > 1:
-            f_path.append(h_line[-1][None, :])
-            b_path.append(h_line[0][None, :])
-        elif i > 0 and len(h_line) == 1:
-            f_path.append(h_line[0][None, :])
+    def cmp(a, b):
+        return (a > b) - (a < b)
 
-    
-    doReverse =  idx == 0 
-    f_path.sort(key=lambda x: x[0][idx], reverse = doReverse)
-    b_path.sort(key=lambda x: x[0][idx], reverse = True)
+    def turn(p, q, r):
+        return cmp((q[0] - p[0])*(r[1] - p[1]) - (r[0] - p[0])*(q[1] - p[1]), 0)
 
-    if len(b_path) == 0:
-        # print(region)
-        # print(f_path)
-        f_path = np.concatenate(f_path, 0)
-        return mpath.Path(f_path)
+    def _keep_left(hull, r):
+        while len(hull) > 1 and turn(hull[-2], hull[-1], r) != TURN_LEFT:
+            hull.pop()
+        if not len(hull) or hull[-1] != r:
+            hull.append(r)
+        return hull
 
-    f_path = np.concatenate(f_path, 0)
-    b_path = np.concatenate(b_path, 0)
-    path = np.concatenate([f_path, b_path[::-1, :]], 0)
-    return patches.Polygon(path)
+    points = sorted(points)
+    l = functools.reduce(_keep_left, points, [])
+    u = functools.reduce(_keep_left, reversed(points), [])
+    return l.extend(u[i] for i in range(1, len(u) - 1)) or l
+
+

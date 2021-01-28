@@ -6,7 +6,7 @@ from torch import optim
 import logging
 from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
-from matplotlib.path import Path
+
 import matplotlib.patches as patches
 import numpy as np
 from collections import Counter
@@ -15,7 +15,7 @@ import os
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import AverageMeter, accuracy, get_path
+from utils.utils import AverageMeter, accuracy, convex_hull_graham
 from utils.get_signatures import get_signatures
 
 
@@ -154,41 +154,42 @@ class Experiment(object):
         for i, key in enumerate(sigs_grid_counter):
             idx = np.where(sigs_grid == key)
             region_points = input_grid[idx]
-            plt.plot(region_points[:, 0], region_points[:, 1])
-            plt.savefig(f'{save_folder}region_points{i}.png')
-            with open(f'{save_folder}region_points{i}.txt', 'w') as f:
-                np.savetxt(f, region_points, delimiter=',')
-            poly = get_path(region_points)
-            fig,ax = plt.subplots()
-            ax.add_patch(poly)
-            plt.savefig(f'{save_folder}region_poly{i}.png')
-        #     ax.add_patch(poly)
-        #     pos_points_in_region = sum(poly.contains_points(pos_data.cpu()))
-        #     neg_points_in_region = sum(poly.contains_points(neg_data.cpu()))
-        #     # print(f'pos_points_in_region: {pos_points_in_region}, neg_points_in_region: {neg_points_in_region}')
-        #     sorted_regions[key] = neg_points_in_region / (pos_points_in_region + neg_points_in_region + 1e-6)
+            # plt.plot(region_points[:, 0], region_points[:, 1])
+            # plt.savefig(f'{save_folder}region_points{i}.png')
+            # with open(f'{save_folder}region_points{i}.txt', 'w') as f:
+            #     np.savetxt(f, region_points, delimiter=',')
+            poly = convex_hull_graham(region_points)
+            poly = patches.Polygon(poly)
+            # fig,ax = plt.subplots()
+            # ax.add_patch(poly)
+            # plt.savefig(f'{save_folder}region_poly{i}.png')
+
+            pos_points_in_region = sum(poly.contains_points(pos_data.cpu()))
+            neg_points_in_region = sum(poly.contains_points(neg_data.cpu()))
+            # print(f'pos_points_in_region: {pos_points_in_region}, neg_points_in_region: {neg_points_in_region}')
+            sorted_regions[key] = neg_points_in_region / (pos_points_in_region + neg_points_in_region + 1e-6)
         
 
 
-        # color_labels = np.array([sigs_grid_counter[c]
-        #                    for c in sigs_grid]).reshape(xx.shape)
-        # plt.imshow(color_labels, interpolation="nearest",
-        #            extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-        #            cmap=plt.get_cmap('Greens'), aspect="auto", origin="lower")
+        color_labels = np.array([sigs_grid_counter[c]
+                           for c in sigs_grid]).reshape(xx.shape)
+        plt.imshow(color_labels, interpolation="nearest",
+                   extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+                   cmap=plt.get_cmap('Greens'), aspect="auto", origin="lower")
 
-        # color_labels = np.array([sorted_regions[c]
-        #                    for c in sigs_grid]).reshape(xx.shape)
-        # plt.imshow(color_labels, interpolation="nearest",
-        #            extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-        #            cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=0.5)
+        color_labels = np.array([sorted_regions[c]
+                           for c in sigs_grid]).reshape(xx.shape)
+        plt.imshow(color_labels, interpolation="nearest",
+                   extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=0.5)
 
-        # # save plot
-        # if not exists(self.cfg.log_path):
-        #     mkdir(self.cfg.log_path)
-        # save_folder = os.path.join(self.cfg.log_path, 'scatter_plots/')
-        # if not exists(save_folder):
-        #     mkdir(save_folder)
-        # plt.savefig(f'{save_folder}epoch{epoch_idx}.png')
+        # save plot
+        if not exists(self.cfg.log_path):
+            mkdir(self.cfg.log_path)
+        save_folder = os.path.join(self.cfg.log_path, 'scatter_plots/')
+        if not exists(save_folder):
+            mkdir(save_folder)
+        plt.savefig(f'{save_folder}epoch{epoch_idx}.png')
 
 
     def fitting(self):
