@@ -26,6 +26,7 @@ class SimpleNet(nn.Sequential):
 
         for i in range(len(self.h_nodes) - 1):
             fc = nn.Linear(self.h_nodes[i], self.h_nodes[i+1])
+            torch.random.manual_seed(i)
             INIT_METHOD[self.cfg.fc_winit](fc.weight)
             INIT_METHOD[self.cfg.fc_binit](fc.bias)
             ac = ACT_METHOD[self.cfg.activation]

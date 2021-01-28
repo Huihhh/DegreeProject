@@ -4,6 +4,9 @@ import os
 from datetime import datetime
 import sys
 import random
+import numpy as np
+import matplotlib.patches as patches
+import matplotlib.path as mpath
 
 def accuracy(output, target):
     correct_n = (output.view(-1) == target).sum()
@@ -92,26 +95,44 @@ def randomcolor(seed=0):
 
 
 
-def is_in_poly(p, poly):
-    """
-    :param p: [x, y]
-    :param poly: [[], [], [], [], ...]
-    :return:
-    """
-    px, py = p
-    is_in = False
-    for i, corner in enumerate(poly):
-        next_i = i + 1 if i + 1 < len(poly) else 0
-        x1, y1 = corner
-        x2, y2 = poly[next_i]
-        if (x1 == px and y1 == py) or (x2 == px and y2 == py):  # if point is on vertex
-            is_in = True
-            break
-        if min(y1, y2) < py <= max(y1, y2):  # find horizontal edges of polygon
-            x = x1 + (py - y1) * (x2 - x1) / (y2 - y1)
-            if x == px:  # if point is on edge
-                is_in = True
-                break
-            elif x > px:  # if point is on left-side of line
-                is_in = not is_in
-    return is_in
+def get_path(region):
+    # region: np.array (N, 2) coordinates of points in region
+    if (len(region[:, 0]) - len(set(region[:, 0]))) <=1 and (len(region[:, 1]) - len(set(region[:, 1]))) <= 1:
+      return patches.Polygon(region)
+    f_path, b_path = [], []
+    if len(set(region[:, 0])) < len(set(region[:, 1])):
+      idx = 0
+      uniqueIdx = set(region[:, 0])
+    else: 
+      idx = 1 
+      uniqueIdx = set(region[:, 1])
+    
+
+    for i, v in enumerate(uniqueIdx):
+        h_line = [p for p in region if p[idx] == v]
+        if i==0 and len(h_line) > 1:
+            f_path.append(h_line[0][None, :])
+            f_path.append(h_line[-1][None, :])
+        elif i == 0 and len(h_line) == 1:
+            f_path.append(h_line[0][None, :])
+        elif i > 0 and len(h_line) > 1:
+            f_path.append(h_line[-1][None, :])
+            b_path.append(h_line[0][None, :])
+        elif i > 0 and len(h_line) == 1:
+            f_path.append(h_line[0][None, :])
+
+    
+    doReverse =  idx == 0 
+    f_path.sort(key=lambda x: x[0][idx], reverse = doReverse)
+    b_path.sort(key=lambda x: x[0][idx], reverse = True)
+
+    if len(b_path) == 0:
+        # print(region)
+        # print(f_path)
+        f_path = np.concatenate(f_path, 0)
+        return mpath.Path(f_path)
+
+    f_path = np.concatenate(f_path, 0)
+    b_path = np.concatenate(b_path, 0)
+    path = np.concatenate([f_path, b_path[::-1, :]], 0)
+    return patches.Polygon(path)

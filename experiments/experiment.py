@@ -7,6 +7,7 @@ import logging
 from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
+import matplotlib.patches as patches
 import numpy as np
 from collections import Counter
 
@@ -14,7 +15,7 @@ import os
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import AverageMeter, accuracy, is_in_poly
+from utils.utils import AverageMeter, accuracy, get_path
 from utils.get_signatures import get_signatures
 
 
@@ -113,12 +114,13 @@ class Experiment(object):
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_counter = Counter(sigs_grid)
         sorted_regions = {}
-        for key in sigs_grid_counter:
+        for i, key in enumerate(sigs_grid_counter):
             idx = np.where(sigs_grid == key)
-            path = Path(input_grid[idx])
-            pos_points_in_region = sum(path.contains_points(pos_data))
-            neg_points_in_region = sum(path.contains_points(neg_data))
-            sorted_regions[key] = pos_points_in_region / (pos_points_in_region + neg_points_in_region)
+            poly = get_path(input_grid[idx])
+            pos_points_in_region = sum(poly.contains_points(pos_data.cpu()))
+            neg_points_in_region = sum(poly.contains_points(neg_data.cpu()))
+            # print(f'pos_points_in_region: {pos_points_in_region}, neg_points_in_region: {neg_points_in_region}')
+            sorted_regions[key] = neg_points_in_region / (pos_points_in_region + neg_points_in_region + 1e-6)
         
 
 
