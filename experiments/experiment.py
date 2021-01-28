@@ -98,6 +98,36 @@ class Experiment(object):
                 val_losses_meter.update(loss.item(), batch_x.shape[0])
                 val_acc_meter.update(acc.item())
             return val_losses_meter.avg, val_acc_meter.avg
+    
+    
+    def testing(self):
+        logger.info("***** Running testing *****")
+        start = time.time()
+        batch_time_meter = AverageMeter()
+        test_losses_meter = AverageMeter()
+        top1_meter = AverageMeter()
+
+        with torch.no_grad():
+            for batch_idx, (inputs, targets) in enumerate(self.dataset.test_loader):
+                self.model.eval()
+                if self.use_gpu:
+                    inputs = inputs.to(device=self.device)
+                    targets = targets.to(device=self.device)
+                # forward
+                outputs = self.forward(inputs)
+                # compute loss and accuracy
+                loss = self.loss_func(outputs, targets)
+                outputs =torch.where(outputs>self.cfg.TH, 1, 0)
+                acc = accuracy(outputs, targets)
+                # update recording
+                test_losses_meter.update(loss.item(), inputs.shape[0])
+                top1_meter.update(acc.item(), inputs.shape[0])
+                batch_time_meter.update(time.time() - start)
+
+        test_loss, top1_acc = test_losses_meter.avg,top1_meter.avg
+        logger.info(
+            "[Testing] testing_loss: {:.4f}, test acc:{}".format(test_loss,top1_acc))
+
 
     def plot_signatures(self, epoch_idx):
         input_data = torch.tensor(self.dataset.data[0]).to(self.device).float() ## all data
@@ -158,7 +188,7 @@ class Experiment(object):
         self.map_color = {}
         for epoch_idx in range(start_epoch, self.cfg.n_epoch):
             # get signatures
-            if epoch_idx ==0:
+            if self.cfg.plot_every and epoch_idx ==0:
                 self.plot_signatures(epoch_idx)
 
             # training
@@ -168,7 +198,7 @@ class Experiment(object):
             print("epoch {}: use {} seconds".format(epoch_idx, end - start))
 
             # plot linear regions
-            if (epoch_idx +1) % self.cfg.plot_every == 0:
+            if self.cfg.plot_every and (epoch_idx +1) % self.cfg.plot_every == 0:
                 self.plot_signatures(epoch_idx)
             # valating
             val_loss, val_acc = self.valation_step()
@@ -189,7 +219,7 @@ class Experiment(object):
                 if epoch_idx == 0 or (epoch_idx + 1) % self.cfg.save_every == 0:
                     state = {
                         'epoch': epoch_idx,
-                        'state_dic': self.model.state_dict(),
+                        'state_dict': self.model.state_dict(),
                         'optimizer': self.optimizer.state_dict(),
                     }
                     self.save_checkpoint(state, epoch_idx)
@@ -207,6 +237,16 @@ class Experiment(object):
         torch.save(state, filename)
         logger.info("[Checkpoints] Epoch {}, saving to {}".format(
             state['epoch'], filename))
+
+    def load_model(self, mdl_fname):
+        if self.use_gpu:
+            # Map model to be loaded to specified single gpu.
+            checkpoint = torch.load(mdl_fname, map_location=self.device)
+        else:
+            checkpoint = torch.load(mdl_fname)
+        self.model.load_state_dict(checkpoint['state_dict'])
+        self.model.eval()
+        logger.info("Loading previous model")
 
     def forward(self, inputs):
         return self.model(inputs)

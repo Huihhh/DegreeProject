@@ -22,12 +22,9 @@ MODEL:
 
 EXPERIMENT:
   name: 'ToyExperiment'
-  out_model: './checkpoints/'
-  log_path: './outputs/'
-  resume: false
+  log_path: './outputs/testTrain/'
 
   TH: 0.5
-
   wdecay: 0.0001
   optim_lr: 0.0001
   optim_momentum: 0.9
@@ -35,10 +32,17 @@ EXPERIMENT:
   use_gpu: True
 
   n_epoch: 10
-  save_every: 10
-  save_model: False
-  plot_every: 10
+  plot_every: 0 # not plot during training if 0
 
+  save_model: True
+  save_every: 10
+  out_model: './checkpoints/'
+  resume: False
+  resume_checkpoints: './checkpoints/ToyExperiment_epoch_9.pth.tar'
+
+Logging:
+  name: "LR"
+  seed: 1265   
 
 hydra:
   run:
