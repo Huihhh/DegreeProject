@@ -39,7 +39,7 @@ class Experiment(object):
         params = [{'params': model.parameters(), 'weigh_decay': self.cfg.wdecay}]
         self.optimizer = optim.Adam(params, lr=self.cfg.optim_lr,)
                                 #    momentum=self.cfg.optim_momentum, nesterov=self.cfg.used_nesterov)
-        self.loss_func = cross_entropy
+        self.loss_func = torch.nn.CrossEntropyLoss()
 
         # used Gpu or not
         self.use_gpu = cfg.use_gpu
@@ -62,9 +62,9 @@ class Experiment(object):
             y_pred = self.model(batch_x)
             # print(batch_idx, y_pred)
             loss = self.loss_func(y_pred, batch_y)
-            y_pred =torch.where(y_pred>self.cfg.TH, 1, 0)
+            # y_pred =torch.where(y_pred>self.cfg.TH, 1, 0)
             # print('#positive points:', y_pred.sum())
-            acc = accuracy(y_pred, batch_y)
+            acc, = accuracy(y_pred, batch_y)
 
             # compute gradient and backprop
             self.optimizer.zero_grad()
@@ -91,8 +91,8 @@ class Experiment(object):
 
                 # compute loss and accuracy
                 loss = self.loss_func(y_pred, batch_y)
-                y_pred =torch.where(y_pred>self.cfg.TH, 1, 0)
-                acc = accuracy(y_pred, batch_y)
+                # y_pred =torch.where(y_pred>self.cfg.TH, 1, 0)
+                acc, = accuracy(y_pred, batch_y)
 
                 # update recording
                 val_losses_meter.update(loss.item(), batch_x.shape[0])
@@ -118,7 +118,7 @@ class Experiment(object):
                 # compute loss and accuracy
                 loss = self.loss_func(outputs, targets)
                 outputs =torch.where(outputs>self.cfg.TH, 1, 0)
-                acc = accuracy(outputs, targets)
+                acc,  = accuracy(outputs, targets)
                 # update recording
                 test_losses_meter.update(loss.item(), inputs.shape[0])
                 top1_meter.update(acc.item(), inputs.shape[0])

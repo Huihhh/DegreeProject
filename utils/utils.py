@@ -1,4 +1,4 @@
-# import torch
+import torch
 import logging
 import os
 from datetime import datetime
@@ -7,28 +7,28 @@ import random
 import numpy as np
 
 
-def accuracy(output, target):
-    correct_n = (output.view(-1) == target).sum()
-    batch_size = target.size(0)
-    return 100 * correct_n/batch_size
+# def accuracy(output, target):
+#     correct_n = (output.view(-1) == target).sum()
+#     batch_size = target.size(0)
+#     return 100 * correct_n/batch_size
 
 
-# def accuracy(output, target, topk=(1,)):
-#     """Computes the accuracy over the k top predictions for the specified values of k
-#     Imported from https://github.com/pytorch/examples/blob/master/imagenet/main.py#L247-L262 """
-#     with torch.no_grad():
-#         maxk = max(topk)
-#         batch_size = target.size(0)
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k
+    Imported from https://github.com/pytorch/examples/blob/master/imagenet/main.py#L247-L262 """
+    with torch.no_grad():
+        maxk = max(topk)
+        batch_size = target.size(0)
 
-#         _, pred = output.topk(maxk, 1, True, True)
-#         pred = pred.t()
-#         correct = pred.eq(target.view(1, -1).expand_as(pred))
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
 
-#         res = []
-#         for k in topk:
-#             correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
-#             res.append(correct_k.mul_(100.0 / batch_size))
-#         return res
+        res = []
+        for k in topk:
+            correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+            res.append(correct_k.mul_(100.0 / batch_size))
+        return res
 
 
 class AverageMeter(object):

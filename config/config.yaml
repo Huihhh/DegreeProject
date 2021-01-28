@@ -12,7 +12,7 @@ DATASET:
 
 MODEL:
   h_nodes: [2, 32, 32]
-  out_dim: 1
+  out_dim: 2
   activation: 'relu' # or leakyRelU
   use_bn: False
   fc_winit: 'normal'
