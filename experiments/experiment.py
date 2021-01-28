@@ -15,7 +15,7 @@ import os
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import AverageMeter, accuracy, convex_hull_graham
+from utils.utils import AverageMeter, accuracy, convex_hull_graham, get_path
 from utils.get_signatures import get_signatures
 
 
@@ -158,7 +158,7 @@ class Experiment(object):
             # plt.savefig(f'{save_folder}region_points{i}.png')
             # with open(f'{save_folder}region_points{i}.txt', 'w') as f:
             #     np.savetxt(f, region_points, delimiter=',')
-            poly = convex_hull_graham(region_points)
+            poly = get_path(region_points)
             poly = patches.Polygon(poly)
             # fig,ax = plt.subplots()
             # ax.add_patch(poly)

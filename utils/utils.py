@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 import sys
 import random
+import numpy as np
 
 
 def accuracy(output, target):
@@ -119,5 +120,19 @@ def convex_hull_graham(points):
     l = functools.reduce(_keep_left, points, [])
     u = functools.reduce(_keep_left, reversed(points), [])
     return l.extend(u[i] for i in range(1, len(u) - 1)) or l
+
+def get_path(region):
+    upper_bound, lower_bound = [], []
+    for x in sorted(list(set(region[:, 0]))):
+        v_line = region[np.where(region[:, 0] == x)]
+        v_line.sort(axis=0)
+        upper_bound.append(v_line[-1][None, :])
+        lower_bound.append(v_line[0][None, :])
+
+    upper_bound = np.concatenate(upper_bound)
+    lower_bound = np.concatenate(lower_bound)
+    lower_bound = lower_bound[::-1, :]
+    path = np.concatenate([upper_bound, lower_bound], 0)
+    return path
 
 
