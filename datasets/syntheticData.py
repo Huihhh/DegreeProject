@@ -101,6 +101,7 @@ if __name__ == '__main__':
 
         dataset = Dataset(CFG.DATASET)
         dataset.plot()
+        np.savetxt('./data/input.txt', dataset.data[0], delimiter=',')
         # x, y = next(iter(dataset.train_loader))
         # print(x)
         # print(y)

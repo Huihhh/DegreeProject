@@ -44,11 +44,11 @@ class SimpleNet(nn.Sequential):
 
 
     def __str__(self) -> str:
-        return super().__str__() #+ '\ntorch.sigmoid'
+        return super().__str__() + '\ntorch.sigmoid'
 
-    # def forward(self, input):
-    #     x = super().forward(input)
-    #     return torch.sigmoid(x)
+    def forward(self, input):
+        x = super().forward(input)
+        return torch.sigmoid(x)
 
 
 if __name__ == "__main__":

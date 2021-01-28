@@ -1,8 +1,8 @@
 DATASET:
-  num_samples: 200
-  n_train: 140
-  n_val: 40
-  n_test: 20
+  num_samples: 2000
+  n_train: 1400
+  n_val: 400
+  n_test: 200
   noise: 0.3
   equal_density: False
 
@@ -12,10 +12,10 @@ DATASET:
 
 MODEL:
   h_nodes: [2, 32, 32]
-  out_dim: 2
+  out_dim: 1
   activation: 'relu' # or leakyRelU
   use_bn: False
-  fc_winit: 'normal'
+  fc_winit: 'he_normal'
   fc_binit: 'zeros'
   bn_winit: 'ones'
   bn_binit: 'zeros'

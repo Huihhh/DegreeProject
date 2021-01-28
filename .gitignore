@@ -10,3 +10,4 @@ checkpoints/
 *.log
 *.png
 test*
+*.txt
