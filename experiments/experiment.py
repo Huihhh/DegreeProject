@@ -132,57 +132,54 @@ class Experiment(object):
     def plot_signatures(self, epoch_idx):
         input_data = torch.tensor(self.dataset.data[0]).to(self.device).float() ## all data
         y = self.dataset.data[1]
-        pos_data = input_data[np.where(y == 1)]
-        neg_data = input_data[np.where(y == 0)]
+        # pos_data = input_data[np.where(y == 1)]
+        # neg_data = input_data[np.where(y == 0)]
 
         # plot linear regions with random green colors
         h = 0.01
         xx, yy = np.meshgrid(np.arange(self.dataset.minX, self.dataset.maxX, h),
                              np.arange(self.dataset.minY, self.dataset.maxY, h))
-        input_grid = np.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], 1)
-        sigs_grid = get_signatures(torch.tensor(input_grid).float().to(self.device), self.model)[1]
+        grid_points = np.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], 1)
+        def compare(point): # TODO: parameterize condition 
+            x, y = point
+            if x**2 + y**2 <=0.75:
+                return -1
+            elif x**2 + y**2 >=1.25 and x**2 + y**2 <=2:
+                return 1
+            else: 
+                return 0     
+
+        grid_labels = np.array(list(map(compare, grid_points)))
+        sigs_grid = get_signatures(torch.tensor(grid_points).float().to(self.device), self.model)[1]
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_counter = Counter(sigs_grid)
-        sorted_regions = {}
-                # # save plot
-        if not exists(self.cfg.log_path):
-            mkdir(self.cfg.log_path)
-        save_folder = os.path.join(self.cfg.log_path, 'debug_plot/')
-        if not exists(save_folder):
-            mkdir(save_folder)
+        # sorted_regions = {}
+        #         # # save plot
+        # if not exists(self.cfg.log_path):
+        #     mkdir(self.cfg.log_path)
+        # save_folder = os.path.join(self.cfg.log_path, 'debug_plot/')
+        # if not exists(save_folder):
+        #     mkdir(save_folder)
         
+        color_labels = np.zeros(grid_labels.shape)
         for i, key in enumerate(sigs_grid_counter):
-            sigs_grid_counter[key] = i 
             idx = np.where(sigs_grid == key)
-            region_points = input_grid[idx]
-            # plt.plot(region_points[:, 0], region_points[:, 1])
-            # plt.savefig(f'{save_folder}region_points{i}.png')
-            # with open(f'{save_folder}region_points{i}.txt', 'w') as f:
-            #     np.savetxt(f, region_points, delimiter=',')
-            poly = get_path(region_points)
-            poly = patches.Polygon(poly)
-            # fig,ax = plt.subplots()
-            # ax.add_patch(poly)
-            # plt.savefig(f'{save_folder}region_poly{i}.png')
-
-            pos_points_in_region = sum(poly.contains_points(pos_data.cpu()))
-            neg_points_in_region = sum(poly.contains_points(neg_data.cpu()))
-            # print(f'pos_points_in_region: {pos_points_in_region}, neg_points_in_region: {neg_points_in_region}')
-            sorted_regions[key] = neg_points_in_region / (pos_points_in_region + neg_points_in_region + 1e-6)
-        
+            region_labels = grid_labels[idx]
+            color_labels[idx] = sum(region_labels)        
 
 
-        color_labels = np.array([sigs_grid_counter[c]
-                           for c in sigs_grid]).reshape(xx.shape)
+        color_labels = color_labels.reshape(xx.shape)
+        # color_labels = np.array([sigs_grid_counter[c]
+        #                    for c in sigs_grid]).reshape(xx.shape)
         plt.imshow(color_labels, interpolation="nearest",
                    extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                   cmap=plt.get_cmap('Greens'), aspect="auto", origin="lower")
+                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower")
 
-        color_labels = np.array([sorted_regions[c]
-                           for c in sigs_grid]).reshape(xx.shape)
-        plt.imshow(color_labels, interpolation="nearest",
-                   extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=0.5)
+        # color_labels = np.array([sorted_regions[c]
+        #                    for c in sigs_grid]).reshape(xx.shape)
+        # plt.imshow(color_labels, interpolation="nearest",
+        #            extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+        #            cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=0.5)
 
         # save plot
         if not exists(self.cfg.log_path):

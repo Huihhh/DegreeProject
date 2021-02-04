@@ -22,17 +22,6 @@ class Dataset(object):
     def gen_circle_data(self):
         np.random.seed(self.seed)
 
-        # h = 0.01
-        # x = np.arange(*self.xrange, h)
-        # y = np.arange(*self.yrange, h)
-        # assert x.size * y.size > self.num_samples, f'cannot generate {self.num_samples} points in grid with size {x.size} * {y.size}'
-        # xx, yy = np.meshgrid(x, y)
-        # color_labels = 
-        # plt.imshow(color_labels, interpolation="nearest",
-        #     extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-        #     cmap=plt.get_cmap('Greens'), aspect="auto", origin="lower")
-
-
         # each class has the same density 
         if self.cfg.equal_density:
             ratio = (self.r2[1] - self.r1[0]) / self.r1[1]
