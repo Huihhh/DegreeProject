@@ -39,7 +39,7 @@ class Experiment(object):
         params = [{'params': model.parameters(), 'weigh_decay': self.cfg.wdecay}]
         self.optimizer = optim.Adam(params, lr=self.cfg.optim_lr,)
                                 #    momentum=self.cfg.optim_momentum, nesterov=self.cfg.used_nesterov)
-        self.loss_func = cross_entropy
+        self.loss_func = torch.nn.BCELoss()
 
         # used Gpu or not
         self.use_gpu = cfg.use_gpu
@@ -58,10 +58,10 @@ class Experiment(object):
         # start traning
         self.model.train()
         for batch_idx, (batch_x, batch_y) in enumerate(self.dataset.train_loader):
-            batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+            batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device).float()
             y_pred = self.model(batch_x)
             # print(batch_idx, y_pred)
-            loss = self.loss_func(y_pred, batch_y)
+            loss = self.loss_func(y_pred, batch_y[:, None])
             y_pred =torch.where(y_pred>self.cfg.TH, 1, 0)
             # print('#positive points:', y_pred.sum())
             acc = accuracy(y_pred, batch_y)
@@ -86,11 +86,11 @@ class Experiment(object):
             for batch_idx, (batch_x, batch_y) in enumerate(self.dataset.val_loader):
                 # forward
                 batch_x, batch_y = batch_x.to(
-                    self.device), batch_y.to(self.device)
+                    self.device), batch_y.to(self.device).float()
                 y_pred = self.model(batch_x)
 
                 # compute loss and accuracy
-                loss = self.loss_func(y_pred, batch_y)
+                loss = self.loss_func(y_pred, batch_y[:, None])
                 y_pred =torch.where(y_pred>self.cfg.TH, 1, 0)
                 acc = accuracy(y_pred, batch_y)
 
@@ -112,13 +112,13 @@ class Experiment(object):
                 self.model.eval()
                 if self.use_gpu:
                     inputs = inputs.to(device=self.device)
-                    targets = targets.to(device=self.device)
+                    targets = targets.to(device=self.device).float()
                 # forward
                 outputs = self.forward(inputs)
                 # compute loss and accuracy
-                loss = self.loss_func(outputs, targets)
+                loss = self.loss_func(outputs, targets[:, None])
                 outputs =torch.where(outputs>self.cfg.TH, 1, 0)
-                acc,  = accuracy(outputs, targets)
+                acc = accuracy(outputs, targets)
                 # update recording
                 test_losses_meter.update(loss.item(), inputs.shape[0])
                 top1_meter.update(acc.item(), inputs.shape[0])
@@ -262,6 +262,31 @@ class Experiment(object):
         self.model.load_state_dict(checkpoint['state_dict'])
         self.model.eval()
         logger.info("Loading previous model")
+
+    def resume_model(self):
+        # TODO: not test
+        """ optionally resume from a checkpoint
+        Imported from https://github.com/pytorch/examples/blob/master/imagenet/main.py#L247-L262 """
+        start_epoch = 0
+        if self.cfg.resume:
+            if os.path.isfile(self.cfg.resume_checkpoints):
+                print("=> loading checkpoint '{}'".format(self.cfg.resume_checkpoints))
+                logger.info("==> Resuming from checkpoint..")
+                if self.use_gpu:
+                    # Map model to be loaded to specified single gpu.
+                    checkpoint = torch.load(self.cfg.resume_checkpoints, map_location=self.device)
+                else:
+                    checkpoint = torch.load(self.cfg.resume_checkpoints)
+                start_epoch = checkpoint['epoch']
+                self.model.load_state_dict(checkpoint['state_dict'])
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
+
+                print("=> loaded checkpoint '{}' (epoch {})".format(self.cfg.resume_checkpoints, checkpoint['epoch']))
+                logger.info("=> loaded checkpoint '{}' (epoch {})".format(self.cfg.resume_checkpoints, checkpoint['epoch']))
+            else:
+                print("=> no checkpoint found at '{}'".format(self.cfg.resume_checkpoints))
+                logger.info("=> no checkpoint found at '{}'".format(self.cfg.resume_checkpoints))
+        return start_epoch
 
     def forward(self, inputs):
         return self.model(inputs)

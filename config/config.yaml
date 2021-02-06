@@ -11,7 +11,7 @@ DATASET:
   seed: 1265
 
 MODEL:
-  h_nodes: [2, 16]
+  h_nodes: [2, 32]
   out_dim: 1
   activation: 'relu' # or leakyRelU
   use_bn: False
@@ -31,14 +31,14 @@ EXPERIMENT:
   used_nesterov: False
   use_gpu: True
 
-  n_epoch: 10
-  plot_every: 10 # not plot during training if 0
+  n_epoch: 2000
+  plot_every: 0 # not plot during training if 0
 
   save_model: True
   save_every: 10
   out_model: './checkpoints/'
-  resume: False
-  resume_checkpoints: './checkpoints/ToyExperiment_epoch_9.pth.tar'
+  resume: True
+  resume_checkpoints: './checkpoints/ToyExperiment_epoch_1329.pth.tar'
 
 Logging:
   name: "LR"
