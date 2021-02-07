@@ -32,6 +32,7 @@ def main(CFG: DictConfig) -> None:
 
     # get datasets
     dataset = Dataset(CFG.DATASET)
+    dataset.plot(CFG.EXPERIMENT.log_path)
 
     # build model
     model = SimpleNet(CFG.MODEL)
@@ -43,7 +44,7 @@ def main(CFG: DictConfig) -> None:
 
     experiment = Experiment(model, dataset, CFG.EXPERIMENT)
     experiment.load_model(CFG.EXPERIMENT.resume_checkpoints)
-    experiment.plot_signatures(epoch_idx='last')
+    experiment.plot_signatures(epoch_idx=experiment.resumed_epoch)
     logger.info("======= plotting done =======")
 
 if __name__ == '__main__':

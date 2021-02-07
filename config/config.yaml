@@ -1,14 +1,13 @@
-DATASET:
-  num_samples: 2000
-  n_train: 1400
-  n_val: 400
-  n_test: 200
-  noise: 0.3
-  equal_density: False
+#TODO: add available choices
+defaults:
+  - dataset: synthetic
 
-  batch_size: 32
-  num_workers: 4
-  seed: 1265
+Logging:
+  name: "LR"
+  seed: 1265   
+
+DATASET:
+  seed: Logging.seed
 
 MODEL:
   h_nodes: [2, 32]
@@ -40,9 +39,6 @@ EXPERIMENT:
   resume: True
   resume_checkpoints: './checkpoints/ToyExperiment_epoch_1329.pth.tar'
 
-Logging:
-  name: "LR"
-  seed: 1265   
 
 hydra:
   run:

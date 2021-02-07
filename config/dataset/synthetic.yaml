@@ -1,0 +1,18 @@
+DATASET:
+  name: 'SyntheticData'
+  total_samples: 2000 # the number of noise excluded
+  n_train: 1400
+  n_val: 400
+  n_test: 200
+  noise: 0.1 # percent of num_samples
+  equal_density: False
+  r1: [0, 0.75] # radius range of the inner circle
+  r2: [1.25, 2] # radius range of the outer ring
+
+  batch_size: 32
+  num_workers: 4
+  seed: 1260 # for testing syntheticData.py
+
+hydra:
+  run:
+    dir: ./

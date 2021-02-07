@@ -11,3 +11,5 @@ checkpoints/
 *.png
 test*
 *.txt
+
+data/
