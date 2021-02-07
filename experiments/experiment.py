@@ -84,7 +84,14 @@ class Experiment(object):
                     return 1
                 else: 
                     return 0  
-            self.compare = compare
+            self.grid_labels = np.array(list(map(compare, self.grid_points)))
+            
+            # dir to save plot
+            if not exists(self.cfg.log_path):
+                mkdir(self.cfg.log_path)
+            self.save_folder = os.path.join(self.cfg.log_path, 'LinearRegions/')
+            if not exists(self.save_folder):
+                mkdir(self.save_folder)
 
 
 
@@ -169,34 +176,31 @@ class Experiment(object):
 
 
     def plot_signatures(self, epoch_idx):
-        grid_labels = np.array(list(map(self.compare, self.grid_points)))
-        sigs_grid = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)[1]
+        
+        sigs_grid, net_out, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
+        pseudo_label = torch.where(net_out>self.cfg.TH, 1, 0)
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_counter = Counter(sigs_grid)
 
-        color_labels = np.zeros(grid_labels.shape)
-        for i, key in enumerate(sigs_grid_counter):
-            idx = np.where(sigs_grid == key)
-            region_labels = grid_labels[idx]
-            ratio = sum(region_labels) / region_labels.size
-            if ratio == 1.0 or ratio == -1.0:
-              color_labels[idx] = ratio + ratio * np.random.random()
-            else: 
-              color_labels[idx] = ratio
+        for lables in [self.grid_labels, pseudo_label]:
+            color_labels = np.zeros(lables.shape)
+            for i, key in enumerate(sigs_grid_counter):
+                idx = np.where(sigs_grid == key)
+                region_labels = lables[idx]
+                ratio = sum(region_labels) / region_labels.size
+                if ratio == 1.0 or ratio == -1.0:
+                    color_labels[idx] = ratio + ratio * np.random.random()
+                else: 
+                    color_labels[idx] = ratio
 
 
-        color_labels = color_labels.reshape(self.xx.shape)
-        plt.imshow(color_labels, interpolation="nearest",
-                   extent=(self.xx.min(), self.xx.max(), self.yy.min(), self.yy.max()),
-                   cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
+            color_labels = color_labels.reshape(self.xx.shape)
+            plt.imshow(color_labels, interpolation="nearest",
+                    extent=(self.xx.min(), self.xx.max(), self.yy.min(), self.yy.max()),
+                    cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
 
-        # save plot
-        if not exists(self.cfg.log_path):
-            mkdir(self.cfg.log_path)
-        save_folder = os.path.join(self.cfg.log_path, 'scatter_plots/')
-        if not exists(save_folder):
-            mkdir(save_folder)
-        plt.savefig(f'{save_folder}epoch{epoch_idx}.png')
+            plt.savefig(f'{self.save_folder}True_label_epoch{epoch_idx}.png')
+
 
 
     def fitting(self):
