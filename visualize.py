@@ -42,7 +42,7 @@ def main(CFG: DictConfig) -> None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device=device)
 
-    experiment = Experiment(model, dataset, CFG.EXPERIMENT)
+    experiment = Experiment(model, dataset, CFG.EXPERIMENT, plot_sig=True)
     experiment.load_model(CFG.EXPERIMENT.resume_checkpoints)
     experiment.plot_signatures(epoch_idx=experiment.resumed_epoch)
     logger.info("======= plotting done =======")

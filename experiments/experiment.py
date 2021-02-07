@@ -46,7 +46,7 @@ def get_cosine_schedule_with_warmup(optimizer,
 
 
 class Experiment(object):
-    def __init__(self, model, dataset, cfg) -> None:
+    def __init__(self, model, dataset, cfg, plot_sig=False) -> None:
         super().__init__()
         self.dataset = dataset
         self.cfg = cfg.EXPERIMENT
@@ -67,6 +67,26 @@ class Experiment(object):
 
         # log path
         self.summary_logdir = os.path.join(self.cfg.log_path, 'summaries')
+
+
+        # init grid points to plot linear regions
+        if cfg.EXPERIMENT.plot_every > 0 or plot_sig:
+            h = 0.01
+            self.xx, self.yy = np.meshgrid(np.arange(self.dataset.minX, self.dataset.maxX, h),
+                                np.arange(self.dataset.minY, self.dataset.maxY, h))
+            self.grid_points = np.concatenate([self.xx.reshape(-1, 1), self.yy.reshape(-1, 1)], 1)
+            
+            def compare(point):
+                x, y = point
+                if x**2 + y**2 <=cfg.DATASET.r1[-1]:
+                    return -1
+                elif x**2 + y**2 >=cfg.DATASET.r2[0] and x**2 + y**2 <=cfg.DATASET.r2[-1]:
+                    return 1
+                else: 
+                    return 0  
+            self.compare = compare
+
+
 
     def train_step(self):
         logger.info("----- Running training -----")
@@ -145,27 +165,12 @@ class Experiment(object):
 
         test_loss, top1_acc = test_losses_meter.avg,top1_meter.avg
         logger.info(
-            "[Testing] testing_loss: {:.4f}, test acc:{}".format(test_loss,top1_acc))
+            "[Testing] testing_loss: {:.4f}, test acc:{}".format(test_loss,top1_acc))    
 
 
     def plot_signatures(self, epoch_idx):
-
-        # plot linear regions with random green colors
-        h = 0.01
-        xx, yy = np.meshgrid(np.arange(self.dataset.minX, self.dataset.maxX, h),
-                             np.arange(self.dataset.minY, self.dataset.maxY, h))
-        grid_points = np.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], 1)
-        def compare(point): # TODO: parameterize condition 
-            x, y = point
-            if x**2 + y**2 <=0.75:
-                return -1
-            elif x**2 + y**2 >=1.25 and x**2 + y**2 <=2:
-                return 1
-            else: 
-                return 0     
-
-        grid_labels = np.array(list(map(compare, grid_points)))
-        sigs_grid = get_signatures(torch.tensor(grid_points).float().to(self.device), self.model)[1]
+        grid_labels = np.array(list(map(self.compare, self.grid_points)))
+        sigs_grid = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)[1]
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_counter = Counter(sigs_grid)
 
@@ -180,9 +185,9 @@ class Experiment(object):
               color_labels[idx] = ratio
 
 
-        color_labels = color_labels.reshape(xx.shape)
+        color_labels = color_labels.reshape(self.xx.shape)
         plt.imshow(color_labels, interpolation="nearest",
-                   extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+                   extent=(self.xx.min(), self.xx.max(), self.yy.min(), self.yy.max()),
                    cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
 
         # save plot
@@ -205,6 +210,7 @@ class Experiment(object):
             start_epoch = 0
 
         self.map_color = {}
+        prev_lr = np.inf
         for epoch_idx in range(start_epoch, self.cfg.n_epoch):
             # get signatures
             if self.cfg.plot_every and epoch_idx ==0:
@@ -215,6 +221,11 @@ class Experiment(object):
             train_loss, train_acc = self.train_step()
             end = time.time()
             print("epoch {}: use {} seconds".format(epoch_idx, end - start))
+
+            cur_lr = self.optimizer.param_groups[0]['lr'] # self.scheduler.get_last_lr()[0]
+            if cur_lr != prev_lr:
+                print('--- Optimizer learning rate changed from %.2e to %.2e ---' % (prev_lr, cur_lr))
+                prev_lr = cur_lr
 
             # plot linear regions
             if self.cfg.plot_every and (epoch_idx +1) % self.cfg.plot_every == 0:

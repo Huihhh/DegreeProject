@@ -43,7 +43,7 @@ def main(CFG: DictConfig) -> None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device=device)
 
-    experiment = Experiment(model, dataset, CFG.EXPERIMENT)
+    experiment = Experiment(model, dataset, CFG)
     experiment.fitting()
     logger.info("======= Training done =======")
     experiment.testing()

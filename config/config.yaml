@@ -29,7 +29,8 @@ EXPERIMENT:
   use_gpu: True
 
   n_epoch: 2000
-  plot_every: 0 # not plot during training if 0
+  plot_sigs: True
+  plot_every: 10 
 
   save_model: True
   save_every: 10
