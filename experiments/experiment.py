@@ -1,48 +1,66 @@
-import torch
 import time
 from os.path import exists
 from os import mkdir
-from torch import optim
 import logging
+import torch
+from torch import optim
+from torch.optim.lr_scheduler import LambdaLR
 from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
 
-import matplotlib.patches as patches
 import numpy as np
 from collections import Counter
 
-import os
-import sys
+import os, sys, math
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import AverageMeter, accuracy, convex_hull_graham, get_path
+from utils.utils import AverageMeter, accuracy
 from utils.get_signatures import get_signatures
 
 
 logger = logging.getLogger(__name__)
 
-def cross_entropy(P, Y):
-    """Cross-Entropy loss function.
-    Y and P are lists of labels and estimations
-    returns the float corresponding to their cross-entropy.
+def get_cosine_schedule_with_warmup(optimizer,
+                                    num_warmup_steps,
+                                    num_training_steps,
+                                    num_cycles=7. / 16.,
+                                    last_epoch=-1):
+    """ <Borrowed from `transformers`>
+        Create a schedule with a learning rate that decreases from the initial lr set in the optimizer to 0,
+        after a warmup period during which it increases from 0 to the initial lr set in the optimizer.
+        Args:
+            optimizer (:class:`~torch.optim.Optimizer`): The optimizer for which to schedule the learning rate.
+            num_warmup_steps (:obj:`int`): The number of steps for the warmup phase.
+            num_training_steps (:obj:`int`): The total number of training steps.
+            last_epoch (:obj:`int`, `optional`, defaults to -1): The index of the last epoch when resuming training.
+        Return:
+            :obj:`torch.optim.lr_scheduler.LambdaLR` with the appropriate schedule.
     """
-    Y = Y.float()
-    P = P.float().view(-1)
-    return -torch.sum(Y * torch.log(P) + (1 - Y) * torch.log(1 - P)) / len(Y)
+    def _lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        no_progress = float(current_step - num_warmup_steps) / \
+                      float(max(1, num_training_steps - num_warmup_steps))
+        return max(0., math.cos(math.pi * num_cycles * no_progress))  # this is correct
+    return LambdaLR(optimizer, _lr_lambda, last_epoch)
 
 
 class Experiment(object):
     def __init__(self, model, dataset, cfg) -> None:
         super().__init__()
         self.dataset = dataset
-        self.cfg = cfg
+        self.cfg = cfg.EXPERIMENT
         params = [{'params': model.parameters(), 'weigh_decay': self.cfg.wdecay}]
         self.optimizer = optim.Adam(params, lr=self.cfg.optim_lr,)
                                 #    momentum=self.cfg.optim_momentum, nesterov=self.cfg.used_nesterov)
+        steps_per_epoch = np.ceil(cfg.DATASET.n_train / cfg.DATASET.batch_size)
+        total_training_steps = self.cfg.n_epoch * steps_per_epoch
+        warmup_steps = self.cfg.warmup * steps_per_epoch
+        self.scheduler = get_cosine_schedule_with_warmup(self.optimizer, warmup_steps, total_training_steps)
         self.loss_func = torch.nn.BCELoss()
 
         # used Gpu or not
-        self.use_gpu = cfg.use_gpu
+        self.use_gpu = cfg.EXPERIMENT.use_gpu
         self.device = torch.device(
             'cuda' if torch.cuda.is_available() and self.use_gpu else 'cpu')
         self.model = model.to(self.device)
@@ -70,6 +88,7 @@ class Experiment(object):
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+            self.scheduler.step()
 
             # update recording
             train_losses_meter.update(loss.item())
@@ -221,6 +240,7 @@ class Experiment(object):
                         'epoch': epoch_idx,
                         'state_dict': self.model.state_dict(),
                         'optimizer': self.optimizer.state_dict(),
+                        'scheduler': self.scheduler.state_dict(),
                     }
                     self.save_checkpoint(state, epoch_idx)
 
@@ -266,6 +286,7 @@ class Experiment(object):
                 start_epoch = checkpoint['epoch']
                 self.model.load_state_dict(checkpoint['state_dict'])
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
+                self.scheduler.load_state_dict(checkpoint['scheduler'])
 
                 print("=> loaded checkpoint '{}' (epoch {})".format(self.cfg.resume_checkpoints, checkpoint['epoch']))
                 logger.info("=> loaded checkpoint '{}' (epoch {})".format(self.cfg.resume_checkpoints, checkpoint['epoch']))
@@ -303,7 +324,7 @@ if __name__ == "__main__":
         # )
         model = SimpleNet(CFG.MODEL)
         dataset = Dataset(CFG.DATASET)
-        experiment = Experiment(model, dataset, CFG.EXPERIMENT)
+        experiment = Experiment(model, dataset, CFG)
         experiment.run()
 
     main()
