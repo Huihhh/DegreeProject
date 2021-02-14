@@ -177,12 +177,12 @@ class Experiment(object):
 
     def plot_signatures(self, epoch_idx):
         
-        sigs_grid, net_out, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
-        pseudo_label = torch.where(net_out>self.cfg.TH, 1, 0)
+        net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
+        pseudo_label = torch.where(net_out>self.cfg.TH, 1, 0).cpu().numpy()
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_counter = Counter(sigs_grid)
 
-        for lables in [self.grid_labels, pseudo_label]:
+        for lables, name in zip([self.grid_labels, pseudo_label], ['true_label', 'pseudo_label']):
             color_labels = np.zeros(lables.shape)
             for i, key in enumerate(sigs_grid_counter):
                 idx = np.where(sigs_grid == key)
@@ -199,7 +199,7 @@ class Experiment(object):
                     extent=(self.xx.min(), self.xx.max(), self.yy.min(), self.yy.max()),
                     cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
 
-            plt.savefig(f'{self.save_folder}True_label_epoch{epoch_idx}.png')
+            plt.savefig(f'{self.save_folder}{name}_epoch{epoch_idx}.png')
 
 
 

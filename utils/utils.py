@@ -57,6 +57,7 @@ class AverageMeter(object):
 
 def setup_default_logging(params, string = 'Train', default_level=logging.INFO,
                           format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s"):
+    print(params.EXPERIMENT.log_path)
     output_dir = os.path.join(params.EXPERIMENT.log_path)
     os.makedirs(output_dir, exist_ok=True)
 

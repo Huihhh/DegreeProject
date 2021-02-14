@@ -1,4 +1,3 @@
-from numpy.lib.arraysetops import isin
 from torch import nn
 import torch
 
@@ -56,12 +55,24 @@ if __name__ == "__main__":
     from omegaconf import DictConfig, OmegaConf
     import os
     import sys
+    import numpy as np
     sys.path.append(os.getcwd())
+    print(os.getcwd())
+    import os, sys
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.append(BASE_DIR)
+    from utils.get_signatures import get_signatures
 
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG.MODEL), '\n')
         net = SimpleNet(CFG.MODEL)
+        h = 0.01
+        xx, yy = np.meshgrid(np.arange(-1, 1, h),
+                            np.arange(-1, 1, h))
+        grid_points = np.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], 1)
+        sigs_grid, net_out, _ = get_signatures(torch.tensor(grid_points).float(), net)
+
         print(net)
 
     main()

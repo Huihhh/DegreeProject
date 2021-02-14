@@ -41,7 +41,10 @@ class Dataset(object):
             X.append(np.concatenate([x, y], 0))
             labels.append(label)
 
-        self.data = [np.concatenate(X, 1).transpose(1, 0), np.concatenate(labels)]
+        labels = np.concatenate(labels)
+        print('the number of negative points: ', len(np.where(labels==0)[0]))
+        print('the number of positive points: ', len(np.where(labels==1)[0]))
+        self.data = [np.concatenate(X, 1).transpose(1, 0), labels]
         self.minX, self.minY = self.data[0].min(0)
         self.maxX, self.maxY = self.data[0].max(0)
         return self.data

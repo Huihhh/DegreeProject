@@ -18,7 +18,7 @@ MODEL:
 
 EXPERIMENT:
   name: 'ToyExperiment'
-  log_path: './outputs/testTrain/'
+  log_path: ./outputs/
 
   TH: 0.5
   wdecay: 0.0001
@@ -40,4 +40,4 @@ EXPERIMENT:
 
 hydra:
   run:
-    dir: ./
+    dir: ${EXPERIMENT.log_path}

@@ -1,10 +1,7 @@
-# import yaml
-# import argparse
 import random
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-from easydict import EasyDict as edict
 
 from omegaconf import DictConfig, OmegaConf
 import hydra

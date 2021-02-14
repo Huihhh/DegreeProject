@@ -1,18 +1,22 @@
+# @package _group_
 DATASET:
   name: 'SyntheticData'
-  total_samples: 2000 # the number of noise excluded
-  n_train: 1400
-  n_val: 400
-  n_test: 200
-  noise: 0.1 # percent of num_samples
-  equal_density: False
+  seed: 1260 # for testing syntheticData.py
+
+  # dataset
+  total_samples: 2000
+  noise: 0.1 # 10% of num_samples => 200 noise points
+  equal_density: True
   r1: [0, 0.75] # radius range of the inner circle
   r2: [1.25, 2] # radius range of the outer ring
 
+  # data loader
+  n_train: 1400
+  n_val: 400
+  n_test: 200
   batch_size: 32
   num_workers: 4
-  seed: 1260 # for testing syntheticData.py
 
 hydra:
   run:
-    dir: ./
+    dir: ./${DATASET.name}
