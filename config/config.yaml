@@ -11,14 +11,14 @@ MODEL:
   out_dim: 1
   activation: 'relu' # or leakyRelU
   use_bn: False
-  fc_winit: 'xavier_normal' # xavier_normal, he_normal, 
-  fc_binit: 'customb' ## xavier_normal, he_normal, customb
+  fc_winit: 'xavier_uniform' # xavier_normal, he_normal, 
+  fc_binit: 'bias_init' ## xavier_normal, he_normal, customb
   bn_winit: 'ones'
   bn_binit: 'zeros'
 
 EXPERIMENT:
   name: 'ToyExperiment'
-  out_folder: test_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
+  out_folder: ${MODEL.fc_winit}_${MODEL.fc_binit}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   TH: 0.5
   wdecay: 0.0001

@@ -19,7 +19,8 @@ INIT_METHOD = {
     'zeros': torch.nn.init.zeros_,
     'ones': torch.nn.init.ones_,
     'custom': lambda x: torch.nn.init.normal_(x, mean=0.75),
-    'customb': bias_init
+    'bias_init': bias_init,
+    'manual': lambda x: x
 }
 
 class SimpleNet(nn.Sequential):
@@ -46,6 +47,8 @@ class SimpleNet(nn.Sequential):
                 self.layers.append(nn.Sequential(fc, ac))
 
         predict = nn.Linear(self.h_nodes[-1], self.out_dim)
+        INIT_METHOD[self.cfg.fc_winit](predict.weight)
+        INIT_METHOD[self.cfg.fc_binit](predict.bias)
         self.layers.append(predict)
         super().__init__(*self.layers)
 

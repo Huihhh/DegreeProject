@@ -209,7 +209,7 @@ class Experiment(object):
                     cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
 
             plt.savefig(self.save_folder / f'{name}_epoch{epoch_idx}.png')
-            return boundary_regions, total_regions
+        return boundary_regions, total_regions
 
 
 
