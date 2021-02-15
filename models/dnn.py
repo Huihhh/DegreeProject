@@ -1,7 +1,7 @@
 from torch import nn
 import torch
 
-def  bias_init(x, a=0.25, b=0.5): #TODO: parameterize a, b or find an equation
+def  bias_init(x, a=0.8, b=1.2): #TODO: parameterize a, b or find an equation
     signs = torch.randint(0,2, x.shape)
     signs[torch.where(signs==0)] = -1
     return signs * torch.nn.init.uniform_(x, a, b)

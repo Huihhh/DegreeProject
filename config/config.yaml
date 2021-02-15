@@ -11,7 +11,7 @@ MODEL:
   out_dim: 1
   activation: 'relu' # or leakyRelU
   use_bn: False
-  fc_winit: 'xavier_uniform' # xavier_normal, he_normal, 
+  fc_winit: 'xavier_normal' # xavier_normal, he_normal, 
   fc_binit: 'bias_init' ## xavier_normal, he_normal, customb
   bn_winit: 'ones'
   bn_binit: 'zeros'
@@ -21,7 +21,7 @@ EXPERIMENT:
   out_folder: ${MODEL.fc_winit}_${MODEL.fc_binit}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   TH: 0.5
-  wdecay: 0.0002
+  wdecay: 0.0005
   optim_lr: 0.001
   optim_momentum: 0.9
   warmup: 0
