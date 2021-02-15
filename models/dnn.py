@@ -8,12 +8,13 @@ def  bias_init(x, a=0.25, b=0.5): #TODO: parameterize a, b or find an equation
 
 ACT_METHOD = {
     'relu': nn.ReLU(),
-    'leakyRelU': nn.LeakyReLU()
+    'leaky_relu': nn.LeakyReLU()
 }
 
 INIT_METHOD = {
     'normal': torch.nn.init.normal_,
     'he_normal': lambda x: torch.nn.init.kaiming_normal_(x, nonlinearity='relu'),
+    'he_uniform': lambda x: torch.nn.init.kaiming_uniform_(x, nonlinearity='relu'),
     'xavier_normal': torch.nn.init.xavier_normal_,
     'xavier_uniform': torch.nn.init.xavier_uniform_,
     'zeros': torch.nn.init.zeros_,
