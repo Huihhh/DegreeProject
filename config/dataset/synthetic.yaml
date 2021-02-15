@@ -7,7 +7,7 @@ DATASET:
   noise: 0.1 # 10% of num_samples => 200 noise points
   equal_density: True
   r1: [0, 0.75] # radius range of the inner circle
-  r2: [1.25, 2] # radius range of the outer ring
+  r2: [1.25, 3] # radius range of the outer ring
 
   # data loader
   n_train: 1400
@@ -18,4 +18,4 @@ DATASET:
 
 # hydra:
 #   run:
-#     dir: ./${DATASET.name}
+#     dir: ./

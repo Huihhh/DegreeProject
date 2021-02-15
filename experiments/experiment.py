@@ -181,6 +181,15 @@ class Experiment(object):
         pseudo_label = torch.where(net_out>self.cfg.TH, 1, 0).cpu().numpy()
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_counter = Counter(sigs_grid)
+        total_regions = len(sigs_grid_counter)
+        boundary_regions = 0
+        for key in sigs_grid_counter:
+            idx = np.where(sigs_grid == key)
+            region_labels = self.grid_labels[idx]  
+            ratio = sum(region_labels) / region_labels.size
+            if ratio>-0.2 and ratio<0.2: #TODO:parameterize threshold, or get the value geometrically?
+                boundary_regions += 1
+        logger.info(f'[Linear regions] #around the boundary / total: {boundary_regions} / {total_regions}')
 
         for lables, name in zip([self.grid_labels, pseudo_label], ['true_label', 'pseudo_label']):
             color_labels = np.zeros(lables.shape)
@@ -193,7 +202,6 @@ class Experiment(object):
                 # else: 
                 color_labels[idx] = (ratio + np.random.random()) / 2
 
-
             color_labels = color_labels.reshape(self.xx.shape)
             plt.figure(figsize=(10, 10), dpi=125)
             plt.imshow(color_labels, interpolation="nearest",
@@ -201,6 +209,7 @@ class Experiment(object):
                     cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
 
             plt.savefig(self.save_folder / f'{name}_epoch{epoch_idx}.png')
+            return boundary_regions, total_regions
 
 
 
@@ -219,7 +228,8 @@ class Experiment(object):
         for epoch_idx in range(start_epoch, self.cfg.n_epoch):
             # get signatures
             if self.cfg.plot_every and epoch_idx ==0:
-                self.plot_signatures(epoch_idx)
+                boundary_regions, total_regions = self.plot_signatures(epoch_idx)
+                self.swriter.add_scalars('linear_regions', {'total': total_regions, 'boundary': boundary_regions}, epoch_idx)
 
             # training
             start = time.time()
@@ -234,15 +244,18 @@ class Experiment(object):
 
             # plot linear regions
             if self.cfg.plot_every and (epoch_idx +1) % self.cfg.plot_every == 0:
-                self.plot_signatures(epoch_idx)
+                boundary_regions, total_regions = self.plot_signatures(epoch_idx)
+                self.swriter.add_scalars('linear_regions', {'total': total_regions, 'boundary': boundary_regions}, epoch_idx)
             # valating
             val_loss, val_acc = self.valation_step()
 
             # saving data in tensorboard
+            self.swriter.add_scalars('train/lr', {'Current Lr': cur_lr}, epoch_idx)
             self.swriter.add_scalars(
                 'loss', {'train_loss': train_loss, 'val_loss': val_loss}, epoch_idx)
             self.swriter.add_scalars(
                 'accuracy/', {'train': train_acc, 'val': val_acc}, epoch_idx)
+            
             logger.info('Epoch {}. [Train] time:{} seconds, '
                         'train_loss: {:.4f}, val_loss: {:.4f}, '
                         'train acc: {}, val acc: {}'.format(

@@ -1,7 +1,7 @@
 from torch import nn
 import torch
 
-def  bias_init(x, a=0.75, b=1.25): #TODO: parameterize a, b or find an equation
+def  bias_init(x, a=0.25, b=0.5): #TODO: parameterize a, b or find an equation
     signs = torch.randint(0,2, x.shape)
     signs[torch.where(signs==0)] = -1
     return signs * torch.nn.init.uniform_(x, a, b)
@@ -15,6 +15,7 @@ INIT_METHOD = {
     'normal': torch.nn.init.normal_,
     'he_normal': lambda x: torch.nn.init.kaiming_normal_(x, nonlinearity='relu'),
     'xavier_normal': torch.nn.init.xavier_normal_,
+    'xavier_uniform': torch.nn.init.xavier_uniform_,
     'zeros': torch.nn.init.zeros_,
     'ones': torch.nn.init.ones_,
     'custom': lambda x: torch.nn.init.normal_(x, mean=0.75),

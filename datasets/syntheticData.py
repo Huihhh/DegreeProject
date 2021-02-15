@@ -22,7 +22,7 @@ class Dataset(object):
         n_noise = int(self.total_samples * self.noise)
         n_samples = self.total_samples - n_noise
         if self.cfg.equal_density:
-            ratio = (self.r2[1] - self.r1[0]) / self.r1[1]
+            ratio = (self.r2[1] - self.r2[0]) / self.r1[1]
             num_class1 = int(1 / (1+ratio) * n_samples)
         else: # even the number of samples per class
             num_class1 = n_samples // 2
