@@ -9,14 +9,14 @@ import hydra
 from datasets.syntheticData import Dataset
 from models.dnn import SimpleNet
 from experiments.experiment import Experiment
-from utils.utils import setup_default_logging
+import logging
  
 @hydra.main(config_path='./config', config_name='config')
 def main(CFG: DictConfig) -> None:
     print('==> CONFIG is: \n', OmegaConf.to_yaml(CFG), '\n')
 
     # initial logging file
-    logger = setup_default_logging(CFG, string='Train')
+    logger = logging.getLogger(__name__)
     logger.info(CFG)
 
     # # For reproducibility, set random seed

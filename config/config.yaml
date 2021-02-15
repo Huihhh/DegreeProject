@@ -11,14 +11,14 @@ MODEL:
   out_dim: 1
   activation: 'relu' # or leakyRelU
   use_bn: False
-  fc_winit: 'he_normal'
-  fc_binit: 'zeros'
+  fc_winit: 'xavier_normal' # xavier_normal, he_normal, 
+  fc_binit: 'customb' ## xavier_normal, he_normal, customb
   bn_winit: 'ones'
   bn_binit: 'zeros'
 
 EXPERIMENT:
   name: 'ToyExperiment'
-  log_path: ./outputs/
+  out_folder: test_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   TH: 0.5
   wdecay: 0.0001
@@ -33,11 +33,11 @@ EXPERIMENT:
 
   save_model: True
   save_every: 10
-  out_model: './checkpoints/'
+
   resume: False
   resume_checkpoints: './checkpoints/ToyExperiment_epoch_1329.pth.tar'
 
 
 hydra:
   run:
-    dir: ${EXPERIMENT.log_path}
+    dir: ./outputs/${EXPERIMENT.out_folder}

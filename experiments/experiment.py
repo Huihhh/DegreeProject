@@ -7,6 +7,8 @@ from torch import optim
 from torch.optim.lr_scheduler import LambdaLR
 from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
+from pathlib import Path
+from hydra.utils import get_original_cwd
 
 import numpy as np
 from collections import Counter
@@ -66,7 +68,7 @@ class Experiment(object):
         self.model = model.to(self.device)
 
         # log path
-        self.summary_logdir = os.path.join(self.cfg.log_path, 'summaries')
+        self.summary_logdir = 'summaries'
 
 
         # init grid points to plot linear regions
@@ -87,9 +89,7 @@ class Experiment(object):
             self.grid_labels = np.array(list(map(compare, self.grid_points)))
             
             # dir to save plot
-            if not exists(self.cfg.log_path):
-                mkdir(self.cfg.log_path)
-            self.save_folder = os.path.join(self.cfg.log_path, 'LinearRegions/')
+            self.save_folder = Path('LinearRegions/')
             if not exists(self.save_folder):
                 mkdir(self.save_folder)
 
@@ -188,18 +188,19 @@ class Experiment(object):
                 idx = np.where(sigs_grid == key)
                 region_labels = lables[idx]
                 ratio = sum(region_labels) / region_labels.size
-                if ratio == 1.0 or ratio == -1.0:
-                    color_labels[idx] = ratio + ratio * np.random.random()
-                else: 
-                    color_labels[idx] = ratio
+                # if ratio == 1.0 or ratio == -1.0:
+                #     color_labels[idx] = ratio + ratio * np.random.random()
+                # else: 
+                color_labels[idx] = (ratio + np.random.random()) / 2
 
 
             color_labels = color_labels.reshape(self.xx.shape)
+            plt.figure(figsize=(10, 10), dpi=125)
             plt.imshow(color_labels, interpolation="nearest",
                     extent=(self.xx.min(), self.xx.max(), self.yy.min(), self.yy.max()),
                     cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
 
-            plt.savefig(f'{self.save_folder}{name}_epoch{epoch_idx}.png')
+            plt.savefig(self.save_folder / f'{name}_epoch{epoch_idx}.png')
 
 
 
@@ -263,8 +264,9 @@ class Experiment(object):
         self.swriter.close()
 
     def save_checkpoint(self, state, epoch_idx):
-        saving_checkpoint_file_folder = os.path.join(
-            self.cfg.out_model, self.cfg.log_path.split('/')[-1])
+        project_folder = get_original_cwd()
+        saving_checkpoint_file_folder = Path(project_folder) / 'checkpoints' / self.cfg.out_folder
+
         if not exists(saving_checkpoint_file_folder):
             mkdir(saving_checkpoint_file_folder)
         filename = os.path.join(saving_checkpoint_file_folder,

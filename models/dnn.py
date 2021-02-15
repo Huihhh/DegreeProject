@@ -1,6 +1,11 @@
 from torch import nn
 import torch
 
+def  bias_init(x, a=0.75, b=1.25): #TODO: parameterize a, b or find an equation
+    signs = torch.randint(0,2, x.shape)
+    signs[torch.where(signs==0)] = -1
+    return signs * torch.nn.init.uniform_(x, a, b)
+
 ACT_METHOD = {
     'relu': nn.ReLU(),
     'leakyRelU': nn.LeakyReLU()
@@ -11,7 +16,9 @@ INIT_METHOD = {
     'he_normal': lambda x: torch.nn.init.kaiming_normal_(x, nonlinearity='relu'),
     'xavier_normal': torch.nn.init.xavier_normal_,
     'zeros': torch.nn.init.zeros_,
-    'ones': torch.nn.init.ones_
+    'ones': torch.nn.init.ones_,
+    'custom': lambda x: torch.nn.init.normal_(x, mean=0.75),
+    'customb': bias_init
 }
 
 class SimpleNet(nn.Sequential):
@@ -44,6 +51,14 @@ class SimpleNet(nn.Sequential):
 
     def __str__(self) -> str:
         return super().__str__() + '\ntorch.sigmoid'
+
+    
+    # def param_init(self):
+    #     if self.cfg.
+    #     init_method = 
+    #     for layer in self.layers:
+    #         if isinstance(layer, (nn.Linear, nn.BatchNorm1d)):
+                
 
     def forward(self, input):
         x = super().forward(input)
