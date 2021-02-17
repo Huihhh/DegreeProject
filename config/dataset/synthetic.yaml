@@ -1,11 +1,11 @@
 DATASET:
   name: 'SyntheticData'
-  seed: 1260 # for testing syntheticData.py
+  seed: 0 # for testing syntheticData.py
 
   # dataset
   total_samples: 2000
   noise: 0.1 # 10% of num_samples => 200 noise points
-  equal_density: True
+  equal_density: False
   r1: [0, 0.75] # radius range of the inner circle
   r2: [1.25, 3] # radius range of the outer ring
 

@@ -1,31 +1,21 @@
 from torch import nn
 import torch
 
-def  bias_init(x, a=0.8, b=1.2): #TODO: parameterize a, b or find an equation
-    signs = torch.randint(0,2, x.shape)
-    signs[torch.where(signs==0)] = -1
-    return signs * torch.nn.init.uniform_(x, a, b)
+def  range_uniform(x, a=0.8, b=1.2):
+    n = x.shape[0] // 2
+    x1 = torch.nn.init.uniform_(x[:n,], a, b)
+    x2 = torch.nn.init.uniform_(x[n:,], -b, -a)
+    return torch.cat([x1, x2], 0)
+    # signs = torch.randint(0,2, x.shape)
+    # signs[torch.where(signs==0)] = -1
+    # return signs * torch.nn.init.uniform_(x, a, b)
 
 ACT_METHOD = {
     'relu': nn.ReLU(),
     'leaky_relu': nn.LeakyReLU()
 }
 
-INIT_METHOD = {
-    'normal': torch.nn.init.normal_,
-    'he_normal': lambda x: torch.nn.init.kaiming_normal_(x, nonlinearity='relu'),
-    'he_uniform': lambda x: torch.nn.init.kaiming_uniform_(x, nonlinearity='relu'),
-    'xavier_normal': torch.nn.init.xavier_normal_,
-    'xavier_uniform': torch.nn.init.xavier_uniform_,
-    'zeros': torch.nn.init.zeros_,
-    'ones': torch.nn.init.ones_,
-    'custom': lambda x: torch.nn.init.normal_(x, mean=0.75),
-    'bias_init': bias_init,
-    'manual': lambda x: x
-}
-
 class SimpleNet(nn.Sequential):
-    # h_nodes: include input_dim
     def __init__(self, cfg) -> None:
         self.cfg = cfg
         self.layers = []
@@ -36,20 +26,20 @@ class SimpleNet(nn.Sequential):
         for i in range(len(self.h_nodes) - 1):
             fc = nn.Linear(self.h_nodes[i], self.h_nodes[i+1])
             torch.random.manual_seed(i)
-            INIT_METHOD[self.cfg.fc_winit](fc.weight)
-            INIT_METHOD[self.cfg.fc_binit](fc.bias)
+            eval(cfg.fc_winit.func)(fc.weight)
+            eval(cfg.fc_binit.func)(fc.bias)
             ac = ACT_METHOD[self.cfg.activation]
             if self.use_bn:
                 bn = nn.BatchNorm1d(self.h_nodes[i+1])
-                INIT_METHOD[self.cfg.bn_winit](bn.weight)
-                INIT_METHOD[self.cfg.bn_binit](bn.bias)
+                eval(cfg.bn_winit.func)(bn.weight)
+                eval(cfg.bn_binit)(bn.bias)
                 self.layers.append(nn.Sequential(fc, bn, ac))
             else:
                 self.layers.append(nn.Sequential(fc, ac))
 
         predict = nn.Linear(self.h_nodes[-1], self.out_dim)
-        INIT_METHOD[self.cfg.fc_winit](predict.weight)
-        INIT_METHOD[self.cfg.fc_binit](predict.bias)
+        eval(cfg.fc_winit.func)(predict.weight)
+        eval(cfg.fc_binit.func)(predict.bias)
         self.layers.append(predict)
         super().__init__(*self.layers)
 

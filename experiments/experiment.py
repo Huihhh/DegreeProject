@@ -176,7 +176,6 @@ class Experiment(object):
 
 
     def plot_signatures(self, epoch_idx):
-        
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
         pseudo_label = torch.where(net_out>self.cfg.TH, 1, 0).cpu().numpy()
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
@@ -207,6 +206,9 @@ class Experiment(object):
             plt.imshow(color_labels, interpolation="nearest",
                     extent=(self.xx.min(), self.xx.max(), self.yy.min(), self.yy.max()),
                     cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
+            if self.cfg.plot_points:
+                input_points, labels = self.dataset.data
+                plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
 
             plt.savefig(self.save_folder / f'{name}_epoch{epoch_idx}.png')
         return boundary_regions, total_regions

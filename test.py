@@ -1,7 +1,8 @@
-import random
+
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
+import random
 
 from omegaconf import DictConfig, OmegaConf
 import hydra
@@ -10,14 +11,15 @@ from datasets.syntheticData import Dataset
 from models.dnn import SimpleNet
 from experiments.experiment import Experiment
 import logging
- 
+from pathlib import Path
+
 @hydra.main(config_path='./config', config_name='config')
 def main(CFG: DictConfig) -> None:
     print('==> CONFIG is: \n', OmegaConf.to_yaml(CFG), '\n')
 
     # initial logging file
     logger = logging.getLogger(__name__)
-    logger.info(OmegaConf.to_yaml(CFG))
+    logger.info(CFG)
 
     # # For reproducibility, set random seed
     if CFG.Logging.seed == 'None':
@@ -31,6 +33,7 @@ def main(CFG: DictConfig) -> None:
 
     # get datasets
     dataset = Dataset(CFG.DATASET)
+    dataset.plot('./')
 
     # build model
     model = SimpleNet(CFG.MODEL)
@@ -40,15 +43,11 @@ def main(CFG: DictConfig) -> None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device=device)
 
-    experiment = Experiment(model, dataset, CFG)
-    experiment.fitting()
-    logger.info("======= Training done =======")
+    experiment = Experiment(model, dataset, CFG, plot_sig=True)
+    experiment.load_model(Path(CFG.EXPERIMENT.resume_checkpoints))
     experiment.testing()
-    logger.info("======= Testing done =======")
-
+    logger.info("======= test done =======")
 
 if __name__ == '__main__':
-    # ### Error: Initializing libiomp5.dylib, but found libiomp5.dylib already initialized.###
-    # import os
-    # os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
     main()
+

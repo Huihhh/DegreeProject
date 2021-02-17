@@ -1,24 +1,24 @@
 #TODO: add available choices
 defaults:
   - dataset: synthetic
+  - init_methods: init_methods
 
 Logging:
   name: "LR"
-  seed: 1265   
+  seed: 0
 
 MODEL:
   h_nodes: [2, 32]
   out_dim: 1
   activation: 'relu' # or leakyRelU
   use_bn: False
-  fc_winit: 'xavier_normal' # xavier_normal, he_normal, 
-  fc_binit: 'bias_init' ## xavier_normal, he_normal, customb
-  bn_winit: 'ones'
-  bn_binit: 'zeros'
+  fc_winit: ${init_methods.xavier_uniform} #'lambda x: torch.nn.init.xavier_uniform_(x, gain=3.0)' #'xavier_uniform' # xavier_normal, he_normal, 
+  fc_binit: ${init_methods.range_uniform} ## xavier_normal, he_normal, customb
+  bn_winit: ${init_methods.ones}
+  bn_binit: ${init_methods.zeros}
 
 EXPERIMENT:
   name: 'ToyExperiment'
-  out_folder: ${MODEL.fc_winit}_${MODEL.fc_binit}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   TH: 0.5
   wdecay: 0.0005
@@ -28,14 +28,16 @@ EXPERIMENT:
   used_nesterov: False
   use_gpu: True
 
-  n_epoch: 2000
-  plot_every: 10 
+  n_epoch: 1024
+  plot_every: 64
+  plot_points: False
 
   save_model: True
-  save_every: 10
+  save_every: 64
+  out_folder: ${MODEL.fc_winit.name}_${MODEL.fc_binit.name}_wd${EXPERIMENT.wdecay}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   resume: False
-  resume_checkpoints: './checkpoints/ToyExperiment_epoch_1329.pth.tar'
+  resume_checkpoints: '../../checkpoints/ToyExperiment_epoch_1499.pth.tar'
 
 
 hydra:
