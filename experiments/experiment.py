@@ -177,7 +177,7 @@ class Experiment(object):
 
     def plot_signatures(self, epoch_idx):
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
-        pseudo_label = torch.where(net_out>self.cfg.TH, 1, 0).cpu().numpy()
+        pseudo_label = torch.where(net_out>self.cfg.TH, torch.tensor(1), torch.tensor(0)).cpu().numpy()
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_counter = Counter(sigs_grid)
         total_regions = len(sigs_grid_counter)
