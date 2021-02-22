@@ -167,7 +167,7 @@ class Experiment(object):
                 acc = accuracy(outputs, targets)
                 # update recording
                 test_losses_meter.update(loss.item(), inputs.shape[0])
-                top1_meter.update(acc.item(), inputs.shape[0])
+                top1_meter.update(acc, inputs.shape[0])
                 batch_time_meter.update(time.time() - start)
 
         test_loss, top1_acc = test_losses_meter.avg,top1_meter.avg
