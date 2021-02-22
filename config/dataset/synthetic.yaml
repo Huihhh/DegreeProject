@@ -1,22 +1,22 @@
-DATASET:
-  seed: 0 # for testing syntheticData.py
+#@package DATASET
+seed: 0 # for testing syntheticData.py
 
-  # make data
-  name: 'circles_fill'
-  total_samples: 2000
-  noise: 0.1 # 10% of num_samples => 200 noise points
-  factor: 0.5 # used in make_circle
+# make data
+name: 'circles_fill'
+total_samples: 2000
+noise: 0.1 # 10% of num_samples => 200 noise points
+factor: 0.5 # used in make_circle
 
-  equal_density: False
-  r1: [0, 0.75] # radius range of the inner circle
-  r2: [1.25, 3] # radius range of the outer ring
+equal_density: False
+r1: [0, 0.75] # radius range of the inner circle
+r2: [1.25, 3] # radius range of the outer ring
 
-  # data loader
-  n_train: 1400
-  n_val: 400
-  n_test: 200
-  batch_size: 32
-  num_workers: 4
+# data loader
+n_train: 1400
+n_val: 400
+n_test: 200
+batch_size: 32
+num_workers: 4
 
 # hydra:
 #   run:

@@ -203,14 +203,27 @@ class Experiment(object):
 
             color_labels = color_labels.reshape(self.xx.shape)
             plt.figure(figsize=(10, 10), dpi=125)
-            plt.imshow(color_labels, interpolation="nearest",
+            plt.imshow(color_labels, 
+                    interpolation="nearest",
+                    vmax=1.0, 
+                    vmin=-1.0, 
                     extent=(self.xx.min(), self.xx.max(), self.yy.min(), self.yy.max()),
-                    cmap=plt.get_cmap('bwr'), aspect="auto", origin="lower", alpha=1)
+                    cmap=plt.get_cmap('bwr'), 
+                    aspect="auto", 
+                    origin="lower", 
+                    alpha=1)
             if self.cfg.plot_points:
                 input_points, labels = self.dataset.data
                 plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
 
             plt.savefig(self.save_folder / f'{name}_epoch{epoch_idx}.png')
+
+        # save confidence map
+        confidence = net_out.reshape(self.xx.shape).detach().numpy()
+        # plt.figure(figsize=(14, 10))
+        plt.scatter(self.xx.reshape(-1), self.yy.reshape(-1), c=confidence)
+        plt.colorbar()
+        plt.savefig(self.save_folder / f'confidenc_epoch{epoch_idx}.png')
         return boundary_regions, total_regions
 
 
