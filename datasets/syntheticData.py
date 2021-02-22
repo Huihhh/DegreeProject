@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch, os
 import torch.utils.data as Data
+from sklearn import datasets
+from torch.utils.data import dataset
 
 
 class Dataset(object):
@@ -14,10 +16,16 @@ class Dataset(object):
         self.seed = cfg.seed
         self.noise = cfg.noise
         self.r1, self.r2 = cfg.r1, cfg.r2
+        self.DATA = {
+            'circles_fill': self.make_circles_fill,
+            'circles': self.make_circles,
+            'moons': self.make_moons,
+        }
+        self.data = self.DATA[cfg.name]()
         self.get_dataloader()
 
 
-    def gen_circle_data(self):
+    def make_circles_fill(self):
         # each class has the same density 
         n_noise = int(self.total_samples * self.noise)
         n_samples = self.total_samples - n_noise
@@ -44,13 +52,21 @@ class Dataset(object):
         labels = np.concatenate(labels)
         print('the number of negative points: ', len(np.where(labels==0)[0]))
         print('the number of positive points: ', len(np.where(labels==1)[0]))
-        self.data = [np.concatenate(X, 1).transpose(1, 0), labels]
-        self.minX, self.minY = self.data[0].min(0)
-        self.maxX, self.maxY = self.data[0].max(0)
-        return self.data
+        return np.concatenate(X, 1).transpose(1, 0), labels
+
+    def make_circles(self):
+        return datasets.make_circles(n_samples=self.total_samples, factor=self.cfg.factor, noise=self.noise)
+
+    def make_moons(self):
+        return datasets.make_moons(n_samples=self.total_samples, noise=self.noise)
+
+    def make_moons(self):
+        return datasets.make_moons(self.total_samples, noise=self.noise)
+
+
 
     def plot(self, save_dir='./data'):
-        x, l = self.gen_circle_data()
+        x, l = self.make_circles_fill()
         plt.figure(figsize=(10, 10), dpi=125)
         idxs = np.where(l==1)
         plt.plot(x[:, 0], x[:, 1], 'bo', markersize=1)
@@ -72,9 +88,10 @@ class Dataset(object):
         plt.savefig(os.path.join(save_dir, self.cfg.name + '.png'))
 
     def get_dataloader(self):
-        X, Y = self.gen_circle_data()
-        X = torch.from_numpy(X).float()
-        Y = torch.from_numpy(Y).long()
+        self.minX, self.minY = self.data[0].min(0)
+        self.maxX, self.maxY = self.data[0].max(0)
+        X = torch.from_numpy(self.data[0]).float()
+        Y = torch.from_numpy(self.data[1]).long()
         dataset = Data.TensorDataset(X, Y)
         trainset, valset, testset = Data.random_split(dataset, [self.cfg.n_train, self.cfg.n_val, self.cfg.n_test], generator=torch.Generator().manual_seed(self.seed))
         kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True)

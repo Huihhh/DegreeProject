@@ -107,7 +107,7 @@ class Experiment(object):
             y_pred = self.model(batch_x)
             # print(batch_idx, y_pred)
             loss = self.loss_func(y_pred, batch_y[:, None])
-            y_pred =torch.where(y_pred>self.cfg.TH, 1, 0)
+            y_pred =torch.where(y_pred>self.cfg.TH, torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
             # print('#positive points:', y_pred.sum())
             acc = accuracy(y_pred, batch_y)
 
@@ -142,8 +142,8 @@ class Experiment(object):
 
                 # update recording
                 val_losses_meter.update(loss.item(), batch_x.shape[0])
-                val_acc_meter.update(acc.item())
-            return val_losses_meter.avg, val_acc_meter.avg
+                val_acc_meter.update(acc)
+        return val_losses_meter.avg, val_acc_meter.avg
     
     
     def testing(self):

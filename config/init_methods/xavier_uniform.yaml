@@ -1,0 +1,5 @@
+# @package xavier_uniform
+params:
+  gain: 1
+name: xu
+func: torch.nn.init.xavier_uniform_

@@ -1,0 +1,5 @@
+#@package he_uniform
+params: 
+  nonlinearity: relu
+name: hu
+func: torch.nn.init.kaiming_uniform_

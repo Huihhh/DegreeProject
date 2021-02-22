@@ -1,0 +1,4 @@
+#@package ones
+params: ""
+name: ones
+func: torch.nn.init.ones_

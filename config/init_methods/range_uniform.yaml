@@ -1,0 +1,6 @@
+#@package range_uniform
+params:
+  a: 0.8
+  b: 1.2
+name: ru
+func: range_uniform

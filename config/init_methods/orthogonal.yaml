@@ -1,0 +1,5 @@
+#@package orthogonal
+params:
+  gain: 1
+name: orth
+func: torch.nn.init.orthogonal_

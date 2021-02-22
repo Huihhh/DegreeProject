@@ -1,0 +1,6 @@
+#@package normal
+params:
+  mean: 0
+  std: 1
+name: normal
+func: torch.nn.init.normal_

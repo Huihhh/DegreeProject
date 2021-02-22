@@ -1,0 +1,5 @@
+#@package he_normal
+params:
+  nonlinearity: relu
+name: hn
+func: torch.nn.init.kaiming_normal_
