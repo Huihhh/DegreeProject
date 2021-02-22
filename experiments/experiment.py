@@ -163,7 +163,7 @@ class Experiment(object):
                 outputs = self.forward(inputs)
                 # compute loss and accuracy
                 loss = self.loss_func(outputs, targets[:, None])
-                outputs =torch.where(outputs>self.cfg.TH, 1, 0)
+                outputs =torch.where(outputs>self.cfg.TH, torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
                 acc = accuracy(outputs, targets)
                 # update recording
                 test_losses_meter.update(loss.item(), inputs.shape[0])
@@ -220,7 +220,7 @@ class Experiment(object):
 
         # save confidence map
         if self.cfg.plot_confidence:
-            confidence = net_out.reshape(self.xx.shape).detach().numpy()
+            confidence = net_out.reshape(self.xx.shape).detach().cpu().numpy()
             # plt.figure(figsize=(14, 10))
             plt.scatter(self.xx.reshape(-1), self.yy.reshape(-1), c=confidence)
             plt.colorbar()
