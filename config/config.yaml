@@ -34,6 +34,7 @@ EXPERIMENT:
   n_epoch: 1024
   plot_every: 64
   plot_points: False
+  plot_confidence: True
 
   save_model: True
   save_every: 64
