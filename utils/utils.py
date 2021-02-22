@@ -8,7 +8,7 @@ import numpy as np
 
 
 def accuracy(output, target):
-    correct_n = (output.view(-1) == target).sum()
+    correct_n = (output.view(-1) == target).sum().item()
     batch_size = target.size(0)
     return 100 * correct_n/batch_size
 

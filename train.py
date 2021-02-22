@@ -13,8 +13,6 @@ import logging
  
 @hydra.main(config_path='./config', config_name='config')
 def main(CFG: DictConfig) -> None:
-    print('==> CONFIG is: \n', OmegaConf.to_yaml(CFG), '\n')
-
     # initial logging file
     logger = logging.getLogger(__name__)
     logger.info(OmegaConf.to_yaml(CFG))
