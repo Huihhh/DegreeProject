@@ -1,4 +1,4 @@
 #@package zeros
-params: ''
+params: {}
 name: zeros
 func: torch.nn.init.zeros_
