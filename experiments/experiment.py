@@ -220,7 +220,7 @@ class Experiment(object):
 
         # save confidence map
         if self.cfg.plot_confidence:
-            confidence = net_out.reshape(self.xx.shape).detach().numpy()
+            confidence = net_out.reshape(self.xx.shape).detach().cpu().numpy()
             # plt.figure(figsize=(14, 10))
             plt.scatter(self.xx.reshape(-1), self.yy.reshape(-1), c=confidence)
             plt.colorbar()

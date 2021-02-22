@@ -65,21 +65,21 @@ class Dataset(object):
 
 
 
-    def plot(self, save_dir='./data'):
-        x, l = self.make_circles_fill()
+    def plot(self, save_dir='./'):
+        x, l = self.data
         plt.figure(figsize=(10, 10), dpi=125)
         idxs = np.where(l==1)
         plt.plot(x[:, 0], x[:, 1], 'bo', markersize=1)
         plt.plot(x[idxs, 0], x[idxs, 1], 'ro', markersize=1)
         plt.xlim(self.minX-0.1, self.maxX + 0.1)
         plt.ylim(self.minY-0.1, self.maxY + 0.1)
-        _t = np.arange(0, 7, 0.1)
-        boundary_colors = ['b-', 'r-']
-        boundary_radius = [self.r1[1]**0.5, self.r2[0]**0.5]
-        for r, clr in zip(boundary_radius, boundary_colors):
-            _x = r * np.cos(_t)
-            _y = r * np.sin(_t)
-            plt.plot(_x, _y, clr)
+        # _t = np.arange(0, 7, 0.1)
+        # boundary_colors = ['b-', 'r-']
+        # boundary_radius = [self.r1[1]**0.5, self.r2[0]**0.5]
+        # for r, clr in zip(boundary_radius, boundary_colors):
+        #     _x = r * np.cos(_t)
+        #     _y = r * np.sin(_t)
+        #     plt.plot(_x, _y, clr)
         plt.xlabel('x')
         plt.ylabel('y')
         plt.title('Random Scatter')
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     import os, sys, random
     sys.path.append(os.getcwd())
 
-    @hydra.main(config_path='../config/dataset', config_name='synthetic')
+    @hydra.main(config_path='../config', config_name='config')
     def main(CFG: DictConfig):
             # # For reproducibility, set random seed
         if CFG.DATASET.seed == 'None':
@@ -114,7 +114,7 @@ if __name__ == '__main__':
         np.random.seed(CFG.DATASET.seed)
         dataset = Dataset(CFG.DATASET)
         dataset.plot()
-        np.savetxt('./data/input.txt', dataset.data[0], delimiter=',')
+        np.savetxt('./input.txt', dataset.data[0], delimiter=',')
         # x, y = next(iter(dataset.train_loader))
         # print(x)
         # print(y)
