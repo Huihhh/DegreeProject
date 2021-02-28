@@ -52,8 +52,21 @@ class Experiment(object):
         super().__init__()
         self.dataset = dataset
         self.cfg = cfg.EXPERIMENT
-        params = [{'params': model.parameters(), 'weigh_decay': self.cfg.wdecay}]
-        self.optimizer = optim.Adam(params, lr=self.cfg.optim_lr,)
+        # used Gpu or not
+        self.use_gpu = cfg.EXPERIMENT.use_gpu
+        self.device = torch.device(
+            'cuda' if torch.cuda.is_available() and self.use_gpu else 'cpu')
+        self.model = model.to(self.device)
+        
+        no_decay = ['bias', 'bn']
+        grouped_parameters = [
+            {'params': [p for n, p in self.model.named_parameters() if not any(
+                nd in n for nd in no_decay)], 'weight_decay': self.cfg.wdecay},
+            {'params': [p for n, p in self.model.named_parameters() if any(
+                nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        ]
+        # params = [{'params': model.parameters(), 'weigh_decay': self.cfg.wdecay}] # do decay to all params
+        self.optimizer = optim.Adam(grouped_parameters, lr=self.cfg.optim_lr,)
                                 #    momentum=self.cfg.optim_momentum, nesterov=self.cfg.used_nesterov)
         steps_per_epoch = np.ceil(cfg.DATASET.n_train / cfg.DATASET.batch_size)
         total_training_steps = self.cfg.n_epoch * steps_per_epoch
@@ -61,11 +74,7 @@ class Experiment(object):
         self.scheduler = get_cosine_schedule_with_warmup(self.optimizer, warmup_steps, total_training_steps)
         self.loss_func = torch.nn.BCELoss()
 
-        # used Gpu or not
-        self.use_gpu = cfg.EXPERIMENT.use_gpu
-        self.device = torch.device(
-            'cuda' if torch.cuda.is_available() and self.use_gpu else 'cpu')
-        self.model = model.to(self.device)
+
 
         # log path
         self.summary_logdir = 'summaries'
@@ -106,7 +115,13 @@ class Experiment(object):
             batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device).float()
             y_pred = self.model(batch_x)
             # print(batch_idx, y_pred)
-            loss = self.loss_func(y_pred, batch_y[:, None])
+            
+            bias_reg_loss = AverageMeter()
+            if self.cfg.bdecay > 0:
+                for name, param in self.model.named_parameters():
+                    if 'bias' in name:
+                        bias_reg_loss.update(torch.sum(torch.abs(param) - eval(self.cfg.bdecay_b))) #TODO: parameterize 1.0
+            loss = self.loss_func(y_pred, batch_y[:, None]) + self.cfg.bdecay * bias_reg_loss.avg
             y_pred =torch.where(y_pred>self.cfg.TH, torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
             # print('#positive points:', y_pred.sum())
             acc = accuracy(y_pred, batch_y)
@@ -177,6 +192,7 @@ class Experiment(object):
 
     def plot_signatures(self, epoch_idx):
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
+        net_out = torch.sigmoid(net_out)
         pseudo_label = torch.where(net_out.cpu()>self.cfg.TH, torch.tensor(1), torch.tensor(-1)).numpy()
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_counter = Counter(sigs_grid)
@@ -266,7 +282,7 @@ class Experiment(object):
             val_loss, val_acc = self.valation_step()
 
             # saving data in tensorboard
-            self.swriter.add_scalars('train/lr', {'Current Lr': cur_lr}, epoch_idx)
+            self.swriter.add_scalars('lr', {'Current Lr': cur_lr}, epoch_idx)
             self.swriter.add_scalars(
                 'loss', {'train_loss': train_loss, 'val_loss': val_loss}, epoch_idx)
             self.swriter.add_scalars(

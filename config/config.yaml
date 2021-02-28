@@ -25,6 +25,8 @@ EXPERIMENT:
 
   TH: 0.5
   wdecay: 0.0005
+  bdecay: 0.0005 # bias decay
+  bdecay_b: (${fc_binit.params.b} + ${fc_binit.params.a})/2
   optim_lr: 0.001
   optim_momentum: 0.9
   warmup: 0

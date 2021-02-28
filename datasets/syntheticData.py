@@ -60,9 +60,6 @@ class Dataset(object):
     def make_moons(self):
         return datasets.make_moons(n_samples=self.total_samples, noise=self.noise)
 
-    def make_moons(self):
-        return datasets.make_moons(self.total_samples, noise=self.noise)
-
 
 
     def plot(self, save_dir='./'):
@@ -106,7 +103,7 @@ if __name__ == '__main__':
     import os, sys, random
     sys.path.append(os.getcwd())
 
-    @hydra.main(config_path='../config', config_name='config')
+    @hydra.main(config_path='../config/dataset', config_name='synthetic')
     def main(CFG: DictConfig):
             # # For reproducibility, set random seed
         if CFG.DATASET.seed == 'None':
@@ -115,7 +112,4 @@ if __name__ == '__main__':
         dataset = Dataset(CFG.DATASET)
         dataset.plot()
         np.savetxt('./input.txt', dataset.data[0], delimiter=',')
-        # x, y = next(iter(dataset.train_loader))
-        # print(x)
-        # print(y)
     main()

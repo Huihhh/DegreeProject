@@ -1,5 +1,5 @@
 # @package xavier_normal
 params: 
-  - gain: 1
+  gain: 1
 name: xn
 func: torch.nn.init.xavier_normal_
