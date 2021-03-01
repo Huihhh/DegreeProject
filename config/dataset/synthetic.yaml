@@ -5,7 +5,7 @@ DATASET:
   # make data
   name: 'circles_fill'
   total_samples: 2000
-  noise: 0.1 # 10% of num_samples => 200 noise points
+  noise: 0.05 # 10% of num_samples => 200 noise points
   factor: 0.5 # used in make_circle
 
   equal_density: False

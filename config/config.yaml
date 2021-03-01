@@ -41,7 +41,7 @@ EXPERIMENT:
   save_model: True
   save_every: 64
   #TODO: MODEL.fc_winit.params.gain might not be in struct
-  out_folder: ${DATASET.name}_${MODEL.fc_winit.name}_${MODEL.fc_binit.name}_wd${EXPERIMENT.wdecay}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
+  out_folder: ${DATASET.name}_${MODEL.fc_winit.name}_${MODEL.fc_binit.name}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   resume: False
   resume_checkpoints: '../../checkpoints/ToyExperiment_epoch_1499.pth.tar'
