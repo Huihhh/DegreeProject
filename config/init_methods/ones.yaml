@@ -1,4 +1,4 @@
-#@package ones
+#@package _group_._name_
 params: {}
 name: ones
 func: torch.nn.init.ones_

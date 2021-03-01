@@ -81,21 +81,8 @@ class Experiment(object):
 
 
         # init grid points to plot linear regions
-        if cfg.EXPERIMENT.plot_every > 0 or plot_sig:
-            h = 0.01
-            self.xx, self.yy = np.meshgrid(np.arange(self.dataset.minX, self.dataset.maxX, h),
-                                np.arange(self.dataset.minY, self.dataset.maxY, h))
-            self.grid_points = np.concatenate([self.xx.reshape(-1, 1), self.yy.reshape(-1, 1)], 1)
-            
-            def compare(point):
-                x, y = point
-                if x**2 + y**2 <=cfg.DATASET.r1[-1]:
-                    return -1
-                elif x**2 + y**2 >=cfg.DATASET.r2[0] and x**2 + y**2 <=cfg.DATASET.r2[-1]:
-                    return 1
-                else: 
-                    return 0  
-            self.grid_labels = np.array(list(map(compare, self.grid_points)))
+        if cfg.EXPERIMENT.plot_every > 0 or plot_sig: 
+            self.grid_points, self.grid_labels = dataset.get_decision_boundary()
             
             # dir to save plot
             self.save_folder = Path('LinearRegions/')
@@ -191,6 +178,7 @@ class Experiment(object):
 
 
     def plot_signatures(self, epoch_idx):
+        xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
         net_out = torch.sigmoid(net_out)
         pseudo_label = torch.where(net_out.cpu()>self.cfg.TH, torch.tensor(1), torch.tensor(-1)).numpy()
@@ -198,15 +186,16 @@ class Experiment(object):
         sigs_grid_counter = Counter(sigs_grid)
         total_regions = len(sigs_grid_counter)
         boundary_regions = 0
+        grid_labels = self.grid_labels.ravel()
         for key in sigs_grid_counter:
             idx = np.where(sigs_grid == key)
-            region_labels = self.grid_labels[idx]  
+            region_labels = grid_labels[idx]  
             ratio = sum(region_labels) / region_labels.size
             if ratio>-0.2 and ratio<0.2: #TODO:parameterize threshold, or get the value geometrically?
                 boundary_regions += 1
         logger.info(f'[Linear regions] #around the boundary / total: {boundary_regions} / {total_regions}')
 
-        for lables, name in zip([self.grid_labels, pseudo_label], ['true_label', 'pseudo_label']):
+        for lables, name in zip([grid_labels, pseudo_label], ['true_label', 'pseudo_label']):
             color_labels = np.zeros(lables.shape)
             for i, key in enumerate(sigs_grid_counter):
                 idx = np.where(sigs_grid == key)
@@ -217,13 +206,13 @@ class Experiment(object):
                 # else: 
                 color_labels[idx] = (ratio + np.random.random()) / 2
 
-            color_labels = color_labels.reshape(self.xx.shape)
+            color_labels = color_labels.reshape(self.grid_labels.shape)
             plt.figure(figsize=(10, 10), dpi=125)
             plt.imshow(color_labels, 
                     interpolation="nearest",
                     vmax=1.0, 
                     vmin=-1.0, 
-                    extent=(self.xx.min(), self.xx.max(), self.yy.min(), self.yy.max()),
+                    extent=(xx.min(), xx.max(), yy.min(), yy.max()),
                     cmap=plt.get_cmap('bwr'), 
                     aspect="auto", 
                     origin="lower", 
@@ -236,9 +225,9 @@ class Experiment(object):
 
         # save confidence map
         if self.cfg.plot_confidence:
-            confidence = net_out.reshape(self.xx.shape).detach().cpu().numpy()
+            confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
             # plt.figure(figsize=(14, 10))
-            plt.scatter(self.xx.reshape(-1), self.yy.reshape(-1), c=confidence)
+            plt.scatter(xx, yy, c=confidence)
             plt.colorbar()
             plt.savefig(self.save_folder / f'confidenc_epoch{epoch_idx}.png')
         return boundary_regions, total_regions

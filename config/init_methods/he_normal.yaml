@@ -1,4 +1,4 @@
-#@package he_normal
+#@package _group_._name_
 params:
   nonlinearity: relu
 name: hn

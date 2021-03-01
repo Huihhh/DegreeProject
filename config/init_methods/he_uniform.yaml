@@ -1,4 +1,4 @@
-#@package he_uniform
+#@package _group_._name_
 params: 
   nonlinearity: relu
 name: hu

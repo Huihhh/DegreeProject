@@ -1,4 +1,4 @@
-# @package xavier_uniform
+# @package _group_._name_
 params:
   gain: 1
 name: xu

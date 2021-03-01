@@ -1,10 +1,10 @@
 #TODO: add available choices
 defaults:
   - dataset: synthetic
-  - init_methods@fc_winit: xavier_uniform
-  - init_methods@fc_binit: range_uniform
-  - init_methods@bn_winit: ones
-  - init_methods@bn_binit: zeros
+  - init_methods@MODEL.fc_winit: xavier_uniform
+  - init_methods@MODEL.fc_binit: range_uniform
+  - init_methods@MODEL.bn_winit: ones
+  - init_methods@MODEL.bn_binit: zeros
 
 Logging:
   name: "LR"
@@ -15,10 +15,10 @@ MODEL:
   out_dim: 1
   activation: 'relu' # or leakyRelU
   use_bn: False
-  fc_winit: ${fc_winit} #'lambda x: torch.nn.init.xavier_uniform_(x, gain=3.0)' #'xavier_uniform' # xavier_normal, he_normal, 
-  fc_binit: ${fc_binit} ## xavier_normal, he_normal, customb
-  bn_winit: ${bn_winit}
-  bn_binit: ${bn_binit}
+  # fc_winit: ${fc_winit} #'lambda x: torch.nn.init.xavier_uniform_(x, gain=3.0)' #'xavier_uniform' # xavier_normal, he_normal, 
+  # fc_binit: ${fc_binit} ## xavier_normal, he_normal, customb
+  # bn_winit: ${bn_winit}
+  # bn_binit: ${bn_binit}
 
 EXPERIMENT:
   name: 'ToyExperiment'
@@ -26,7 +26,7 @@ EXPERIMENT:
   TH: 0.5
   wdecay: 0.0005
   bdecay: 0.0005 # bias decay
-  bdecay_b: (${fc_binit.params.b} + ${fc_binit.params.a})/2
+  bdecay_b: (${MODEL.fc_binit.params.b} + ${MODEL.fc_binit.params.a})/2
   optim_lr: 0.001
   optim_momentum: 0.9
   warmup: 0
@@ -40,7 +40,8 @@ EXPERIMENT:
 
   save_model: True
   save_every: 64
-  out_folder: ${DATASET.name}_${MODEL.fc_winit.name}${MODEL.fc_winit.params}_${MODEL.fc_binit.name}${MODEL.fc_binit.params}_wd${EXPERIMENT.wdecay}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
+  #TODO: MODEL.fc_winit.params.gain might not be in struct
+  out_folder: ${DATASET.name}_${MODEL.fc_winit.name}${MODEL.fc_winit.params.gain}_${MODEL.fc_binit.name}_wd${EXPERIMENT.wdecay}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   resume: False
   resume_checkpoints: '../../checkpoints/ToyExperiment_epoch_1499.pth.tar'

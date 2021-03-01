@@ -1,4 +1,4 @@
-#@package normal
+#@package _group_._name_
 params:
   mean: 0
   std: 1

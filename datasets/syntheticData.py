@@ -2,8 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch, os
 import torch.utils.data as Data
-from sklearn import datasets
-from torch.utils.data import dataset
+from sklearn import datasets, svm
 
 
 class Dataset(object):
@@ -22,6 +21,8 @@ class Dataset(object):
             'moons': self.make_moons,
         }
         self.data = self.DATA[cfg.name]()
+        self.minX, self.minY = self.data[0].min(0)
+        self.maxX, self.maxY = self.data[0].max(0)
         self.get_dataloader()
 
 
@@ -57,17 +58,46 @@ class Dataset(object):
     def make_circles(self):
         return datasets.make_circles(n_samples=self.total_samples, factor=self.cfg.factor, noise=self.noise)
 
+
+
+    def get_decison_boundary(self):
+        # create grid to evaluate model
+        h = 0.01
+        xx = np.arange(self.minX, self.maxX, h)
+        yy = np.arange(self.minY, self.maxY, h)
+        YY, XX = np.meshgrid(yy, xx)
+        xy = np.vstack([XX.ravel(), YY.ravel()]).T
+
+        if self.cfg.name == 'circles_fill':            
+            def compare(point):
+                x, y = point
+                if x**2 + y**2 <=self.cfg.r1[-1]:
+                    return -1
+                elif x**2 + y**2 >=self.cfg.r2[0] and x**2 + y**2 <=self.cfg.r2[-1]:
+                    return 1
+                else: 
+                    return 0  
+            grid_labels = np.array(list(map(compare, xy))).reshape(XX.shape)
+        else:            
+            X, y = self.data
+            clf = svm.SVC(kernel='rbf', C=100)
+            clf.fit(X, y)
+            prob = clf.decision_function(xy).reshape(XX.shape)
+            prob = np.rot90(prob, k=-3)
+            TH = 1
+            decision_boundary = 1 - ((-TH<=prob) & (prob<=TH)).astype(float)
+            negtive_class = -2 * (prob<-TH).astype(float)
+            grid_labels = decision_boundary + negtive_class
+        return xy, grid_labels
+
     def make_moons(self):
         return datasets.make_moons(n_samples=self.total_samples, noise=self.noise)
-
 
 
     def plot(self, save_dir='./'):
         x, l = self.data
         plt.figure(figsize=(10, 10), dpi=125)
-        idxs = np.where(l==1)
-        plt.plot(x[:, 0], x[:, 1], 'bo', markersize=1)
-        plt.plot(x[idxs, 0], x[idxs, 1], 'ro', markersize=1)
+        plt.scatter(x[:, 0], x[:, 1], c=l, cmap=plt.cm.Paired)
         plt.xlim(self.minX-0.1, self.maxX + 0.1)
         plt.ylim(self.minY-0.1, self.maxY + 0.1)
         # _t = np.arange(0, 7, 0.1)
@@ -85,8 +115,6 @@ class Dataset(object):
         plt.savefig(os.path.join(save_dir, self.cfg.name + '.png'))
 
     def get_dataloader(self):
-        self.minX, self.minY = self.data[0].min(0)
-        self.maxX, self.maxY = self.data[0].max(0)
         X = torch.from_numpy(self.data[0]).float()
         Y = torch.from_numpy(self.data[1]).long()
         dataset = Data.TensorDataset(X, Y)
@@ -110,6 +138,11 @@ if __name__ == '__main__':
             CFG.DATASET.seed = random.randint(1, 10000)
         np.random.seed(CFG.DATASET.seed)
         dataset = Dataset(CFG.DATASET)
-        dataset.plot()
+        grid_points, grid_labels = dataset.get_decison_boundary()
+        print(grid_labels)
+        plt.imshow(grid_labels)
+        plt.colorbar()
+        plt.savefig('./mask.png')
+        # dataset.plot()
         np.savetxt('./input.txt', dataset.data[0], delimiter=',')
     main()
