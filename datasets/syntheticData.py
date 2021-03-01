@@ -83,7 +83,7 @@ class Dataset(object):
             clf = svm.SVC(kernel='rbf', C=100)
             clf.fit(X, y)
             prob = clf.decision_function(xy).reshape(XX.shape)
-            prob = np.rot90(prob, k=-3)
+            # prob = np.rot90(prob, k=-3)
             TH = 1
             decision_boundary = 1 - ((-TH<=prob) & (prob<=TH)).astype(float)
             negtive_class = -2 * (prob<-TH).astype(float)

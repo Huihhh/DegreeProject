@@ -107,7 +107,7 @@ class Experiment(object):
             if self.cfg.bdecay > 0:
                 for name, param in self.model.named_parameters():
                     if 'bias' in name:
-                        bias_reg_loss.update(torch.sum(torch.abs(param) - eval(self.cfg.bdecay_b))) #TODO: parameterize 1.0
+                        bias_reg_loss.update(torch.sum(torch.abs(param) - eval(self.cfg.bdecay_b)))
             loss = self.loss_func(y_pred, batch_y[:, None]) + self.cfg.bdecay * bias_reg_loss.avg
             y_pred =torch.where(y_pred>self.cfg.TH, torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
             # print('#positive points:', y_pred.sum())
@@ -186,7 +186,7 @@ class Experiment(object):
         sigs_grid_counter = Counter(sigs_grid)
         total_regions = len(sigs_grid_counter)
         boundary_regions = 0
-        grid_labels = self.grid_labels.ravel()
+        grid_labels = self.grid_labels.reshape(-1)
         for key in sigs_grid_counter:
             idx = np.where(sigs_grid == key)
             region_labels = grid_labels[idx]  
@@ -207,6 +207,9 @@ class Experiment(object):
                 color_labels[idx] = (ratio + np.random.random()) / 2
 
             color_labels = color_labels.reshape(self.grid_labels.shape)
+            if self.dataset.cfg.name != 'circles_fill':
+                color_labels = color_labels.T
+            # random_labels = np.array([sigs_grid_counter[s] for s in sigs_grid]).reshape(self.grid_labels.shape)
             plt.figure(figsize=(10, 10), dpi=125)
             plt.imshow(color_labels, 
                     interpolation="nearest",
