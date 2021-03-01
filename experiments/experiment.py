@@ -105,9 +105,10 @@ class Experiment(object):
             
             bias_reg_loss = AverageMeter()
             if self.cfg.bdecay > 0:
+                bdecay_b = eval(self.cfg.bdecay_b) if isinstance(self.cfg.bdecay_b, str) else self.cfg.bdecay_b
                 for name, param in self.model.named_parameters():
                     if 'bias' in name:
-                        bias_reg_loss.update(torch.sum(torch.abs(param) - eval(self.cfg.bdecay_b)))
+                        bias_reg_loss.update(torch.sum(torch.abs(param) - bdecay_b))
             loss = self.loss_func(y_pred, batch_y[:, None]) + self.cfg.bdecay * bias_reg_loss.avg
             y_pred =torch.where(y_pred>self.cfg.TH, torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
             # print('#positive points:', y_pred.sum())

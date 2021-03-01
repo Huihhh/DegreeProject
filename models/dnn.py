@@ -1,5 +1,7 @@
 from torch import nn
 import torch
+import numpy as np
+
 
 def  range_uniform(x, a=0.8, b=1.2):
     n = x.shape[0] // 2
@@ -9,6 +11,26 @@ def  range_uniform(x, a=0.8, b=1.2):
     # signs = torch.randint(0,2, x.shape)
     # signs[torch.where(signs==0)] = -1
     # return signs * torch.nn.init.uniform_(x, a, b)
+
+def tanh(w, a=-np.pi, b=np.pi):
+    n, m = w.shape
+    ww = np.zeros((n, m))
+    for i in range(m):
+        wn = np.tanh(np.linspace(a, b, n))
+        ww[:, i] = wn
+    w = torch.tensor(ww, requires_grad = True, device="cuda" if torch.cuda.is_available() else 'cpu')
+    # w.to("cuda" if torch.cuda.is_available() else 'cpu')
+    # w.requires_grad = True
+    return w
+
+def cos(w, a=-np.pi, b=np.pi):
+    n, = w.shape
+    wn = np.cos(np.linspace(a, b, n))
+    w = torch.tensor(wn, requires_grad = True, device="cuda" if torch.cuda.is_available() else 'cpu')
+    # w.to("cuda" if torch.cuda.is_available() else 'cpu')
+    # w.requires_grad = True
+    return w
+
 
 ACT_METHOD = {
     'relu': nn.ReLU(),

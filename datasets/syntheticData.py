@@ -60,7 +60,7 @@ class Dataset(object):
 
 
 
-    def get_decison_boundary(self):
+    def get_decision_boundary(self):
         # create grid to evaluate model
         h = 0.01
         xx = np.arange(self.minX, self.maxX, h)
