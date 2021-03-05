@@ -15,18 +15,17 @@ MODEL:
   out_dim: 1
   activation: 'relu' # or leakyRelU
   use_bn: False
-  # fc_winit: ${fc_winit} #'lambda x: torch.nn.init.xavier_uniform_(x, gain=3.0)' #'xavier_uniform' # xavier_normal, he_normal, 
-  # fc_binit: ${fc_binit} ## xavier_normal, he_normal, customb
-  # bn_winit: ${bn_winit}
-  # bn_binit: ${bn_binit}
 
 EXPERIMENT:
   name: 'ToyExperiment'
 
+  # classification
   TH: 0.5
   wdecay: 0.0005
   bdecay: 0.0005 # bias decay
-  bdecay_b: (${MODEL.fc_binit.params.b} + ${MODEL.fc_binit.params.a})/2
+  bdecay_m: (${MODEL.fc_binit.params.b} + ${MODEL.fc_binit.params.a})/2
+
+  # optimizer
   optim_lr: 0.001
   optim_momentum: 0.9
   warmup: 0
@@ -34,6 +33,7 @@ EXPERIMENT:
   use_gpu: True
 
   n_epoch: 1024
+  steps_per_epoch: np.ceil(${DATASET.n_train} / ${DATASET.batch_size})
   plot_every: 64
   plot_points: False
   plot_confidence: True
@@ -44,7 +44,8 @@ EXPERIMENT:
   out_folder: ${DATASET.name}_${MODEL.fc_winit.name}_${MODEL.fc_binit.name}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   resume: False
-  resume_checkpoints: '../../checkpoints/ToyExperiment_epoch_1499.pth.tar'
+  resume_checkpoints: './checkpoints/ToyExperiment_epoch_0.pth.tar' # folder or file
+  resumed_epochs: [0,1023]
 
 
 hydra:

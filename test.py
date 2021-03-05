@@ -1,8 +1,20 @@
 
+""" 
+Get test accuracy of checkpoints
+run: 
+python test.py hydra.run.dir="outputs/output_folder"
+
+example: 
+python test.py hydra.run.dir="outputs/circles_fill_xu_ru_seed0_2021-03-03_10-47-32"
+"""
+
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-import random
+import random, yaml
+from easydict import EasyDict as edict
+import logging
+from pathlib import Path
 
 from omegaconf import DictConfig, OmegaConf
 import hydra
@@ -10,16 +22,23 @@ import hydra
 from datasets.syntheticData import Dataset
 from models.dnn import SimpleNet
 from experiments.experiment import Experiment
-import logging
-from pathlib import Path
+
+
+
 
 @hydra.main(config_path='./config', config_name='config')
 def main(CFG: DictConfig) -> None:
-    print('==> CONFIG is: \n', OmegaConf.to_yaml(CFG), '\n')
-
     # initial logging file
     logger = logging.getLogger(__name__)
-    logger.info(CFG)
+
+    with open('./.hydra/config.yaml', 'r') as file:
+        try:
+            config_file = yaml.safe_load(file)
+        except yaml.YAMLError as exc:
+            print(exc)
+    TRAIN_CFG = edict(config_file)
+    CFG.MODEL.h_nodes = TRAIN_CFG.MODEL.h_nodes
+    logger.info(OmegaConf.to_yaml(CFG))
 
     # # For reproducibility, set random seed
     if CFG.Logging.seed == 'None':

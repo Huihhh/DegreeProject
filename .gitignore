@@ -13,3 +13,4 @@ try*
 *.txt
 
 data/
+filter_outputs.py
