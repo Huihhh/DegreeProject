@@ -5,6 +5,7 @@ import torch.backends.cudnn as cudnn
 
 from omegaconf import DictConfig, OmegaConf
 import hydra
+import ignite
 
 from datasets.syntheticData import Dataset
 from models.dnn import SimpleNet
@@ -24,6 +25,7 @@ def main(CFG: DictConfig) -> None:
     np.random.seed(CFG.Logging.seed)
     torch.manual_seed(CFG.Logging.seed)
     torch.cuda.manual_seed_all(CFG.Logging.seed)
+    ignite.utils.manual_seed(CFG.Logging.seed)
     cudnn.deterministic = True
     cudnn.benchmark = False
 
@@ -38,11 +40,9 @@ def main(CFG: DictConfig) -> None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device=device)
 
-    experiment = Experiment(model, dataset, CFG)
-    experiment.fitting()
-    logger.info("======= Training done =======")
-    experiment.testing()
-    logger.info("======= Testing done =======")
+    experiment = Experiment(model, dataset, CFG.EXPERIMENT)
+    logger.info("======= Training =======")
+    experiment.fitting(dataset.train_loader)
 
 
 if __name__ == '__main__':

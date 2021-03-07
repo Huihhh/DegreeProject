@@ -14,26 +14,26 @@ logger = logging.getLogger(__name__)
 
 
 class Dataset(object):
-    def __init__(self, cfg) -> None:
+    def __init__(self, CFG) -> None:
         super().__init__()
-        self.cfg = cfg
-        self.total_samples = cfg.total_samples
-        self.n_train = cfg.n_train
-        self.n_val = cfg.n_val
-        self.n_test = cfg.n_test
-        self.batch_size = cfg.batch_size
-        self.num_workers = cfg.num_workers
+        self.CFG = CFG
+        self.total_samples = CFG.total_samples
+        self.n_train = CFG.n_train
+        self.n_val = CFG.n_val
+        self.n_test = CFG.n_test
+        self.batch_size = CFG.batch_size
+        self.num_workers = CFG.num_workers
         self.get_dataset()
         self.get_dataloader()
 
     def get_dataset(self):
-        logger.info(f'***** Preparing data: {self.cfg.name} *****')
+        logger.info(f'***** Preparing data: {self.CFG.name} *****')
         self.DATA = {
             'circles_fill': self.make_circles_fill,
             'circles': self.make_circles,
             'moons': self.make_moons,
         }
-        self.data = self.DATA[self.cfg.name](**self.cfg)
+        self.data = self.DATA[self.CFG.name](**self.CFG)
         logger.info('the number of negative points: %d' %
                     len(np.where(self.data[1] == 0)[0]))
         logger.info('the number of positive points: %d' %
@@ -83,12 +83,12 @@ class Dataset(object):
         YY, XX = np.meshgrid(yy, xx)
         xy = np.vstack([XX.ravel(), YY.ravel()]).T
 
-        if self.cfg.name == 'circles_fill':
+        if self.CFG.name == 'circles_fill':
             def compare(point):
                 x, y = point
-                if x**2 + y**2 <= self.cfg.r1[-1]:
+                if x**2 + y**2 <= self.CFG.r1[-1]:
                     return -1
-                elif x**2 + y**2 >= self.cfg.r2[0] and x**2 + y**2 <= self.cfg.r2[-1]:
+                elif x**2 + y**2 >= self.CFG.r2[0] and x**2 + y**2 <= self.CFG.r2[-1]:
                     return 1
                 else:
                     return 0
@@ -112,14 +112,14 @@ class Dataset(object):
         plt.ylim(self.minY-0.1, self.maxY + 0.1)
         plt.xlabel('x')
         plt.ylabel('y')
-        plt.title(self.cfg.name)
-        plt.savefig(os.path.join(save_dir, self.cfg.name + '.png'))
+        plt.title(self.CFG.name)
+        plt.savefig(os.path.join(save_dir, self.CFG.name + '.png'))
 
     def get_dataloader(self):
         X = torch.from_numpy(self.data[0]).float()
         Y = torch.from_numpy(self.data[1]).long()
         dataset = Data.TensorDataset(X, Y)
-        trainset, valset, testset = Data.random_split(dataset, [self.cfg.n_train, self.cfg.n_val, self.cfg.n_test])
+        trainset, valset, testset = Data.random_split(dataset, [self.CFG.n_train, self.CFG.n_val, self.CFG.n_test])
         kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True)
         self.train_loader = Data.DataLoader(trainset, shuffle=False, **kwargs)
         self.val_loader = Data.DataLoader(valset, **kwargs)
