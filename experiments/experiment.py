@@ -241,7 +241,6 @@ class Experiment(object):
                                aspect="auto",
                                origin="lower",
                                alpha=0.6)
-                    plt.colorbar()
                     if self.CFG.plot_points:
                         input_points, labels = self.dataset.data
                         plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
