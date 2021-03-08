@@ -88,7 +88,7 @@ class Dataset(object):
                 x, y = point
                 if x**2 + y**2 <= self.CFG.r1[-1]:
                     return -1
-                elif x**2 + y**2 >= self.CFG.r2[0] and x**2 + y**2 <= self.CFG.r2[-1]:
+                elif x**2 + y**2 >= self.CFG.r2[0]:
                     return 1
                 else:
                     return 0

@@ -22,8 +22,9 @@ EXPERIMENT:
   # classification
   TH: 0.5
   wdecay: 0.0005
-  bdecay: 0.0005 # bias decay
-  bdecay_m: (${MODEL.fc_binit.params.b} + ${MODEL.fc_binit.params.a})/2
+  bdecay: 0.000 # bias decay TODO: only applied for circle_fill data
+  bdecay_mean: (${MODEL.fc_binit.params.b} + ${MODEL.fc_binit.params.a})/2
+  bdecay_method: l1
 
   # optimizer
   optim_lr: 0.001
@@ -37,11 +38,12 @@ EXPERIMENT:
   plot_every: 64
   plot_points: False
   plot_confidence: True
+  TH_bounds: [-0.2, 0.2]
 
   save_model: True
   save_every: 64
   #TODO: MODEL.fc_winit.params.gain might not be in struct
-  out_folder: ${DATASET.name}_${MODEL.fc_winit.name}_${MODEL.fc_binit.name}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
+  out_folder: ${DATASET.name}_${MODEL.fc_winit.name}_${MODEL.fc_binit.name}_${EXPERIMENT.TH_bounds}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   resume: False
   resume_checkpoints: './checkpoints/ToyExperiment_epoch_0.pth.tar' # folder or file

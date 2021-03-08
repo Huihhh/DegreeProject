@@ -1,3 +1,7 @@
+from enum import unique
+from numpy import random
+from utils.get_signatures import get_signatures
+from utils.utils import AverageMeter, accuracy
 from ignite.engine import Events, Engine
 from ignite.metrics import Accuracy, Loss
 from ignite.handlers import Checkpoint, DiskSaver
@@ -12,6 +16,8 @@ import numpy as np
 import logging
 from collections import Counter
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+from matplotlib.colors import LinearSegmentedColormap
 
 import os
 from os import mkdir
@@ -22,11 +28,9 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
-from utils.utils import AverageMeter, accuracy
-from utils.get_signatures import get_signatures
-
 
 logger = logging.getLogger(__name__)
+
 
 def get_cosine_schedule_with_warmup(optimizer,
                                     num_warmup_steps,
@@ -53,7 +57,6 @@ def get_cosine_schedule_with_warmup(optimizer,
     return LambdaLR(optimizer, _lr_lambda, last_epoch)
 
 
-
 class Experiment(object):
     def __init__(self, model, dataset, CFG, plot_sig=False) -> None:
         super().__init__()
@@ -72,7 +75,7 @@ class Experiment(object):
                 nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
         self.optimizer = optim.Adam(grouped_parameters, lr=CFG.optim_lr,)
-                #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
+        #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
         steps_per_epoch = eval(CFG.steps_per_epoch)
         total_training_steps = CFG.n_epoch * steps_per_epoch
         warmup_steps = CFG.warmup * steps_per_epoch
@@ -91,23 +94,27 @@ class Experiment(object):
             self.save_folder = Path('LinearRegions/')
             if not exists(self.save_folder):
                 mkdir(self.save_folder)
-        
+
         if CFG.save_model:
             self.save_checkpoints()
-    
+
     def init_criterion(self):
         if self.CFG.bdecay > 0:
-            bdecay_m = eval(self.CFG.bdecay_m) if isinstance(self.CFG.bdecay_m, str) else self.CFG.bdecay_m
-        else: bdecay_m = 0
+            bdecay_mean = eval(self.CFG.bdecay_mean) if isinstance(self.CFG.bdecay_mean, str) else self.CFG.bdecay_mean
+        else:
+            bdecay_mean = 0     
+
         def bias_reg():
+            if self.CFG.bdecay_method == 'l1':
+                reg_func = lambda x: torch.sum(torch.abs(torch.abs(x) - bdecay_mean))
+            else: 
+                reg_func = lambda x: (torch.abs(torch.abs(x) - bdecay_mean))**2
             bias_reg_loss = AverageMeter()
             for name, param in self.model.named_parameters():
-                    if 'bias' in name:
-                        #TODO: try other loss regularization methods
-                        bias_reg_loss.update(torch.sum(torch.abs(torch.abs(param) - bdecay_m)))
+                if 'bias' in name:
+                    bias_reg_loss.update(reg_func(param))
             return bias_reg_loss.avg
         self.criterion = lambda pred, y: torch.nn.BCELoss()(pred, y) + self.CFG.bdecay * bias_reg()
-
 
     def create_trainer(self):
         def train_step(engine, batch):
@@ -152,56 +159,82 @@ class Experiment(object):
             return False
 
         if self.CFG.plot_every > 0:
-            @trainer.on(Events.EPOCH_STARTED(event_filter=custom_event_filter) | Events.EPOCH_COMPLETED(every=self.CFG.plot_every)) 
-            def plot_signatures(engine): #TODO: every epoch for the first 10 epochs
+            @trainer.on(Events.EPOCH_STARTED(event_filter=custom_event_filter) | Events.EPOCH_COMPLETED(every=self.CFG.plot_every))
+            def plot_signatures(engine):  
                 xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
-                net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
+                net_out, sigs_grid, _ = get_signatures(torch.tensor(
+                    self.grid_points).float().to(self.device), self.model)
                 net_out = torch.sigmoid(net_out)
                 pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, torch.tensor(1), torch.tensor(-1)).numpy()
                 sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
                 sigs_grid_counter = Counter(sigs_grid)
                 total_regions = len(sigs_grid_counter)
-                boundary_regions = 0
-                grid_labels = self.grid_labels.reshape(-1)
-                for key in sigs_grid_counter:
-                    idx = np.where(sigs_grid == key)
-                    region_labels = grid_labels[idx]
-                    ratio = sum(region_labels) / region_labels.size
-                    if ratio > -0.2 and ratio < 0.2:  # TODO:parameterize threshold, or get the value geometrically?
-                        boundary_regions += 1
-                logger.info(f'[Linear regions] #around the boundary / total: {boundary_regions} / {total_regions}')
+
+                grid_labels = self.grid_labels.reshape(-1)            
 
                 for lables, name in zip([grid_labels, pseudo_label], ['true_label', 'pseudo_label']):
                     color_labels = np.zeros(lables.shape)
+                    random_labels = np.zeros(lables.shape)
                     for i, key in enumerate(sigs_grid_counter):
                         idx = np.where(sigs_grid == key)
                         region_labels = lables[idx]
-                        ratio = sum(region_labels) / region_labels.size
-                        # if ratio == 1.0 or ratio == -1.0:
-                        #     color_labels[idx] = ratio + ratio * np.random.random()
-                        # else:
-                        color_labels[idx] = (ratio + np.random.random()) / 2
+                        color_labels[idx] = sum(region_labels) / region_labels.size
+                        random_labels[idx] = np.random.random()
+                        # color_labels[idx] = (ratio + np.random.random()) / 2
 
+                    if name == 'true_label':
+                        unique_labels = np.unique(color_labels)
+                        boundary_regions = sum((unique_labels>-0.2) & (unique_labels < 0.2))
+                        blue_regions = sum(unique_labels <= -0.2)
+                        red_regions = sum(unique_labels >= 0.2)
+                        logger.info(f'[Linear regions] \
+                                #around the boundary: {boundary_regions} \
+                                #red region: {red_regions} \
+                                #blue region: {blue_regions}\
+                                #total regions: {total_regions} ')
+                        self.swriter.add_scalars(
+                                'linear_regions', 
+                                {'total': total_regions, 
+                                'boundary': boundary_regions,
+                                'red_region': red_regions,
+                                'blue_region': blue_regions
+                                },
+                                engine.state.epoch)
+                    color_labels = (color_labels + random_labels) / 2
                     color_labels = color_labels.reshape(self.grid_labels.shape)
+
                     if self.dataset.CFG.name != 'circles_fill':
                         color_labels = color_labels.T
-                    # random_labels = np.array([sigs_grid_counter[s] for s in sigs_grid]).reshape(self.grid_labels.shape)
+
                     plt.figure(figsize=(10, 10), dpi=125)
+                    cmap = mpl.cm.viridis
+                    norm = mpl.colors.BoundaryNorm(self.CFG.TH_bounds, cmap.N, extend='both')
                     plt.imshow(color_labels,
-                            interpolation="nearest",
-                            vmax=1.0,
-                            vmin=-1.0,
-                            extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                            cmap=plt.get_cmap('bwr'),
-                            aspect="auto",
-                            origin="lower",
-                            alpha=1)
+                               interpolation="nearest",
+                               vmax=1.0,
+                               vmin=-1.0,
+                               extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+                               cmap=cmap, #plt.get_cmap('bwr'),
+                               norm=norm,
+                               aspect="auto",
+                               origin="lower",
+                               alpha=1)
+                    plt.imshow(color_labels,
+                               interpolation="nearest",
+                               vmax=1.0,
+                               vmin=-1.0,
+                               extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+                               cmap=plt.get_cmap('bwr'),
+                               aspect="auto",
+                               origin="lower",
+                               alpha=0.6)
+                    plt.colorbar()
                     if self.CFG.plot_points:
                         input_points, labels = self.dataset.data
                         plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
 
                     plt.savefig(self.save_folder / f'{name}_epoch{engine.state.epoch}.png')
-                
+
                 # save confidence map
                 if self.CFG.plot_confidence:
                     confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
@@ -210,16 +243,11 @@ class Experiment(object):
                     plt.colorbar()
                     plt.savefig(self.save_folder / f'confidenc_epoch{engine.state.epoch}.png')
 
-                self.swriter.add_scalars(
-                    'linear_regions', {'total': total_regions, 'boundary': boundary_regions},
-                    engine.state.epoch)
-
 
         @trainer.on(Events.ITERATION_COMPLETED)
         def update_loss_acc(engine):
             self.train_loss.update(engine.state.output[0])
             self.train_acc.update(engine.state.output[1])
-
 
         @trainer.on(Events.EPOCH_STARTED)
         def reset_loss_acc(engine):
@@ -237,17 +265,17 @@ class Experiment(object):
 
             logger.info('Epoch {}. train_loss: {:.4f}, val_loss: {:.4f}, '
                         'train acc: {:.4f}, val acc: {}'.format(
-                            engine.state.epoch, self.train_loss.avg, metrics['loss'], 
+                            engine.state.epoch, self.train_loss.avg, metrics['loss'],
                             self.train_acc.avg, metrics['accuracy']*100.0)
                         )
-        
+
         @trainer.on(Events.COMPLETED)
         def test(engine):
             evaluator.run(self.dataset.test_loader)
             metrics = evaluator.state.metrics
             logger.info("======= Testing =======")
             logger.info(
-            "[Testing] test loss: {:.4f}, test acc:{}".format(metrics['loss'],metrics['accuracy']*100))
+                "[Testing] test loss: {:.4f}, test acc:{}".format(metrics['loss'], metrics['accuracy']*100))
 
         self.trainer = trainer
 
@@ -258,80 +286,22 @@ class Experiment(object):
             # optionally resume from a checkpoint
             self.resume_model()
 
-        self.trainer.run(dataloader, max_epochs=self.CFG.n_epoch)#TODO: self.CFG.n_epoch
+        self.trainer.run(dataloader, max_epochs=self.CFG.n_epoch)  
 
     def save_checkpoints(self):
         self.to_save = {
-            'model': self.model, 
-            'optimizer': self.optimizer, 
-            'scheduler': self.scheduler, 
+            'model': self.model,
+            'optimizer': self.optimizer,
+            'scheduler': self.scheduler,
             'trainer': self.trainer}
 
         handler = Checkpoint(
-            self.to_save, 
-            DiskSaver('checkpoints', create_dir=True), 
-            n_saved=None, 
+            self.to_save,
+            DiskSaver('checkpoints', create_dir=True),
+            n_saved=None,
             global_step_transform=lambda *_: self.trainer.state.epoch
         )
         self.trainer.add_event_handler(Events.EPOCH_COMPLETED(every=self.CFG.save_every), handler)
-
-    def plot_signatures(self, epoch_idx):
-        xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
-        net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
-        net_out = torch.sigmoid(net_out)
-        pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, torch.tensor(1), torch.tensor(-1)).numpy()
-        sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
-        sigs_grid_counter = Counter(sigs_grid)
-        total_regions = len(sigs_grid_counter)
-        boundary_regions = 0
-        grid_labels = self.grid_labels.reshape(-1)
-        for key in sigs_grid_counter:
-            idx = np.where(sigs_grid == key)
-            region_labels = grid_labels[idx]
-            ratio = sum(region_labels) / region_labels.size
-            if ratio > -0.2 and ratio < 0.2:  # TODO:parameterize threshold, or get the value geometrically?
-                boundary_regions += 1
-        logger.info(f'[Linear regions] #around the boundary / total: {boundary_regions} / {total_regions}')
-
-        for lables, name in zip([grid_labels, pseudo_label], ['true_label', 'pseudo_label']):
-            color_labels = np.zeros(lables.shape)
-            for i, key in enumerate(sigs_grid_counter):
-                idx = np.where(sigs_grid == key)
-                region_labels = lables[idx]
-                ratio = sum(region_labels) / region_labels.size
-                # if ratio == 1.0 or ratio == -1.0:
-                #     color_labels[idx] = ratio + ratio * np.random.random()
-                # else:
-                color_labels[idx] = (ratio + np.random.random()) / 2
-
-            color_labels = color_labels.reshape(self.grid_labels.shape)
-            if self.dataset.CFG.name != 'circles_fill':
-                color_labels = color_labels.T
-            # random_labels = np.array([sigs_grid_counter[s] for s in sigs_grid]).reshape(self.grid_labels.shape)
-            plt.figure(figsize=(10, 10), dpi=125)
-            plt.imshow(color_labels,
-                       interpolation="nearest",
-                       vmax=1.0,
-                       vmin=-1.0,
-                       extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                       cmap=plt.get_cmap('bwr'),
-                       aspect="auto",
-                       origin="lower",
-                       alpha=1)
-            if self.CFG.plot_points:
-                input_points, labels = self.dataset.data
-                plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
-
-            plt.savefig(self.save_folder / f'{name}_epoch{epoch_idx}.png')
-        
-        # save confidence map
-        if self.CFG.plot_confidence:
-            confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
-            # plt.figure(figsize=(14, 10))
-            plt.scatter(xx, yy, c=confidence, vmin=0, vmax=1)
-            plt.colorbar()
-            plt.savefig(self.save_folder / f'confidenc_epoch{epoch_idx}.png')
-        return boundary_regions, total_regions
 
     def load_model(self, mdl_fname):
         print(mdl_fname)
