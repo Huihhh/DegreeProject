@@ -1,5 +1,6 @@
 from enum import unique
 from numpy import random
+from numpy.lib.arraysetops import isin
 from utils.get_signatures import get_signatures
 from utils.utils import AverageMeter, accuracy
 from ignite.engine import Events, Engine
@@ -172,6 +173,36 @@ class Experiment(object):
 
                 grid_labels = self.grid_labels.reshape(-1)            
 
+                boundary_regions, blue_regions, red_regions = 0, 0, 0
+                if isinstance(self.CFG.TH_bounds, float):
+                    bounds = [-self.CFG.TH_bounds, self.CFG.TH_bounds]
+                else:
+                    bounds = self.CFG.TH_bounds
+                for i, key in enumerate(sigs_grid_counter):
+                        idx = np.where(sigs_grid == key)
+                        region_labels = grid_labels[idx]
+                        ratio = sum(region_labels) / region_labels.size
+                        if ratio > bounds[1]:
+                            red_regions += 1
+                        elif ratio < bounds[0]:
+                            blue_regions += 1
+                        else:
+                            boundary_regions += 1
+
+                logger.info(f'[Linear regions] \
+                        #around the boundary: {boundary_regions} \
+                        #red region: {red_regions} \
+                        #blue region: {blue_regions}\
+                        #total regions: {total_regions} ')
+                self.swriter.add_scalars(
+                        'linear_regions', 
+                        {'total': total_regions, 
+                        'boundary': boundary_regions,
+                        'red_region': red_regions,
+                        'blue_region': blue_regions
+                        },
+                        engine.state.epoch)
+
                 for lables, name in zip([grid_labels, pseudo_label], ['true_label', 'pseudo_label']):
                     color_labels = np.zeros(lables.shape)
                     random_labels = np.zeros(lables.shape)
@@ -182,24 +213,6 @@ class Experiment(object):
                         random_labels[idx] = np.random.random()
                         # color_labels[idx] = (ratio + np.random.random()) / 2
 
-                    if name == 'true_label':
-                        unique_labels = np.unique(color_labels)
-                        boundary_regions = sum((unique_labels>-0.2) & (unique_labels < 0.2))
-                        blue_regions = sum(unique_labels <= -0.2)
-                        red_regions = sum(unique_labels >= 0.2)
-                        logger.info(f'[Linear regions] \
-                                #around the boundary: {boundary_regions} \
-                                #red region: {red_regions} \
-                                #blue region: {blue_regions}\
-                                #total regions: {total_regions} ')
-                        self.swriter.add_scalars(
-                                'linear_regions', 
-                                {'total': total_regions, 
-                                'boundary': boundary_regions,
-                                'red_region': red_regions,
-                                'blue_region': blue_regions
-                                },
-                                engine.state.epoch)
                     color_labels = (color_labels + random_labels) / 2
                     color_labels = color_labels.reshape(self.grid_labels.shape)
 
@@ -208,7 +221,7 @@ class Experiment(object):
 
                     plt.figure(figsize=(10, 10), dpi=125)
                     cmap = mpl.cm.viridis
-                    norm = mpl.colors.BoundaryNorm(self.CFG.TH_bounds, cmap.N, extend='both')
+                    norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
                     plt.imshow(color_labels,
                                interpolation="nearest",
                                vmax=1.0,
