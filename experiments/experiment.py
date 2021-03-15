@@ -202,7 +202,7 @@ class Experiment(object):
                             boundary_regions['count'] += 1
                             boundary_regions['area'] += region_labels.size
 
-                logger.info(f"[Linear regions] divided by the area \
+                logger.info(f"[Linear regions/area] \
                     #around the boundary: {boundary_regions['count'] / boundary_regions['area']} \
                     #red region: {red_regions['count'] / red_regions['area']} \
                     #blue region: {blue_regions['count'] / blue_regions['area'] }\
@@ -239,8 +239,6 @@ class Experiment(object):
                     norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
                     plt.imshow(color_labels,
                                interpolation="nearest",
-                               vmax=1.0,
-                               vmin=-1.0,
                                extent=(xx.min(), xx.max(), yy.min(), yy.max()),
                                cmap=cmap, #plt.get_cmap('bwr'),
                                norm=norm,

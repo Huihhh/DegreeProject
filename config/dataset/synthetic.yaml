@@ -1,17 +1,16 @@
 #@package _global_
 DATASET:
-  # make data
   name: 'moons'
+  seed: 0
+  # make data
   total_samples: 2000
-  noise: 0.05 
-
-  # params for make_circle
-  factor: 0.5 
-
-  # params for make_circle_fill
-  equal_density: False
-  r1: [0, 1] # radius range of the inner circle
-  r2: [4, 9] # radius range of the outer ring
+  equal_density: False # only used for circles
+  width: 0.05
+  boundary_w: 1 # boundary_width [0, 1) for circles, 
+  noise_ratio: 0 # percent of noisy points
+  noise_level: 0.2 # guassian std noise
+  shuffle: True
+  increase_dim: [] # [np.cos, np.sin, np.square]
 
   # data loader
   n_train: 1400

@@ -34,7 +34,8 @@ def main(CFG: DictConfig) -> None:
 
     # build model
     model = SimpleNet(CFG.MODEL)
-    logger.info("[Model] Building model {} out dim: {}".format(CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
+    logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"
+                                .format(eval(CFG.MODEL.input_dim), CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 
     if CFG.EXPERIMENT.use_gpu:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
