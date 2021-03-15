@@ -203,9 +203,9 @@ class Experiment(object):
                             boundary_regions['area'] += region_labels.size
 
                 logger.info(f"[Linear regions/area] \
-                    #around the boundary: {boundary_regions['count'] / boundary_regions['area']} \
-                    #red region: {red_regions['count'] / red_regions['area']} \
-                    #blue region: {blue_regions['count'] / blue_regions['area'] }\
+                    #around the boundary: {boundary_regions['count'] / (boundary_regions['area'] +1e-6)} \
+                    #red region: {red_regions['count'] / (red_regions['area'] + 1e-6)} \
+                    #blue region: {blue_regions['count'] / (blue_regions['area'] +1e-6) }\
                     #total regions: {total_regions} ")
                 self.swriter.add_scalars(
                         'linear_regions/count', 
@@ -217,9 +217,9 @@ class Experiment(object):
                         engine.state.epoch)
                 self.swriter.add_scalars(
                         'linear_regions/divided_by_area', 
-                        {'boundary': boundary_regions['count'] / boundary_regions['area'],
-                        'blue_region': blue_regions['count'] / blue_regions['area'],
-                        'red_region': red_regions['count'] / red_regions['area'],
+                        {'boundary': boundary_regions['count'] / (boundary_regions['area'] +1e-6),
+                        'blue_region': blue_regions['count'] / (blue_regions['area'] +1e-6),
+                        'red_region': red_regions['count'] / (red_regions['area'] + 1e-6),
                         },
                         engine.state.epoch)
                 for lables, name in zip([grid_labels, pseudo_label.squeeze()], ['true_label', 'pseudo_label']):
