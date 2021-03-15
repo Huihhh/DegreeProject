@@ -26,6 +26,7 @@ from pathlib import Path
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
+from utils.ema import EMA
 
 
 logger = logging.getLogger(__name__)
@@ -90,9 +91,17 @@ class Experiment(object):
             self.save_folder = Path('LinearRegions/')
             if not exists(self.save_folder):
                 mkdir(self.save_folder)
-
+        
+        # used EWA or not
+        self.ema = self.CFG.ema_used
+        if self.ema:
+            self.ema_model = EMA(self.model, self.CFG.ema_decay)
+            logger.info("[EMA] initial ")
+        
         if CFG.save_model:
             self.save_checkpoints()
+        
+
 
     def init_criterion(self):
         if self.CFG.bdecay > 0:
@@ -268,6 +277,16 @@ class Experiment(object):
                     plt.colorbar()
                     plt.savefig(self.save_folder / f'confidenc_epoch{engine.state.epoch}.png')
 
+        
+        if self.CFG.ema_used:
+            @trainer.on(Events.ITERATION_COMPLETED)
+            def update_ema_params(engien):
+                self.ema_model.update_params()
+            
+            @trainer.on(Events.EPOCH_COMPLETED)
+            def update_ema_buffer(engien):
+                self.ema_model.update_buffer()
+                logger.info("[EMA] update buffer()")
 
         @trainer.on(Events.EPOCH_COMPLETED)
         def write_summaries(engine):
@@ -284,6 +303,25 @@ class Experiment(object):
                             engine.state.epoch, train_matrics['loss'], val_metrics['loss'],
                             train_matrics['acc'], val_metrics['accuracy']*100.0)
                         )
+            if self.CFG.ema_used:
+                self.ema_model.apply_shadow()
+                logger.info("[EMA] apply shadow")
+                # testing
+                evaluator.run(self.dataset.val_loader)
+                val_metrics_ema = evaluator.state.metrics
+                # restore the params
+                self.ema_model.restore()
+                logger.info("[EMA] restore ")
+                self.swriter.add_scalars(
+                'train_w_ema/loss', {'train_loss': train_matrics['loss'], 'val_loss_ema': val_metrics_ema['loss']}, engine.state.epoch)
+                self.swriter.add_scalars(
+                'test_w_ema/accuracy', {'val': train_matrics['acc'], 'val': val_metrics_ema['accuracy']*100}, engine.state.epoch)
+
+                logger.info('[EMA] Epoch {}. train_loss: {:.4f}, val_loss_ema: {:.4f}, '
+                            'train acc: {:.4f}, val_acc_ema: {}'.format(
+                                engine.state.epoch, train_matrics['loss'], val_metrics_ema['loss'],
+                                train_matrics['acc'], val_metrics_ema['accuracy']*100.0)
+                            )
 
         @trainer.on(Events.COMPLETED)
         def test(engine):
@@ -309,7 +347,9 @@ class Experiment(object):
             'model': self.model,
             'optimizer': self.optimizer,
             'scheduler': self.scheduler,
-            'trainer': self.trainer}
+            'trainer': self.trainer,
+            # 'ema_state_dict': self.ema_model.shadow if self.CFG.ema_used else None
+            }
 
         handler = Checkpoint(
             self.to_save,
