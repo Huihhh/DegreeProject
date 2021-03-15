@@ -1,8 +1,8 @@
 #TODO: add available choices
 defaults:
   - dataset: synthetic
-  - init_methods@MODEL.fc_winit: xavier_uniform
-  - init_methods@MODEL.fc_binit: range_uniform
+  - init_methods@MODEL.fc_winit: tanh
+  - init_methods@MODEL.fc_binit: cos
   - init_methods@MODEL.bn_winit: ones
   - init_methods@MODEL.bn_binit: zeros
 

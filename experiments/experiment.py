@@ -1,8 +1,5 @@
-from enum import unique
-from numpy import random
-from numpy.lib.arraysetops import isin
 from utils.get_signatures import get_signatures
-from utils.utils import AverageMeter, accuracy
+from utils.utils import AverageMeter, accuracy, Average
 from ignite.engine import Events, Engine
 from ignite.metrics import Accuracy, Loss
 from ignite.handlers import Checkpoint, DiskSaver
@@ -15,10 +12,11 @@ from tensorboardX import SummaryWriter
 import math
 import numpy as np
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from matplotlib.colors import LinearSegmentedColormap
+from functools import partial
+
 
 import os
 from os import mkdir
@@ -81,9 +79,6 @@ class Experiment(object):
         total_training_steps = CFG.n_epoch * steps_per_epoch
         warmup_steps = CFG.warmup * steps_per_epoch
         self.scheduler = get_cosine_schedule_with_warmup(self.optimizer, warmup_steps, total_training_steps)
-
-        self.train_loss = AverageMeter()
-        self.train_acc = AverageMeter()
         self.init_criterion()
         self.create_trainer()
 
@@ -117,30 +112,41 @@ class Experiment(object):
             return bias_reg_loss.avg
         self.criterion = lambda pred, y: torch.nn.BCELoss()(pred, y) + self.CFG.bdecay * bias_reg()
 
-    def create_trainer(self):
-        def train_step(engine, batch):
-            self.model.train()
-            self.optimizer.zero_grad()
+    def train_step(self, engine, batch):
+        self.model.train()
+        self.optimizer.zero_grad()
+        x, y = batch[0].to(self.device), batch[1].to(self.device).float()
+        y_pred = self.model(x)
+        loss = self.criterion(y_pred, y[:, None])
+        y_pred = torch.where(y_pred > self.CFG.TH,
+                                torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
+        acc = accuracy(y_pred, y)
+        loss.backward()
+        self.optimizer.step()
+        return {
+            'loss': loss.item(),
+            'acc': acc
+        }
+
+
+    def validation_step(self, engine, batch):
+        self.model.eval()
+        with torch.no_grad():
             x, y = batch[0].to(self.device), batch[1].to(self.device).float()
             y_pred = self.model(x)
-            loss = self.criterion(y_pred, y[:, None])
-            y_pred = torch.where(y_pred > self.CFG.TH,
-                                 torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
-            acc = accuracy(y_pred, y)
-            loss.backward()
-            self.optimizer.step()
-            return loss.item(), acc
+            return y_pred, y[:, None]
 
-        trainer = Engine(train_step)
+    def create_trainer(self):
+        trainer = Engine(lambda engine, batch: self.train_step(engine, batch))
+        
+        def output_transform(out, name):
+            return out[name]
 
-        def validation_step(engine, batch):
-            self.model.eval()
-            with torch.no_grad():
-                x, y = batch[0].to(self.device), batch[1].to(self.device).float()
-                y_pred = self.model(x)
-                return y_pred, y[:, None]
+        for name in ['loss', 'acc']:
+            Average(output_transform=partial(output_transform, name=name)).attach(trainer, name)
 
-        evaluator = Engine(validation_step)
+
+        evaluator = Engine(lambda engine, batch: self.validation_step(engine, batch))
         evaluator.logger = setup_logger("evaluator", level=30)
 
         def output_transform(output):
@@ -168,17 +174,21 @@ class Experiment(object):
                 net_out = torch.sigmoid(net_out)
                 pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, torch.tensor(1), torch.tensor(-1)).numpy()
                 sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
-                sigs_grid_counter = Counter(sigs_grid)
-                total_regions = len(sigs_grid_counter)
+                region_sigs = list(np.unique(sigs_grid))
+                total_regions = len(region_sigs)
+                region_ids = np.random.permutation(total_regions)
+                
+                sigs_grid_dict = dict(zip(region_sigs, region_ids))                
+                base_color_labels = np.array([sigs_grid_dict[sig] for sig in sigs_grid])
+                base_color_labels = base_color_labels.reshape(self.grid_labels.shape).T
 
                 grid_labels = self.grid_labels.reshape(-1)            
-
                 boundary_regions, blue_regions, red_regions = 0, 0, 0
                 if isinstance(self.CFG.TH_bounds, float):
                     bounds = [-self.CFG.TH_bounds, self.CFG.TH_bounds]
                 else:
                     bounds = self.CFG.TH_bounds
-                for i, key in enumerate(sigs_grid_counter):
+                for i, key in enumerate(sigs_grid_dict):
                         idx = np.where(sigs_grid == key)
                         region_labels = grid_labels[idx]
                         ratio = sum(region_labels) / region_labels.size
@@ -202,25 +212,20 @@ class Experiment(object):
                         'blue_region': blue_regions
                         },
                         engine.state.epoch)
-
-                for lables, name in zip([grid_labels, pseudo_label], ['true_label', 'pseudo_label']):
+                for lables, name in zip([grid_labels, pseudo_label.squeeze()], ['true_label', 'pseudo_label']):
                     color_labels = np.zeros(lables.shape)
-                    random_labels = np.zeros(lables.shape)
-                    for i, key in enumerate(sigs_grid_counter):
+                    for i, key in enumerate(sigs_grid_dict):
                         idx = np.where(sigs_grid == key)
                         region_labels = lables[idx]
-                        color_labels[idx] = sum(region_labels) / region_labels.size
-                        random_labels[idx] = np.random.random()
-                        # color_labels[idx] = (ratio + np.random.random()) / 2
+                        ratio = sum(region_labels) / region_labels.size
+                        color_labels[idx] = ratio
 
-                    color_labels = (color_labels + random_labels) / 2
                     color_labels = color_labels.reshape(self.grid_labels.shape)
-
                     if self.dataset.CFG.name != 'circles_fill':
                         color_labels = color_labels.T
 
-                    plt.figure(figsize=(10, 10), dpi=125)
-                    cmap = mpl.cm.viridis
+                    plt.figure()
+                    cmap = mpl.cm.bwr
                     norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
                     plt.imshow(color_labels,
                                interpolation="nearest",
@@ -232,12 +237,16 @@ class Experiment(object):
                                aspect="auto",
                                origin="lower",
                                alpha=1)
-                    plt.imshow(color_labels,
+                    # if name == 'true_label':
+                    #     cb = plt.colorbar()
+                    #     plt.savefig(self.save_folder / f'labelmask_epoch{engine.state.epoch}.png')
+                    #     cb.remove()
+                    plt.imshow(base_color_labels,
                                interpolation="nearest",
-                               vmax=1.0,
-                               vmin=-1.0,
+                            #    vmax=1.0,
+                            #    vmin=-1.0,
                                extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                               cmap=plt.get_cmap('bwr'),
+                               cmap=plt.get_cmap('Pastel2'),
                                aspect="auto",
                                origin="lower",
                                alpha=0.6)
@@ -246,6 +255,31 @@ class Experiment(object):
                         plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
 
                     plt.savefig(self.save_folder / f'{name}_epoch{engine.state.epoch}.png')
+
+                    # if name == 'true_label':
+                    #     plt.imshow(self.grid_labels.T, 
+                    #                 interpolation="nearest",
+                    #                 vmax=1.0,
+                    #                 vmin=-1.0,
+                    #                 extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+                    #                 cmap=plt.get_cmap('Greys'),
+                    #                 aspect="auto",
+                    #                 origin="lower",
+                    #                 alpha=0.3)
+                    #     # plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
+                    #     plt.savefig(self.save_folder / f'overlay_epoch{engine.state.epoch}.png')
+                    #     plt.figure()
+                    #     plt.imshow(color_labels,
+                    #            interpolation="nearest",
+                    #            vmax=1.0,
+                    #            vmin=-1.0,
+                    #            extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+                    #            cmap=plt.get_cmap('bwr'),
+                    #            aspect="auto",
+                    #            origin="lower",
+                    #            alpha=1)
+                    #     plt.colorbar()
+                    #     plt.savefig(self.save_folder / f'labelratio_epoch{engine.state.epoch}.png')
 
                 # save confidence map
                 if self.CFG.plot_confidence:
@@ -256,29 +290,20 @@ class Experiment(object):
                     plt.savefig(self.save_folder / f'confidenc_epoch{engine.state.epoch}.png')
 
 
-        @trainer.on(Events.ITERATION_COMPLETED)
-        def update_loss_acc(engine):
-            self.train_loss.update(engine.state.output[0])
-            self.train_acc.update(engine.state.output[1])
-
-        @trainer.on(Events.EPOCH_STARTED)
-        def reset_loss_acc(engine):
-            self.train_loss.reset()
-            self.train_acc.reset()
-
         @trainer.on(Events.EPOCH_COMPLETED)
         def write_summaries(engine):
             evaluator.run(self.dataset.val_loader)
-            metrics = evaluator.state.metrics
+            train_matrics = engine.state.metrics
+            val_metrics = evaluator.state.metrics
             self.swriter.add_scalars(
-                'loss', {'train_loss': self.train_loss.avg, 'val_loss': metrics['loss']}, engine.state.epoch)
+                'loss', {'train_loss': train_matrics['loss'], 'val_loss': val_metrics['loss']}, engine.state.epoch)
             self.swriter.add_scalars(
-                'accuracy/', {'train': self.train_acc.avg, 'val': metrics['accuracy']}, engine.state.epoch)
+                'accuracy/', {'train': train_matrics['acc'], 'val': val_metrics['accuracy']*100}, engine.state.epoch)
 
             logger.info('Epoch {}. train_loss: {:.4f}, val_loss: {:.4f}, '
                         'train acc: {:.4f}, val acc: {}'.format(
-                            engine.state.epoch, self.train_loss.avg, metrics['loss'],
-                            self.train_acc.avg, metrics['accuracy']*100.0)
+                            engine.state.epoch, self.train_loss.avg, val_metrics['loss'],
+                            train_matrics['acc'], val_metrics['accuracy']*100.0)
                         )
 
         @trainer.on(Events.COMPLETED)
@@ -300,7 +325,7 @@ class Experiment(object):
 
         self.trainer.run(dataloader, max_epochs=self.CFG.n_epoch)  
 
-    def save_checkpoints(self):
+    def save_checkpoints(self): #TODO: register the event using @trainer.on()
         self.to_save = {
             'model': self.model,
             'optimizer': self.optimizer,
