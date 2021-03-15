@@ -1,7 +1,7 @@
 from utils.get_signatures import get_signatures
-from utils.utils import AverageMeter, accuracy, Average
+from utils.utils import AverageMeter, accuracy
 from ignite.engine import Events, Engine
-from ignite.metrics import Accuracy, Loss
+from ignite.metrics import Accuracy, Loss, Average
 from ignite.handlers import Checkpoint, DiskSaver
 from ignite.utils import setup_logger
 import torch
@@ -183,7 +183,7 @@ class Experiment(object):
                 base_color_labels = base_color_labels.reshape(self.grid_labels.shape).T
 
                 grid_labels = self.grid_labels.reshape(-1)            
-                boundary_regions, blue_regions, red_regions = 0, 0, 0
+                boundary_regions, blue_regions, red_regions = defaultdict(int), defaultdict(int), defaultdict(int)
                 if isinstance(self.CFG.TH_bounds, float):
                     bounds = [-self.CFG.TH_bounds, self.CFG.TH_bounds]
                 else:
@@ -193,23 +193,33 @@ class Experiment(object):
                         region_labels = grid_labels[idx]
                         ratio = sum(region_labels) / region_labels.size
                         if ratio > bounds[1]:
-                            red_regions += 1
+                            red_regions['count'] += 1
+                            red_regions['area'] += region_labels.size
                         elif ratio < bounds[0]:
-                            blue_regions += 1
+                            blue_regions['count'] += 1
+                            blue_regions['area'] += region_labels.size
                         else:
-                            boundary_regions += 1
+                            boundary_regions['count'] += 1
+                            boundary_regions['area'] += region_labels.size
 
-                logger.info(f'[Linear regions] \
-                        #around the boundary: {boundary_regions} \
-                        #red region: {red_regions} \
-                        #blue region: {blue_regions}\
-                        #total regions: {total_regions} ')
+                logger.info(f"[Linear regions] divided by the area \
+                    #around the boundary: {boundary_regions['count'] / boundary_regions['area']} \
+                    #red region: {red_regions['count'] / red_regions['area']} \
+                    #blue region: {blue_regions['count'] / blue_regions['area'] }\
+                    #total regions: {total_regions} ")
                 self.swriter.add_scalars(
-                        'linear_regions', 
+                        'linear_regions/count', 
                         {'total': total_regions, 
-                        'boundary': boundary_regions,
-                        'red_region': red_regions,
-                        'blue_region': blue_regions
+                        'boundary': boundary_regions['count'],
+                        'blue_region': blue_regions['count'],
+                        'red_region': red_regions['count'],
+                        },
+                        engine.state.epoch)
+                self.swriter.add_scalars(
+                        'linear_regions/divided_by_area', 
+                        {'boundary': boundary_regions['count'] / boundary_regions['area'],
+                        'blue_region': blue_regions['count'] / blue_regions['area'],
+                        'red_region': red_regions['count'] / red_regions['area'],
                         },
                         engine.state.epoch)
                 for lables, name in zip([grid_labels, pseudo_label.squeeze()], ['true_label', 'pseudo_label']):
@@ -237,14 +247,9 @@ class Experiment(object):
                                aspect="auto",
                                origin="lower",
                                alpha=1)
-                    # if name == 'true_label':
-                    #     cb = plt.colorbar()
-                    #     plt.savefig(self.save_folder / f'labelmask_epoch{engine.state.epoch}.png')
-                    #     cb.remove()
+
                     plt.imshow(base_color_labels,
                                interpolation="nearest",
-                            #    vmax=1.0,
-                            #    vmin=-1.0,
                                extent=(xx.min(), xx.max(), yy.min(), yy.max()),
                                cmap=plt.get_cmap('Pastel2'),
                                aspect="auto",
@@ -256,30 +261,6 @@ class Experiment(object):
 
                     plt.savefig(self.save_folder / f'{name}_epoch{engine.state.epoch}.png')
 
-                    # if name == 'true_label':
-                    #     plt.imshow(self.grid_labels.T, 
-                    #                 interpolation="nearest",
-                    #                 vmax=1.0,
-                    #                 vmin=-1.0,
-                    #                 extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                    #                 cmap=plt.get_cmap('Greys'),
-                    #                 aspect="auto",
-                    #                 origin="lower",
-                    #                 alpha=0.3)
-                    #     # plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
-                    #     plt.savefig(self.save_folder / f'overlay_epoch{engine.state.epoch}.png')
-                    #     plt.figure()
-                    #     plt.imshow(color_labels,
-                    #            interpolation="nearest",
-                    #            vmax=1.0,
-                    #            vmin=-1.0,
-                    #            extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                    #            cmap=plt.get_cmap('bwr'),
-                    #            aspect="auto",
-                    #            origin="lower",
-                    #            alpha=1)
-                    #     plt.colorbar()
-                    #     plt.savefig(self.save_folder / f'labelratio_epoch{engine.state.epoch}.png')
 
                 # save confidence map
                 if self.CFG.plot_confidence:
@@ -302,7 +283,7 @@ class Experiment(object):
 
             logger.info('Epoch {}. train_loss: {:.4f}, val_loss: {:.4f}, '
                         'train acc: {:.4f}, val acc: {}'.format(
-                            engine.state.epoch, self.train_loss.avg, val_metrics['loss'],
+                            engine.state.epoch, train_matrics['loss'], val_metrics['loss'],
                             train_matrics['acc'], val_metrics['accuracy']*100.0)
                         )
 
