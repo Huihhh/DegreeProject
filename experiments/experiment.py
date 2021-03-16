@@ -176,107 +176,14 @@ class Experiment(object):
 
         if self.CFG.plot_every > 0:
             @trainer.on(Events.EPOCH_STARTED(event_filter=custom_event_filter) | Events.EPOCH_COMPLETED(every=self.CFG.plot_every))
-            def plot_signatures(engine):  
-                xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
-                net_out, sigs_grid, _ = get_signatures(torch.tensor(
-                    self.grid_points).float().to(self.device), self.model)
-                net_out = torch.sigmoid(net_out)
-                pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, torch.tensor(1), torch.tensor(-1)).numpy()
-                sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
-                region_sigs = list(np.unique(sigs_grid))
-                total_regions = len(region_sigs)
-                region_ids = np.random.permutation(total_regions)
-                
-                sigs_grid_dict = dict(zip(region_sigs, region_ids))                
-                base_color_labels = np.array([sigs_grid_dict[sig] for sig in sigs_grid])
-                base_color_labels = base_color_labels.reshape(self.grid_labels.shape).T
-
-                grid_labels = self.grid_labels.reshape(-1)            
-                boundary_regions, blue_regions, red_regions = defaultdict(int), defaultdict(int), defaultdict(int)
-                if isinstance(self.CFG.TH_bounds, float):
-                    bounds = [-self.CFG.TH_bounds, self.CFG.TH_bounds]
-                else:
-                    bounds = self.CFG.TH_bounds
-                for i, key in enumerate(sigs_grid_dict):
-                        idx = np.where(sigs_grid == key)
-                        region_labels = grid_labels[idx]
-                        ratio = sum(region_labels) / region_labels.size
-                        if ratio > bounds[1]:
-                            red_regions['count'] += 1
-                            red_regions['area'] += region_labels.size
-                        elif ratio < bounds[0]:
-                            blue_regions['count'] += 1
-                            blue_regions['area'] += region_labels.size
-                        else:
-                            boundary_regions['count'] += 1
-                            boundary_regions['area'] += region_labels.size
-
-                logger.info(f"[Linear regions/area] \
-                    #around the boundary: {boundary_regions['count'] / (boundary_regions['area'] +1e-6)} \
-                    #red region: {red_regions['count'] / (red_regions['area'] + 1e-6)} \
-                    #blue region: {blue_regions['count'] / (blue_regions['area'] +1e-6) }\
-                    #total regions: {total_regions} ")
-                self.swriter.add_scalars(
-                        'linear_regions/count', 
-                        {'total': total_regions, 
-                        'boundary': boundary_regions['count'],
-                        'blue_region': blue_regions['count'],
-                        'red_region': red_regions['count'],
-                        },
-                        engine.state.epoch)
-                self.swriter.add_scalars(
-                        'linear_regions/divided_by_area', 
-                        {'boundary': boundary_regions['count'] / (boundary_regions['area'] +1e-6),
-                        'blue_region': blue_regions['count'] / (blue_regions['area'] +1e-6),
-                        'red_region': red_regions['count'] / (red_regions['area'] + 1e-6),
-                        },
-                        engine.state.epoch)
-                for lables, name in zip([grid_labels, pseudo_label.squeeze()], ['true_label', 'pseudo_label']):
-                    color_labels = np.zeros(lables.shape)
-                    for i, key in enumerate(sigs_grid_dict):
-                        idx = np.where(sigs_grid == key)
-                        region_labels = lables[idx]
-                        ratio = sum(region_labels) / region_labels.size
-                        color_labels[idx] = ratio
-
-                    color_labels = color_labels.reshape(self.grid_labels.shape)
-                    if self.dataset.CFG.name != 'circles_fill':
-                        color_labels = color_labels.T
-
-                    plt.figure()
-                    cmap = mpl.cm.bwr
-                    norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
-                    plt.imshow(color_labels,
-                               interpolation="nearest",
-                               extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                               cmap=cmap, #plt.get_cmap('bwr'),
-                               norm=norm,
-                               aspect="auto",
-                               origin="lower",
-                               alpha=1)
-
-                    plt.imshow(base_color_labels,
-                               interpolation="nearest",
-                               extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                               cmap=plt.get_cmap('Pastel2'),
-                               aspect="auto",
-                               origin="lower",
-                               alpha=0.6)
-                    if self.CFG.plot_points:
-                        input_points, labels = self.dataset.data
-                        plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
-
-                    plt.savefig(self.save_folder / f'{name}_epoch{engine.state.epoch}.png')
-
-
-                # save confidence map
-                if self.CFG.plot_confidence:
-                    confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
-                    # plt.figure(figsize=(14, 10))
-                    plt.scatter(xx, yy, c=confidence, vmin=0, vmax=1)
-                    plt.colorbar()
-                    plt.savefig(self.save_folder / f'confidenc_epoch{engine.state.epoch}.png')
-
+            def plot_signatures(engine):
+                self.plot_signatures(engine)
+                if self.CFG.ema_used:
+                    self.ema_model.apply_shadow()
+                    logger.info("[EMA] apply shadow")
+                    self.plot_signatures(engine)
+                    self.ema_model.restore()
+                    logger.info("[EMA] restore ")
         
         if self.CFG.ema_used:
             @trainer.on(Events.ITERATION_COMPLETED)
@@ -332,6 +239,101 @@ class Experiment(object):
                 "[Testing] test loss: {:.4f}, test acc:{}".format(metrics['loss'], metrics['accuracy']*100))
 
         self.trainer = trainer
+
+    def plot_signatures(self, engine):  
+        name = 'Linear_regions_ema' if self.CFG.ema_used else 'Linear_regions'
+        xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
+        net_out, sigs_grid, _ = get_signatures(torch.tensor(
+            self.grid_points).float().to(self.device), self.model)
+        net_out = torch.sigmoid(net_out)
+        pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, torch.tensor(1), torch.tensor(-1)).numpy()
+        sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
+        region_sigs = list(np.unique(sigs_grid))
+        total_regions = len(region_sigs)
+        region_ids = np.random.permutation(total_regions)
+        
+        sigs_grid_dict = dict(zip(region_sigs, region_ids))                
+        base_color_labels = np.array([sigs_grid_dict[sig] for sig in sigs_grid])
+        base_color_labels = base_color_labels.reshape(self.grid_labels.shape).T
+
+        grid_labels = self.grid_labels.reshape(-1)            
+        boundary_regions, blue_regions, red_regions = defaultdict(int), defaultdict(int), defaultdict(int)
+        if isinstance(self.CFG.TH_bounds, float):
+            bounds = [-self.CFG.TH_bounds, self.CFG.TH_bounds]
+        else:
+            bounds = self.CFG.TH_bounds
+        for i, key in enumerate(sigs_grid_dict):
+                idx = np.where(sigs_grid == key)
+                region_labels = grid_labels[idx]
+                ratio = sum(region_labels) / region_labels.size
+                if ratio > bounds[1]:
+                    red_regions['count'] += 1
+                    red_regions['area'] += region_labels.size
+                elif ratio < bounds[0]:
+                    blue_regions['count'] += 1
+                    blue_regions['area'] += region_labels.size
+                else:
+                    boundary_regions['count'] += 1
+                    boundary_regions['area'] += region_labels.size
+
+        logger.info(f"[Linear regions/area] \
+            #around the boundary: {boundary_regions['count'] / (boundary_regions['area'] +1e-6)} \
+            #red region: {red_regions['count'] / (red_regions['area'] + 1e-6)} \
+            #blue region: {blue_regions['count'] / (blue_regions['area'] +1e-6) }\
+            #total regions: {total_regions} ")
+        self.swriter.add_scalars(
+                name + '/count', 
+                {'total': total_regions, 
+                'boundary': boundary_regions['count'],
+                'blue_region': blue_regions['count'],
+                'red_region': red_regions['count'],
+                },
+                engine.state.epoch)
+        self.swriter.add_scalars(
+                name + '/divided_by_area', 
+                {'boundary': boundary_regions['count'] / (boundary_regions['area'] +1e-6),
+                'blue_region': blue_regions['count'] / (blue_regions['area'] +1e-6),
+                'red_region': red_regions['count'] / (red_regions['area'] + 1e-6),
+                },
+                engine.state.epoch)
+
+        kwargs = dict(
+            interpolation="nearest",
+            extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+            aspect="auto",
+            origin="lower",
+        )
+        for lables, name in zip([grid_labels, pseudo_label.squeeze()], ['true_label', 'pseudo_label']):
+            color_labels = np.zeros(lables.shape)
+            for i, key in enumerate(sigs_grid_dict):
+                idx = np.where(sigs_grid == key)
+                region_labels = lables[idx]
+                ratio = sum(region_labels) / region_labels.size
+                color_labels[idx] = ratio
+
+            color_labels = color_labels.reshape(self.grid_labels.shape)
+            if self.dataset.CFG.name != 'circles_fill':
+                color_labels = color_labels.T
+
+            plt.figure()
+            cmap = mpl.cm.bwr
+            norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
+            plt.imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
+            plt.imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.6, **kwargs)
+            if self.CFG.plot_points:
+                input_points, labels = self.dataset.data
+                plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
+
+            plt.savefig(self.save_folder / f'{name}_epoch{engine.state.epoch}.png')
+
+
+        # save confidence map
+        if self.CFG.plot_confidence:
+            confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
+            plt.scatter(xx, yy, c=confidence, vmin=0, vmax=1)
+            plt.colorbar()
+            plt.savefig(self.save_folder / f'confidenc_epoch{engine.state.epoch}.png')
+
 
     def fitting(self, dataloader):
         # initialize tensorboard
