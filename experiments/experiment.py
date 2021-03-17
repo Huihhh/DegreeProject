@@ -82,6 +82,13 @@ class Experiment(object):
         self.scheduler = get_cosine_schedule_with_warmup(self.optimizer, warmup_steps, total_training_steps)
         self.init_criterion()
         self.create_trainer()
+        self.to_save = {
+            'model': self.model,
+            'optimizer': self.optimizer,
+            'scheduler': self.scheduler,
+            'trainer': self.trainer,
+            # 'ema_state_dict': self.ema_model.shadow if self.CFG.ema_used else None
+            }
 
         # init grid points to plot linear regions
         if CFG.plot_every > 0 or plot_sig:
@@ -176,12 +183,12 @@ class Experiment(object):
 
         if self.CFG.plot_every > 0:
             @trainer.on(Events.EPOCH_STARTED(event_filter=custom_event_filter) | Events.EPOCH_COMPLETED(every=self.CFG.plot_every))
-            def plot_signatures(engine):
-                self.plot_signatures(engine)
+            def plot_signatures(engine): #TODO: subplots
+                self.plot_signatures(engine.state.epoch)
                 if self.CFG.ema_used:
                     self.ema_model.apply_shadow()
                     logger.info("[EMA] apply shadow")
-                    self.plot_signatures(engine)
+                    self.plot_signatures(engine.state.epoch)
                     self.ema_model.restore()
                     logger.info("[EMA] restore ")
         
@@ -240,7 +247,7 @@ class Experiment(object):
 
         self.trainer = trainer
 
-    def plot_signatures(self, engine):  
+    def plot_signatures(self, epoch):  
         name = 'Linear_regions_ema' if self.CFG.ema_used else 'Linear_regions'
         xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
         net_out, sigs_grid, _ = get_signatures(torch.tensor(
@@ -288,14 +295,14 @@ class Experiment(object):
                 'blue_region': blue_regions['count'],
                 'red_region': red_regions['count'],
                 },
-                engine.state.epoch)
+                epoch)
         self.swriter.add_scalars(
                 name + '/divided_by_area', 
                 {'boundary': boundary_regions['count'] / (boundary_regions['area'] +1e-6),
                 'blue_region': blue_regions['count'] / (blue_regions['area'] +1e-6),
                 'red_region': red_regions['count'] / (red_regions['area'] + 1e-6),
                 },
-                engine.state.epoch)
+                epoch)
 
         kwargs = dict(
             interpolation="nearest",
@@ -311,9 +318,7 @@ class Experiment(object):
                 ratio = sum(region_labels) / region_labels.size
                 color_labels[idx] = ratio
 
-            color_labels = color_labels.reshape(self.grid_labels.shape)
-            if self.dataset.CFG.name != 'circles_fill':
-                color_labels = color_labels.T
+            color_labels = color_labels.reshape(self.grid_labels.shape).T
 
             plt.figure()
             cmap = mpl.cm.bwr
@@ -322,9 +327,9 @@ class Experiment(object):
             plt.imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.6, **kwargs)
             if self.CFG.plot_points:
                 input_points, labels = self.dataset.data
-                plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, linewidths=0.5)
+                plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, s=1)
 
-            plt.savefig(self.save_folder / f'{name}_epoch{engine.state.epoch}.png')
+            plt.savefig(self.save_folder / f'{name}_epoch{epoch}.png')
 
 
         # save confidence map
@@ -332,7 +337,7 @@ class Experiment(object):
             confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
             plt.scatter(xx, yy, c=confidence, vmin=0, vmax=1)
             plt.colorbar()
-            plt.savefig(self.save_folder / f'confidenc_epoch{engine.state.epoch}.png')
+            plt.savefig(self.save_folder / f'confidenc_epoch{epoch}.png')
 
 
     def fitting(self, dataloader):
@@ -345,13 +350,6 @@ class Experiment(object):
         self.trainer.run(dataloader, max_epochs=self.CFG.n_epoch)  
 
     def save_checkpoints(self): #TODO: register the event using @trainer.on()
-        self.to_save = {
-            'model': self.model,
-            'optimizer': self.optimizer,
-            'scheduler': self.scheduler,
-            'trainer': self.trainer,
-            # 'ema_state_dict': self.ema_model.shadow if self.CFG.ema_used else None
-            }
 
         handler = Checkpoint(
             self.to_save,
@@ -369,9 +367,10 @@ class Experiment(object):
             checkpoint = torch.load(mdl_fname, map_location=self.device)
         else:
             checkpoint = torch.load(mdl_fname)
-        self.model.load_state_dict(checkpoint['state_dict'])
-        self.resumed_epoch = checkpoint['epoch']
-        self.model.eval()
+        Checkpoint.load_objects(to_load=self.to_save, checkpoint=checkpoint)
+        # self.model.load_state_dict(checkpoint['state_dict'])
+        # self.resumed_epoch = checkpoint['epoch']
+        # self.model.eval()
         logger.info("Loading previous model")
 
     def resume_model(self):

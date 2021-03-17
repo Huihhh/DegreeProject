@@ -220,13 +220,12 @@ class Dataset(object):
 
     def plot(self, save_dir='./'):
         x, l = self.data
-        plt.figure(figsize=(10, 10), dpi=125)
-        plt.scatter(x[:, 0], x[:, 1], c=l, cmap=plt.cm.Paired)
+        plt.scatter(x[:, 0], x[:, 1], c=l, cmap=plt.cm.Paired, s=8)
         plt.xlim(self.minX-0.1, self.maxX + 0.1)
         plt.ylim(self.minY-0.1, self.maxY + 0.1)
         plt.xlabel('x')
         plt.ylabel('y')
-        plt.title(self.CFG.name)
+        plt.title(f'{self.CFG.name} noise/total points:{self.CFG.noise_ratio} noise(std):{self.CFG.noise_level}')
         plt.savefig(os.path.join(save_dir, self.CFG.name + '.png'))
 
     def get_dataloader(self):
@@ -262,7 +261,7 @@ if __name__ == '__main__':
         # plt.imshow(grid_points.reshape(grid_labels.shape))
         # plt.savefig('./grid_points.png')
         plt.figure()
-        plt.imshow(grid_labels)
+        plt.imshow(np.rot90(grid_labels))
         plt.savefig('./mask.png')
         np.savetxt('./input.txt', dataset.data[0], delimiter=',')
     main()
