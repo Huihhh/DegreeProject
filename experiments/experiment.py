@@ -1,3 +1,5 @@
+from utils.wandb_init import wandb_init
+from utils.ema import EMA
 from utils.get_signatures import get_signatures
 from utils.utils import AverageMeter, accuracy
 from ignite.engine import Events, Engine
@@ -31,8 +33,6 @@ from pathlib import Path
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.ema import EMA
-from utils.wandb_init import wandb_init
 
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,8 @@ def get_cosine_schedule_with_warmup(optimizer,
             return float(current_step) / float(max(1, num_warmup_steps))
         no_progress = float(current_step - num_warmup_steps) / \
             float(max(1, num_training_steps - num_warmup_steps))
-        return max(0., math.cos(math.pi * num_cycles * no_progress))  # this is correct
+        # this is correct
+        return max(0., math.cos(math.pi * num_cycles * no_progress))
     return LambdaLR(optimizer, _lr_lambda, last_epoch)
 
 
@@ -70,7 +71,8 @@ class Experiment(object):
         self.CFG = CFG
         # used Gpu or not
         self.use_gpu = CFG.use_gpu
-        self.device = torch.device('cuda' if torch.cuda.is_available() and CFG.use_gpu else 'cpu')
+        self.device = torch.device(
+            'cuda' if torch.cuda.is_available() and CFG.use_gpu else 'cpu')
         self.model = model.to(self.device)
 
         no_decay = ['bias', 'bn']
@@ -80,12 +82,13 @@ class Experiment(object):
             {'params': [p for n, p in self.model.named_parameters() if any(
                 nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
-        self.optimizer = optim.SGD(grouped_parameters, lr=CFG.optim_lr,#)
-           momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
+        self.optimizer = optim.Adam(grouped_parameters, lr=CFG.optim_lr,)
+                                #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
         steps_per_epoch = eval(CFG.steps_per_epoch)
         total_training_steps = CFG.n_epoch * steps_per_epoch
         warmup_steps = CFG.warmup * steps_per_epoch
-        self.scheduler = get_cosine_schedule_with_warmup(self.optimizer, warmup_steps, total_training_steps)
+        self.scheduler = get_cosine_schedule_with_warmup(
+            self.optimizer, warmup_steps, total_training_steps)
         self.init_criterion()
         self.create_trainer()
         self.to_save = {
@@ -94,7 +97,7 @@ class Experiment(object):
             'scheduler': self.scheduler,
             'trainer': self.trainer,
             # 'ema_state_dict': self.ema_model.shadow if self.CFG.ema_used else None
-            }
+        }
 
         # init grid points to plot linear regions
         if CFG.plot_every > 0 or plot_sig:
@@ -104,35 +107,37 @@ class Experiment(object):
             self.save_folder = Path('LinearRegions/')
             if not exists(self.save_folder):
                 mkdir(self.save_folder)
-        
+
         # used EWA or not
         self.ema = self.CFG.ema_used
         if self.ema:
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
-        
+
         if CFG.save_model:
             self.save_checkpoints()
-        
-
 
     def init_criterion(self):
         if self.CFG.bdecay > 0:
-            bdecay_mean = eval(self.CFG.bdecay_mean) if isinstance(self.CFG.bdecay_mean, str) else self.CFG.bdecay_mean
+            bdecay_mean = eval(self.CFG.bdecay_mean) if isinstance(
+                self.CFG.bdecay_mean, str) else self.CFG.bdecay_mean
         else:
-            bdecay_mean = 0     
+            bdecay_mean = 0
 
         def bias_reg():
             if self.CFG.bdecay_method == 'l1':
-                reg_func = lambda x: torch.sum(torch.abs(torch.abs(x) - bdecay_mean))
-            else: 
-                reg_func = lambda x: (torch.abs(torch.abs(x) - bdecay_mean))**2
+                def reg_func(x): return torch.sum(
+                    torch.abs(torch.abs(x) - bdecay_mean))
+            else:
+                def reg_func(x): return (
+                    torch.abs(torch.abs(x) - bdecay_mean))**2
             bias_reg_loss = AverageMeter()
             for name, param in self.model.named_parameters():
                 if 'bias' in name:
                     bias_reg_loss.update(reg_func(param))
             return bias_reg_loss.avg
-        self.criterion = lambda pred, y: torch.nn.BCELoss()(pred, y) + self.CFG.bdecay * bias_reg()
+        self.criterion = lambda pred, y: torch.nn.BCELoss()(
+            pred, y) + self.CFG.bdecay * bias_reg()
 
     def train_step(self, engine, batch):
         self.model.train()
@@ -141,7 +146,7 @@ class Experiment(object):
         y_pred = self.model(x)
         loss = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH,
-                                torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
+                             torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
         acc = accuracy(y_pred, y)
         loss.backward()
         self.optimizer.step()
@@ -150,7 +155,6 @@ class Experiment(object):
             'loss': loss.item(),
             'acc': acc
         }
-
 
     def validation_step(self, engine, batch):
         self.model.eval()
@@ -161,19 +165,20 @@ class Experiment(object):
 
     def create_trainer(self):
         log_format = "[%(asctime)s][%(module)s.%(filename)s][%(levelname)s] - [%(name)s] %(message)s"
-        #trainer
+        # trainer
         trainer = Engine(lambda engine, batch: self.train_step(engine, batch))
         trainer.logger = setup_logger('trainer', format=log_format)
-        
+
         def output_transform(out, name):
             return out[name]
 
         for name in ['loss', 'acc']:
-            Average(output_transform=partial(output_transform, name=name)).attach(trainer, name)
+            Average(output_transform=partial(
+                output_transform, name=name)).attach(trainer, name)
 
-
-        #evaluator
-        evaluator = Engine(lambda engine, batch: self.validation_step(engine, batch))
+        # evaluator
+        evaluator = Engine(
+            lambda engine, batch: self.validation_step(engine, batch))
         evaluator.logger = setup_logger("evaluator", level=30)
 
         def output_transform(output):
@@ -194,7 +199,7 @@ class Experiment(object):
 
         if self.CFG.plot_every > 0:
             @trainer.on(Events.EPOCH_STARTED(event_filter=custom_event_filter) | Events.EPOCH_COMPLETED(every=self.CFG.plot_every))
-            def plot_signatures(engine): #TODO: subplots
+            def plot_signatures(engine):  # TODO: subplots
                 self.plot_signatures(engine.state.epoch)
                 if self.CFG.ema_used:
                     self.ema_model.apply_shadow()
@@ -202,7 +207,6 @@ class Experiment(object):
                     self.plot_signatures(engine.state.epoch)
                     self.ema_model.restore()
                     logger.info("[EMA] restore ")
-        
 
         @trainer.on(Events.EPOCH_COMPLETED)
         def run_validation_raw(engine):
@@ -215,27 +219,29 @@ class Experiment(object):
             logger.info('======== Validating on original model ========')
             evaluator.run(self.dataset.val_loader)
             metrics = evaluator.state.metrics
-            logger.info(f"[raw] validation: val_loss={metrics['val_loss']} val_acc={metrics['val_acc']}")
-
+            logger.info(
+                f"[raw] validation: val_loss={metrics['val_loss']} val_acc={metrics['val_acc']}")
 
         @trainer.on(Events.COMPLETED)
         def test(engine):
             logger.info("======= Testing =======")
             evaluator.run(self.dataset.test_loader)
             metrics = evaluator.state.metrics
-            logger.info(f"[raw] Testing: test_loss={metrics['val_loss']} test_acc={metrics['val_acc']*100}")
-        
+            logger.info(
+                f"[raw] Testing: test_loss={metrics['val_loss']} test_acc={metrics['val_acc']*100}")
+
         def score_function(engine):
             val_loss = engine.state.metrics['val_loss']
             return -val_loss
-        
-        handler = EarlyStopping(patience=10, score_function=score_function, min_delta=0.001, trainer=trainer)
+
+        handler = EarlyStopping(
+            patience=10, score_function=score_function, min_delta=0.0001, trainer=trainer)
         # Note: the handler is attached to an *Evaluator* (runs one epoch on validation dataset).
         evaluator.add_event_handler(Events.COMPLETED, handler)
 
-        
         if self.CFG.ema_used:
-            ema_evaluator = Engine(lambda engine, batch: self.validation_step(engine, batch))
+            ema_evaluator = Engine(
+                lambda engine, batch: self.validation_step(engine, batch))
             ema_evaluator.logger = setup_logger('ema evaluator', level=30)
             val_acc = Accuracy(output_transform=output_transform)
             val_acc.attach(ema_evaluator, 'ema_val_acc')
@@ -245,7 +251,7 @@ class Experiment(object):
             @trainer.on(Events.ITERATION_COMPLETED)
             def update_ema_params(engien):
                 self.ema_model.update_params()
-            
+
             @trainer.on(Events.EPOCH_COMPLETED)
             def run_validation_ema(engien):
                 logger.info('======== Validating on EMA model ========')
@@ -256,7 +262,8 @@ class Experiment(object):
                 # validating
                 ema_evaluator.run(self.dataset.val_loader)
                 metrics = ema_evaluator.state.metrics
-                logger.info(f"[EMA] validation: val_loss={metrics['ema_val_loss']} val_acc={metrics['ema_val_acc']}")
+                logger.info(
+                    f"[EMA] validation: val_loss={metrics['ema_val_loss']} val_acc={metrics['ema_val_acc']}")
                 # restore the params
                 self.ema_model.restore()
                 logger.info("[EMA] restore ")
@@ -269,7 +276,8 @@ class Experiment(object):
                 # validating
                 ema_evaluator.run(self.dataset.val_loader)
                 metrics = ema_evaluator.state.metrics
-                logger.info(f"[EMA] validation: val_loss={metrics['ema_val_loss']} val_acc={metrics['ema_val_acc']}")
+                logger.info(
+                    f"[EMA] validation: val_loss={metrics['ema_val_loss']} val_acc={metrics['ema_val_acc']}")
                 # restore the params
                 self.ema_model.restore()
                 logger.info("[EMA] restore ")
@@ -327,49 +335,61 @@ class Experiment(object):
             param_name='lr'  # optional
         )
 
+        if self.CFG.ema_used:
+            wandb_logger.attach_output_handler(
+                ema_evaluator,
+                event_name=Events.EPOCH_COMPLETED,
+                tag="ema_validation",
+                metric_names='all',
+                global_step_transform=lambda *_: trainer.state.iteration,
+            )
+
         if self.CFG.debug:
             ProgressBar(persist=False).attach(
                 trainer, metric_names="all", event_name=Events.ITERATION_COMPLETED
             )
-        
+
         self.trainer = trainer
 
-
-    def plot_signatures(self, epoch):  
+    def plot_signatures(self, epoch):
         name = 'Linear_regions_ema' if self.CFG.ema_used else 'Linear_regions'
         xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
         net_out, sigs_grid, _ = get_signatures(torch.tensor(
             self.grid_points).float().to(self.device), self.model)
         net_out = torch.sigmoid(net_out)
-        pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, torch.tensor(1), torch.tensor(-1)).numpy()
-        sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
+        pseudo_label = torch.where(
+            net_out.cpu() > self.CFG.TH, torch.tensor(1), torch.tensor(-1)).numpy()
+        sigs_grid = np.array([''.join(str(x)
+                                      for x in s.tolist()) for s in sigs_grid])
         region_sigs = list(np.unique(sigs_grid))
         total_regions = len(region_sigs)
         region_ids = np.random.permutation(total_regions)
-        
-        sigs_grid_dict = dict(zip(region_sigs, region_ids))                
-        base_color_labels = np.array([sigs_grid_dict[sig] for sig in sigs_grid])
+
+        sigs_grid_dict = dict(zip(region_sigs, region_ids))
+        base_color_labels = np.array(
+            [sigs_grid_dict[sig] for sig in sigs_grid])
         base_color_labels = base_color_labels.reshape(self.grid_labels.shape).T
 
-        grid_labels = self.grid_labels.reshape(-1)            
-        boundary_regions, blue_regions, red_regions = defaultdict(int), defaultdict(int), defaultdict(int)
+        grid_labels = self.grid_labels.reshape(-1)
+        boundary_regions, blue_regions, red_regions = defaultdict(
+            int), defaultdict(int), defaultdict(int)
         if isinstance(self.CFG.TH_bounds, float):
             bounds = [-self.CFG.TH_bounds, self.CFG.TH_bounds]
         else:
             bounds = self.CFG.TH_bounds
         for i, key in enumerate(sigs_grid_dict):
-                idx = np.where(sigs_grid == key)
-                region_labels = grid_labels[idx]
-                ratio = sum(region_labels) / region_labels.size
-                if ratio > bounds[1]:
-                    red_regions['count'] += 1
-                    red_regions['area'] += region_labels.size
-                elif ratio < bounds[0]:
-                    blue_regions['count'] += 1
-                    blue_regions['area'] += region_labels.size
-                else:
-                    boundary_regions['count'] += 1
-                    boundary_regions['area'] += region_labels.size
+            idx = np.where(sigs_grid == key)
+            region_labels = grid_labels[idx]
+            ratio = sum(region_labels) / region_labels.size
+            if ratio > bounds[1]:
+                red_regions['count'] += 1
+                red_regions['area'] += region_labels.size
+            elif ratio < bounds[0]:
+                blue_regions['count'] += 1
+                blue_regions['area'] += region_labels.size
+            else:
+                boundary_regions['count'] += 1
+                boundary_regions['area'] += region_labels.size
 
         logger.info(f"[Linear regions/area] \
             #around the boundary: {boundary_regions['count'] / (boundary_regions['area'] +1e-6)} \
@@ -377,20 +397,20 @@ class Experiment(object):
             #blue region: {blue_regions['count'] / (blue_regions['area'] +1e-6) }\
             #total regions: {total_regions} ")
         self.swriter.add_scalars(
-                name + '/count', 
-                {'total': total_regions, 
-                'boundary': boundary_regions['count'],
-                'blue_region': blue_regions['count'],
-                'red_region': red_regions['count'],
-                },
-                epoch)
+            name + '/count',
+            {'total': total_regions,
+             'boundary': boundary_regions['count'],
+             'blue_region': blue_regions['count'],
+             'red_region': red_regions['count'],
+             },
+            epoch)
         self.swriter.add_scalars(
-                name + '/divided_by_area', 
-                {'boundary': boundary_regions['count'] / (boundary_regions['area'] +1e-6),
-                'blue_region': blue_regions['count'] / (blue_regions['area'] +1e-6),
-                'red_region': red_regions['count'] / (red_regions['area'] + 1e-6),
-                },
-                epoch)
+            name + '/divided_by_area',
+            {'boundary': boundary_regions['count'] / (boundary_regions['area'] + 1e-6),
+             'blue_region': blue_regions['count'] / (blue_regions['area'] + 1e-6),
+             'red_region': red_regions['count'] / (red_regions['area'] + 1e-6),
+             },
+            epoch)
 
         kwargs = dict(
             interpolation="nearest",
@@ -412,21 +432,22 @@ class Experiment(object):
             cmap = mpl.cm.bwr
             norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
             plt.imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
-            plt.imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.6, **kwargs)
+            plt.imshow(base_color_labels, cmap=plt.get_cmap(
+                'Pastel2'), alpha=0.6, **kwargs)
             if self.CFG.plot_points:
                 input_points, labels = self.dataset.data
-                plt.scatter(input_points[:, 0], input_points[:, 1], c=labels, s=1)
+                plt.scatter(input_points[:, 0],
+                            input_points[:, 1], c=labels, s=1)
 
             plt.savefig(self.save_folder / f'{name}_epoch{epoch}.png')
 
-
         # save confidence map
         if self.CFG.plot_confidence:
-            confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
+            confidence = net_out.reshape(
+                self.grid_labels.shape).detach().cpu().numpy()
             plt.scatter(xx, yy, c=confidence, vmin=0, vmax=1)
             plt.colorbar()
             plt.savefig(self.save_folder / f'confidenc_epoch{epoch}.png')
-
 
     def fitting(self, dataloader):
         # initialize tensorboard
@@ -435,9 +456,9 @@ class Experiment(object):
             # optionally resume from a checkpoint
             self.resume_model()
 
-        self.trainer.run(dataloader, max_epochs=self.CFG.n_epoch)  
+        self.trainer.run(dataloader, max_epochs=self.CFG.n_epoch)
 
-    def save_checkpoints(self): #TODO: register the event using @trainer.on()
+    def save_checkpoints(self):  # TODO: register the event using @trainer.on()
 
         handler = Checkpoint(
             self.to_save,
@@ -445,7 +466,8 @@ class Experiment(object):
             n_saved=None,
             global_step_transform=lambda *_: self.trainer.state.epoch
         )
-        self.trainer.add_event_handler(Events.EPOCH_COMPLETED(every=self.CFG.save_every), handler)
+        self.trainer.add_event_handler(
+            Events.EPOCH_COMPLETED(every=self.CFG.save_every), handler)
 
     def load_model(self, mdl_fname):
         print(mdl_fname)
@@ -464,14 +486,17 @@ class Experiment(object):
     def resume_model(self):
         if self.CFG.resume:
             if os.path.isfile(self.CFG.resume_checkpoints):
-                print("=> loading checkpoint '{}'".format(self.CFG.resume_checkpoints))
+                print("=> loading checkpoint '{}'".format(
+                    self.CFG.resume_checkpoints))
                 logger.info("==> Resuming from checkpoint..")
                 if self.use_gpu:
                     # Map model to be loaded to specified single gpu.
-                    checkpoint = torch.load(self.CFG.resume_checkpoints, map_location=self.device)
+                    checkpoint = torch.load(
+                        self.CFG.resume_checkpoints, map_location=self.device)
                 else:
                     checkpoint = torch.load(self.CFG.resume_checkpoints)
-                Checkpoint.load_objects(to_load=self.to_save, checkpoint=checkpoint)
+                Checkpoint.load_objects(
+                    to_load=self.to_save, checkpoint=checkpoint)
 
 
 if __name__ == '__main__':
