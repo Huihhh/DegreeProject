@@ -51,22 +51,25 @@ class SimpleNet(nn.Sequential):
         self.use_bn = cfg.use_bn
 
         for i in range(len(self.h_nodes) - 1):
-            fc = nn.Linear(self.h_nodes[i], self.h_nodes[i+1])
             torch.random.manual_seed(i+self.cfg.seed)
-            eval(cfg.fc_winit.func)(fc.weight, **cfg.fc_winit.params)
-            eval(cfg.fc_binit.func)(fc.bias, **cfg.fc_binit.params)
+            fc = nn.Linear(self.h_nodes[i], self.h_nodes[i+1])
+            if cfg.fc_winit.name != 'default': #TODO: more elegant way
+                eval(cfg.fc_winit.func)(fc.weight, **cfg.fc_winit.params)
+                eval(cfg.fc_binit.func)(fc.bias, **cfg.fc_binit.params)
             ac = ACT_METHOD[self.cfg.activation]
             if self.use_bn:
                 bn = nn.BatchNorm1d(self.h_nodes[i+1])
-                eval(cfg.bn_winit.func)(bn.weight, **cfg.bn_winit.params)
-                eval(cfg.bn_binit.func)(bn.bias, **cfg.bn_binit.params)
+                if cfg.fc_winit.name != 'default':
+                    eval(cfg.bn_winit.func)(bn.weight, **cfg.bn_winit.params)
+                    eval(cfg.bn_binit.func)(bn.bias, **cfg.bn_binit.params)
                 self.layers.append(nn.Sequential(fc, bn, ac))
             else:
                 self.layers.append(nn.Sequential(fc, ac))
 
         predict = nn.Linear(self.h_nodes[-1], self.out_dim)
-        eval(cfg.fc_winit.func)(predict.weight, **cfg.fc_winit.params)
-        eval(cfg.fc_binit.func)(predict.bias, **cfg.fc_binit.params)
+        if cfg.fc_winit.name != 'default':
+            eval(cfg.fc_winit.func)(predict.weight, **cfg.fc_winit.params)
+            eval(cfg.fc_binit.func)(predict.bias, **cfg.fc_binit.params)
         self.layers.append(predict)
         super().__init__(*self.layers)
 

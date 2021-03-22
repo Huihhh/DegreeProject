@@ -20,6 +20,7 @@ MODEL:
 
 EXPERIMENT:
   name: 'ToyExperiment'
+  debug: False
 
   # classification
   TH: 0.5
@@ -32,7 +33,7 @@ EXPERIMENT:
   optim_lr: 0.001
   optim_momentum: 0.9
   warmup: 0
-  used_nesterov: False
+  used_nesterov: True
   use_gpu: True
   ema_used: True
   ema_decay: 0.999

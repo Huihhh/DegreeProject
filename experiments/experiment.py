@@ -2,8 +2,12 @@ from utils.get_signatures import get_signatures
 from utils.utils import AverageMeter, accuracy
 from ignite.engine import Events, Engine
 from ignite.metrics import Accuracy, Loss, Average
-from ignite.handlers import Checkpoint, DiskSaver
+from ignite.handlers import Checkpoint, DiskSaver, EarlyStopping
 from ignite.utils import setup_logger
+from ignite.contrib.engines import common
+from ignite.contrib.handlers.wandb_logger import *
+from ignite.contrib.handlers import ProgressBar
+
 import torch
 from torch import optim
 from torch.optim.lr_scheduler import LambdaLR
@@ -27,6 +31,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 from utils.ema import EMA
+from utils.wandb_init import wandb_init
 
 
 logger = logging.getLogger(__name__)
@@ -74,8 +79,8 @@ class Experiment(object):
             {'params': [p for n, p in self.model.named_parameters() if any(
                 nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
-        self.optimizer = optim.Adam(grouped_parameters, lr=CFG.optim_lr,)
-        #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
+        self.optimizer = optim.SGD(grouped_parameters, lr=CFG.optim_lr,#)
+           momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
         steps_per_epoch = eval(CFG.steps_per_epoch)
         total_training_steps = CFG.n_epoch * steps_per_epoch
         warmup_steps = CFG.warmup * steps_per_epoch
@@ -139,6 +144,7 @@ class Experiment(object):
         acc = accuracy(y_pred, y)
         loss.backward()
         self.optimizer.step()
+        self.scheduler.step()
         return {
             'loss': loss.item(),
             'acc': acc
@@ -153,7 +159,10 @@ class Experiment(object):
             return y_pred, y[:, None]
 
     def create_trainer(self):
+        log_format = "[%(asctime)s][%(module)s.%(filename)s][%(levelname)s] - [%(name)s] %(message)s"
+        #trainer
         trainer = Engine(lambda engine, batch: self.train_step(engine, batch))
+        trainer.logger = setup_logger('trainer', format=log_format)
         
         def output_transform(out, name):
             return out[name]
@@ -162,6 +171,7 @@ class Experiment(object):
             Average(output_transform=partial(output_transform, name=name)).attach(trainer, name)
 
 
+        #evaluator
         evaluator = Engine(lambda engine, batch: self.validation_step(engine, batch))
         evaluator.logger = setup_logger("evaluator", level=30)
 
@@ -173,8 +183,8 @@ class Experiment(object):
 
         acc = Accuracy(output_transform=output_transform)
         ls = Loss(self.criterion)
-        acc.attach(evaluator, 'accuracy')
-        ls.attach(evaluator, 'loss')
+        ls.attach(evaluator, 'val_loss')
+        acc.attach(evaluator, 'val_acc')
 
         def custom_event_filter(trainer, event):
             if event in range(10):
@@ -192,60 +202,129 @@ class Experiment(object):
                     self.ema_model.restore()
                     logger.info("[EMA] restore ")
         
+
+        @trainer.on(Events.EPOCH_COMPLETED)
+        def run_validation_raw(engine):
+            # log training results
+            metrics = engine.state.metrics
+            info = [k+'='+str(round(v, 4))+', ' for k, v in metrics.items()]
+            info = ''.join(info)[:-1]
+            logger.info(f"[train] {info}")
+            # run validation
+            logger.info('======== Validating on original model ========')
+            evaluator.run(self.dataset.val_loader)
+            metrics = evaluator.state.metrics
+            logger.info(f"[raw] validation: val_loss={metrics['val_loss']} val_acc={metrics['val_acc']}")
+
+
+        @trainer.on(Events.COMPLETED)
+        def test(engine):
+            logger.info("======= Testing =======")
+            evaluator.run(self.dataset.test_loader)
+            metrics = evaluator.state.metrics
+            logger.info(f"[raw] Testing: test_loss={metrics['val_loss']} test_acc={metrics['val_acc']*100}")
+        
+        def score_function(engine):
+            val_loss = engine.state.metrics['nll']
+            return -val_loss
+        
+        handler = EarlyStopping(patience=10, score_function=score_function, min_delta=0.001, trainer=trainer)
+        # Note: the handler is attached to an *Evaluator* (runs one epoch on validation dataset).
+        evaluator.add_event_handler(Events.COMPLETED, handler)
+
+        
         if self.CFG.ema_used:
+            ema_evaluator = Engine(lambda engine, batch: self.validation_step(engine, batch))
+            ema_evaluator.logger = setup_logger('ema evaluator', level=30)
+            val_acc = Accuracy(output_transform=output_transform)
+            val_acc.attach(ema_evaluator, 'ema_val_acc')
+            val_loss = Loss(self.criterion)
+            val_loss.attach(ema_evaluator, 'ema_val_loss')
+
             @trainer.on(Events.ITERATION_COMPLETED)
             def update_ema_params(engien):
                 self.ema_model.update_params()
             
             @trainer.on(Events.EPOCH_COMPLETED)
-            def update_ema_buffer(engien):
+            def run_validation_ema(engien):
+                logger.info('======== Validating on EMA model ========')
                 self.ema_model.update_buffer()
                 logger.info("[EMA] update buffer()")
-
-        @trainer.on(Events.EPOCH_COMPLETED)
-        def write_summaries(engine):
-            evaluator.run(self.dataset.val_loader)
-            train_matrics = engine.state.metrics
-            val_metrics = evaluator.state.metrics
-            self.swriter.add_scalars(
-                'loss', {'train_loss': train_matrics['loss'], 'val_loss': val_metrics['loss']}, engine.state.epoch)
-            self.swriter.add_scalars(
-                'accuracy/', {'train': train_matrics['acc'], 'val': val_metrics['accuracy']*100}, engine.state.epoch)
-
-            logger.info('Epoch {}. train_loss: {:.4f}, val_loss: {:.4f}, '
-                        'train acc: {:.4f}, val acc: {}'.format(
-                            engine.state.epoch, train_matrics['loss'], val_metrics['loss'],
-                            train_matrics['acc'], val_metrics['accuracy']*100.0)
-                        )
-            if self.CFG.ema_used:
                 self.ema_model.apply_shadow()
                 logger.info("[EMA] apply shadow")
-                # testing
-                evaluator.run(self.dataset.val_loader)
-                val_metrics_ema = evaluator.state.metrics
+                # validating
+                ema_evaluator.run(self.dataset.val_loader)
+                metrics = ema_evaluator.state.metrics
+                logger.info(f"[EMA] validation: val_loss={metrics['ema_val_loss']} val_acc={metrics['ema_val_acc']}")
                 # restore the params
                 self.ema_model.restore()
                 logger.info("[EMA] restore ")
-                self.swriter.add_scalars(
-                'train_w_ema/loss', {'train_loss': train_matrics['loss'], 'val_loss_ema': val_metrics_ema['loss']}, engine.state.epoch)
-                self.swriter.add_scalars(
-                'test_w_ema/accuracy', {'val': train_matrics['acc'], 'val': val_metrics_ema['accuracy']*100}, engine.state.epoch)
 
-                logger.info('[EMA] Epoch {}. train_loss: {:.4f}, val_loss_ema: {:.4f}, '
-                            'train acc: {:.4f}, val_acc_ema: {}'.format(
-                                engine.state.epoch, train_matrics['loss'], val_metrics_ema['loss'],
-                                train_matrics['acc'], val_metrics_ema['accuracy']*100.0)
-                            )
+            @trainer.on(Events.COMPLETED)
+            def testing_ema(engine):
+                logger.info('======== Testing on EMA model ========')
+                self.ema_model.apply_shadow()
+                logger.info("[EMA] apply shadow")
+                # validating
+                ema_evaluator.run(self.dataset.val_loader)
+                metrics = ema_evaluator.state.metrics
+                logger.info(f"[EMA] validation: val_loss={metrics['ema_val_loss']} val_acc={metrics['ema_val_acc']}")
+                # restore the params
+                self.ema_model.restore()
+                logger.info("[EMA] restore ")
 
-        @trainer.on(Events.COMPLETED)
-        def test(engine):
-            evaluator.run(self.dataset.test_loader)
-            metrics = evaluator.state.metrics
-            logger.info("======= Testing =======")
-            logger.info(
-                "[Testing] test loss: {:.4f}, test acc:{}".format(metrics['loss'], metrics['accuracy']*100))
+        # set up TB logger & Wandb logger
+        evaluators = {'training': trainer, "validation": evaluator}
+        if self.CFG.ema_used:
+            evaluators.update({"ema_validation": ema_evaluator})
+        tb_logger = common.setup_tb_logging(
+            output_path='summaries',
+            trainer=trainer,
+            optimizers=self.optimizer,
+            evaluators=evaluators,
+            log_every_iters=15,
+        )
+        wandb_init()
+        wandb_logger = WandBLogger(
+            project="degree-project",
+            name=self.CFG.name,
+            config=self.CFG,
+            sync_tensorboard=True,
+            tensorboard=tb_logger
+            # dir=wb_dir.as_posix(),
+            # reinit=True,
+        )
+        wandb_logger.attach_output_handler(
+            trainer,
+            event_name=Events.EPOCH_COMPLETED,
+            tag='training',
+            metric_names='all',
+            # output_transform=lambda out: {'epoch': trainer.state.epoch, **out[0]},
+            global_step_transform=lambda *_: trainer.state.iteration,
+        )
+        wandb_logger.attach_output_handler(
+            evaluator,
+            event_name=Events.EPOCH_COMPLETED,
+            tag="validation",
+            metric_names='all',
+            global_step_transform=lambda *_: trainer.state.iteration,
+        )
 
+        # Attach the logger to the trainer to log optimizer's parameters, e.g. learning rate at each iteration
+        wandb_logger.attach_opt_params_handler(
+            trainer,
+            event_name=Events.ITERATION_STARTED,
+            optimizer=self.optimizer,
+            param_name='lr'  # optional
+        )
+
+        if self.CFG.debug:
+            ProgressBar(persist=False).attach(
+                trainer, metric_names="all", event_name=Events.ITERATION_COMPLETED
+            )
+        
         self.trainer = trainer
+
 
     def plot_signatures(self, epoch):  
         name = 'Linear_regions_ema' if self.CFG.ema_used else 'Linear_regions'
