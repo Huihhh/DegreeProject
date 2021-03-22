@@ -6,6 +6,7 @@ from ignite.handlers import Checkpoint, DiskSaver, EarlyStopping
 from ignite.utils import setup_logger
 from ignite.contrib.engines import common
 from ignite.contrib.handlers.wandb_logger import *
+from ignite.contrib.handlers.tensorboard_logger import WeightsHistHandler
 from ignite.contrib.handlers import ProgressBar
 
 import torch
@@ -225,7 +226,7 @@ class Experiment(object):
             logger.info(f"[raw] Testing: test_loss={metrics['val_loss']} test_acc={metrics['val_acc']*100}")
         
         def score_function(engine):
-            val_loss = engine.state.metrics['nll']
+            val_loss = engine.state.metrics['val_loss']
             return -val_loss
         
         handler = EarlyStopping(patience=10, score_function=score_function, min_delta=0.001, trainer=trainer)
@@ -284,6 +285,14 @@ class Experiment(object):
             evaluators=evaluators,
             log_every_iters=15,
         )
+
+        # Attach the logger to the trainer to log model's weights norm after each iteration
+        tb_logger.attach(
+            trainer,
+            event_name=Events.EPOCH_COMPLETED(every=self.CFG.save_every),
+            log_handler=WeightsHistHandler(self.model)
+        )
+
         wandb_init()
         wandb_logger = WandBLogger(
             project="degree-project",
