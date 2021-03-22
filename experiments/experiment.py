@@ -192,29 +192,55 @@ class Experiment(object):
         ls.attach(evaluator, 'val_loss')
         acc.attach(evaluator, 'val_acc')
 
+        # set up TB logger & Wandb logger
+        tb_logger, wandb_logger = self.setup_tb_logger(trainer, evaluator)
+
         def custom_event_filter(trainer, event):
-            if event in range(10):
+            if event in range(10) or event % self.CFG.plot_every == 0:
                 return True
             return False
 
         if self.CFG.plot_every > 0:
-            @trainer.on(Events.EPOCH_STARTED(event_filter=custom_event_filter) | Events.EPOCH_COMPLETED(every=self.CFG.plot_every))
+            events = Events.EPOCH_STARTED(event_filter=custom_event_filter)
+            @trainer.on(events)
             def plot_signatures(engine):  # TODO: subplots
-                self.plot_signatures(engine.state.epoch)
+                total_regions, red_regions, blue_regions, boundary_regions = self.plot_signatures(engine.state.epoch)
+                engine.state.metrics.update({
+                    'total_regions': total_regions,
+                    'red_regions_count': red_regions['count'],
+                    'blue_regions_count': blue_regions['count'],
+                    'boundary_regions_count': boundary_regions['count'],
+                    'red_regions_ratio': red_regions['count'] / (red_regions['area']+1e-6),
+                    'blue_regions_ratio': blue_regions['count'] / (blue_regions['area']+1e-6),
+                    'boundary_regions_ratio': boundary_regions['count'] / (boundary_regions['area']+1e-6),
+                })
+
                 if self.CFG.ema_used:
                     self.ema_model.apply_shadow()
                     logger.info("[EMA] apply shadow")
                     self.plot_signatures(engine.state.epoch)
                     self.ema_model.restore()
                     logger.info("[EMA] restore ")
+            tb_logger.attach_output_handler(
+                evaluator,
+                event_name=events,
+                tag="Linear_regions/count",
+                metric_names=["total_regions", "red_regions_count", "blue_regions_count", "boundary_regions_count"],
+                global_step_transform=global_step_from_engine(trainer),
+            )
+            tb_logger.attach_output_handler(
+                evaluator,
+                event_name=events,
+                tag="Linear_regions/divided_by_area",
+                metric_names=["total_regions", "red_regions_ratio", "blue_regions_ratio", "boundary_regions_ratio"],
+                global_step_transform=global_step_from_engine(trainer),
+            )
 
         @trainer.on(Events.EPOCH_COMPLETED)
         def run_validation_raw(engine):
             # log training results
             metrics = engine.state.metrics
-            info = [k+'='+str(round(v, 4))+', ' for k, v in metrics.items()]
-            info = ''.join(info)[:-1]
-            logger.info(f"[train] {info}")
+            logger.info(f"[train] validation: val_loss={metrics['loss']} val_acc={metrics['acc']}")
             # run validation
             logger.info('======== Validating on original model ========')
             evaluator.run(self.dataset.val_loader)
@@ -235,7 +261,7 @@ class Experiment(object):
             return -val_loss
 
         handler = EarlyStopping(
-            patience=10, score_function=score_function, min_delta=0.0001, trainer=trainer)
+            patience=10, score_function=score_function, min_delta=0.0001, cumulative_delta=True, trainer=trainer)
         # Note: the handler is attached to an *Evaluator* (runs one epoch on validation dataset).
         evaluator.add_event_handler(Events.COMPLETED, handler)
 
@@ -247,6 +273,14 @@ class Experiment(object):
             val_acc.attach(ema_evaluator, 'ema_val_acc')
             val_loss = Loss(self.criterion)
             val_loss.attach(ema_evaluator, 'ema_val_loss')
+
+            wandb_logger.attach_output_handler(
+                ema_evaluator,
+                event_name=Events.EPOCH_COMPLETED,
+                tag="ema_validation",
+                metric_names='all',
+                global_step_transform=lambda *_: trainer.state.iteration,
+            )
 
             @trainer.on(Events.ITERATION_COMPLETED)
             def update_ema_params(engien):
@@ -282,68 +316,7 @@ class Experiment(object):
                 self.ema_model.restore()
                 logger.info("[EMA] restore ")
 
-        # set up TB logger & Wandb logger
-        evaluators = {'training': trainer, "validation": evaluator}
-        if self.CFG.ema_used:
-            evaluators.update({"ema_validation": ema_evaluator})
-        tb_logger = common.setup_tb_logging(
-            output_path='summaries',
-            trainer=trainer,
-            optimizers=self.optimizer,
-            evaluators=evaluators,
-            log_every_iters=15,
-        )
-
-        # Attach the logger to the trainer to log model's weights norm after each iteration
-        tb_logger.attach(
-            trainer,
-            event_name=Events.EPOCH_COMPLETED(every=self.CFG.save_every),
-            log_handler=WeightsHistHandler(self.model)
-        )
-
-        wandb_init()
-        wandb_logger = WandBLogger(
-            project="degree-project",
-            name=self.CFG.name,
-            config=self.CFG,
-            sync_tensorboard=True,
-            tensorboard=tb_logger
-            # dir=wb_dir.as_posix(),
-            # reinit=True,
-        )
-        wandb_logger.attach_output_handler(
-            trainer,
-            event_name=Events.EPOCH_COMPLETED,
-            tag='training',
-            metric_names='all',
-            # output_transform=lambda out: {'epoch': trainer.state.epoch, **out[0]},
-            global_step_transform=lambda *_: trainer.state.iteration,
-        )
-        wandb_logger.attach_output_handler(
-            evaluator,
-            event_name=Events.EPOCH_COMPLETED,
-            tag="validation",
-            metric_names='all',
-            global_step_transform=lambda *_: trainer.state.iteration,
-        )
-
-        # Attach the logger to the trainer to log optimizer's parameters, e.g. learning rate at each iteration
-        wandb_logger.attach_opt_params_handler(
-            trainer,
-            event_name=Events.ITERATION_STARTED,
-            optimizer=self.optimizer,
-            param_name='lr'  # optional
-        )
-
-        if self.CFG.ema_used:
-            wandb_logger.attach_output_handler(
-                ema_evaluator,
-                event_name=Events.EPOCH_COMPLETED,
-                tag="ema_validation",
-                metric_names='all',
-                global_step_transform=lambda *_: trainer.state.iteration,
-            )
-
+        
         if self.CFG.debug:
             ProgressBar(persist=False).attach(
                 trainer, metric_names="all", event_name=Events.ITERATION_COMPLETED
@@ -396,21 +369,21 @@ class Experiment(object):
             #red region: {red_regions['count'] / (red_regions['area'] + 1e-6)} \
             #blue region: {blue_regions['count'] / (blue_regions['area'] +1e-6) }\
             #total regions: {total_regions} ")
-        self.swriter.add_scalars(
-            name + '/count',
-            {'total': total_regions,
-             'boundary': boundary_regions['count'],
-             'blue_region': blue_regions['count'],
-             'red_region': red_regions['count'],
-             },
-            epoch)
-        self.swriter.add_scalars(
-            name + '/divided_by_area',
-            {'boundary': boundary_regions['count'] / (boundary_regions['area'] + 1e-6),
-             'blue_region': blue_regions['count'] / (blue_regions['area'] + 1e-6),
-             'red_region': red_regions['count'] / (red_regions['area'] + 1e-6),
-             },
-            epoch)
+        # self.swriter.add_scalars(
+        #     name + '/count',
+        #     {'total': total_regions,
+        #      'boundary': boundary_regions['count'],
+        #      'blue_region': blue_regions['count'],
+        #      'red_region': red_regions['count'],
+        #      },
+        #     epoch)
+        # self.swriter.add_scalars(
+        #     name + '/divided_by_area',
+        #     {'boundary': boundary_regions['count'] / (boundary_regions['area'] + 1e-6),
+        #      'blue_region': blue_regions['count'] / (blue_regions['area'] + 1e-6),
+        #      'red_region': red_regions['count'] / (red_regions['area'] + 1e-6),
+        #      },
+        #     epoch)
 
         kwargs = dict(
             interpolation="nearest",
@@ -449,9 +422,64 @@ class Experiment(object):
             plt.colorbar()
             plt.savefig(self.save_folder / f'confidenc_epoch{epoch}.png')
 
+        return total_regions, red_regions, blue_regions, boundary_regions
+
+    def setup_tb_logger(self, trainer, evaluator):
+        evaluators = {'training': trainer, "validation": evaluator}
+        tb_logger = common.setup_tb_logging(
+            output_path='summaries',
+            trainer=trainer,
+            optimizers=self.optimizer,
+            evaluators=evaluators,
+            log_every_iters=43,#TODO: automatically set
+        )
+
+        # Attach the logger to the trainer to log model's weights norm after each iteration
+        tb_logger.attach(
+            trainer,
+            event_name=Events.EPOCH_COMPLETED(every=self.CFG.save_every),
+            log_handler=WeightsHistHandler(self.model)
+        )
+
+        wandb_init()
+        wandb_logger = WandBLogger(
+            project="degree-project",
+            name=self.CFG.name,
+            config=self.CFG,
+            sync_tensorboard=True,
+            # tensorboard=tb_logger
+        )
+        wandb_logger.attach_output_handler(
+            trainer,
+            event_name=Events.EPOCH_COMPLETED,
+            tag='training',
+            metric_names='all',
+            # output_transform=lambda out: {'epoch': trainer.state.epoch, **out[0]},
+            global_step_transform=lambda *_: trainer.state.iteration,
+        )
+        wandb_logger.attach_output_handler(
+            evaluator,
+            event_name=Events.EPOCH_COMPLETED,
+            tag="validation",
+            metric_names='all',
+            global_step_transform=lambda *_: trainer.state.iteration,
+        )
+
+        # Attach the logger to the trainer to log optimizer's parameters, e.g. learning rate at each iteration
+        wandb_logger.attach_opt_params_handler(
+            trainer,
+            event_name=Events.ITERATION_STARTED,
+            optimizer=self.optimizer,
+            param_name='lr'  # optional
+        )
+
+        return tb_logger, wandb_logger
+
+
+    
     def fitting(self, dataloader):
         # initialize tensorboard
-        self.swriter = SummaryWriter(log_dir='summaries')
+        # self.swriter = SummaryWriter(log_dir='summaries')
         if self.CFG.resume:
             # optionally resume from a checkpoint
             self.resume_model()
