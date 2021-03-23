@@ -34,6 +34,7 @@ EXPERIMENT:
   optim_momentum: 0.9
   warmup: 0
   used_nesterov: True
+  early_stop: False
   use_gpu: True
   ema_used: True
   ema_decay: 0.999

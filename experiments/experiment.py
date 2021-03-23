@@ -235,6 +235,12 @@ class Experiment(object):
                 metric_names=["total_regions", "red_regions_ratio", "blue_regions_ratio", "boundary_regions_ratio"],
                 global_step_transform=global_step_from_engine(trainer),
             )
+                    # Attach the logger to the trainer to log model's weights norm after each iteration
+            tb_logger.attach(
+                trainer,
+                event_name=events,
+                log_handler=WeightsHistHandler(self.model)
+            )
 
         @trainer.on(Events.EPOCH_COMPLETED)
         def run_validation_raw(engine):
@@ -260,10 +266,11 @@ class Experiment(object):
             val_loss = engine.state.metrics['val_loss']
             return -val_loss
 
-        handler = EarlyStopping(
-            patience=10, score_function=score_function, min_delta=0.0001, cumulative_delta=True, trainer=trainer)
-        # Note: the handler is attached to an *Evaluator* (runs one epoch on validation dataset).
-        evaluator.add_event_handler(Events.COMPLETED, handler)
+        if self.CFG.early_stop:
+            handler = EarlyStopping(
+                patience=10, score_function=score_function, min_delta=0.0001, cumulative_delta=True, trainer=trainer)
+            # Note: the handler is attached to an *Evaluator* (runs one epoch on validation dataset).
+            evaluator.add_event_handler(Events.COMPLETED, handler)
 
         if self.CFG.ema_used:
             ema_evaluator = Engine(
@@ -434,12 +441,6 @@ class Experiment(object):
             log_every_iters=43,#TODO: automatically set
         )
 
-        # Attach the logger to the trainer to log model's weights norm after each iteration
-        tb_logger.attach(
-            trainer,
-            event_name=Events.EPOCH_COMPLETED(every=self.CFG.save_every),
-            log_handler=WeightsHistHandler(self.model)
-        )
 
         wandb_init()
         wandb_logger = WandBLogger(
