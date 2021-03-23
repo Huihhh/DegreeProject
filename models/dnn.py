@@ -35,6 +35,17 @@ def cos(w, a=-np.pi, b=np.pi):
     # w.requires_grad = True
     return w
 
+    
+def _no_grad_normal_(tensor, mean, std):
+    with torch.no_grad():
+        return tensor.normal_(mean, std)
+
+def normal_custom(w):
+    fan_out, fan_in = w.shape
+    std = float(fan_in + fan_out) / float(fan_in * fan_out)
+
+    return _no_grad_normal_(w, 0., std)
+
 
 ACT_METHOD = {
     'relu': nn.ReLU(),
