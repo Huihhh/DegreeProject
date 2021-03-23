@@ -35,7 +35,7 @@ def cos(w, a=-np.pi, b=np.pi):
     # w.requires_grad = True
     return w
 
-    
+
 def _no_grad_normal_(tensor, mean, std):
     with torch.no_grad():
         return tensor.normal_(mean, std)
@@ -66,12 +66,14 @@ class SimpleNet(nn.Sequential):
             fc = nn.Linear(self.h_nodes[i], self.h_nodes[i+1])
             if cfg.fc_winit.name != 'default': #TODO: more elegant way
                 eval(cfg.fc_winit.func)(fc.weight, **cfg.fc_winit.params)
+            if cfg.fc_binit.name != 'default':
                 eval(cfg.fc_binit.func)(fc.bias, **cfg.fc_binit.params)
             ac = ACT_METHOD[self.cfg.activation]
             if self.use_bn:
                 bn = nn.BatchNorm1d(self.h_nodes[i+1])
-                if cfg.fc_winit.name != 'default':
+                if cfg.bn_winit.name != 'default':
                     eval(cfg.bn_winit.func)(bn.weight, **cfg.bn_winit.params)
+                if cfg.bn_binit.name != 'default':
                     eval(cfg.bn_binit.func)(bn.bias, **cfg.bn_binit.params)
                 self.layers.append(nn.Sequential(fc, bn, ac))
             else:
@@ -80,6 +82,7 @@ class SimpleNet(nn.Sequential):
         predict = nn.Linear(self.h_nodes[-1], self.out_dim)
         if cfg.fc_winit.name != 'default':
             eval(cfg.fc_winit.func)(predict.weight, **cfg.fc_winit.params)
+        if cfg.fc_binit.name != 'default':
             eval(cfg.fc_binit.func)(predict.bias, **cfg.fc_binit.params)
         self.layers.append(predict)
         super().__init__(*self.layers)
