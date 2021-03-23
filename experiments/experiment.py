@@ -497,6 +497,8 @@ class Experiment(object):
         )
         self.trainer.add_event_handler(
             Events.EPOCH_COMPLETED(every=self.CFG.save_every), handler)
+        self.trainer.add_event_handler(
+            Events.COMPLETED, handler)
 
     def load_model(self, mdl_fname):
         print(mdl_fname)
