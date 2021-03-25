@@ -21,6 +21,8 @@ MODEL:
 EXPERIMENT:
   name: 'ToyExperiment'
   debug: False
+  # wandb setting
+  dryrun: False
 
   # classification
   TH: 0.5

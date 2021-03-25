@@ -193,7 +193,7 @@ class Experiment(object):
         acc.attach(evaluator, 'val_acc')
 
         # set up TB logger & Wandb logger
-        tb_logger, wandb_logger = self.setup_tb_logger(trainer, evaluator)
+        tb_logger = self.setup_tb_logger(trainer, evaluator)
 
         def custom_event_filter(trainer, event):
             if event in range(10) or event % self.CFG.plot_every == 0:
@@ -281,7 +281,7 @@ class Experiment(object):
             val_loss = Loss(self.criterion)
             val_loss.attach(ema_evaluator, 'ema_val_loss')
 
-            wandb_logger.attach_output_handler(
+            self.wandb_logger.attach_output_handler(
                 ema_evaluator,
                 event_name=Events.EPOCH_COMPLETED,
                 tag="ema_validation",
@@ -376,21 +376,6 @@ class Experiment(object):
             #red region: {red_regions['count'] / (red_regions['area'] + 1e-6)} \
             #blue region: {blue_regions['count'] / (blue_regions['area'] +1e-6) }\
             #total regions: {total_regions} ")
-        # self.swriter.add_scalars(
-        #     name + '/count',
-        #     {'total': total_regions,
-        #      'boundary': boundary_regions['count'],
-        #      'blue_region': blue_regions['count'],
-        #      'red_region': red_regions['count'],
-        #      },
-        #     epoch)
-        # self.swriter.add_scalars(
-        #     name + '/divided_by_area',
-        #     {'boundary': boundary_regions['count'] / (boundary_regions['area'] + 1e-6),
-        #      'blue_region': blue_regions['count'] / (blue_regions['area'] + 1e-6),
-        #      'red_region': red_regions['count'] / (red_regions['area'] + 1e-6),
-        #      },
-        #     epoch)
 
         kwargs = dict(
             interpolation="nearest",
@@ -420,6 +405,7 @@ class Experiment(object):
                             input_points[:, 1], c=labels, s=1)
 
             plt.savefig(self.save_folder / f'{name}_epoch{epoch}.png')
+            self.wandb_logger._wandb.save(self.save_folder / f'{name}_epoch{epoch}.png')
 
         # save confidence map
         if self.CFG.plot_confidence:
@@ -441,16 +427,16 @@ class Experiment(object):
             log_every_iters=43,#TODO: automatically set
         )
 
-
-        wandb_init()
-        wandb_logger = WandBLogger(
+        if self.CFG.dryrun:
+            os.environ['WANDB_MODE'] = 'dryrun'
+        self.wandb_logger = WandBLogger(
             project="degree-project",
             name=self.CFG.name,
             config=self.CFG,
             sync_tensorboard=True,
             # tensorboard=tb_logger
         )
-        wandb_logger.attach_output_handler(
+        self.wandb_logger.attach_output_handler(
             trainer,
             event_name=Events.EPOCH_COMPLETED,
             tag='training',
@@ -458,7 +444,7 @@ class Experiment(object):
             # output_transform=lambda out: {'epoch': trainer.state.epoch, **out[0]},
             global_step_transform=lambda *_: trainer.state.iteration,
         )
-        wandb_logger.attach_output_handler(
+        self.wandb_logger.attach_output_handler(
             evaluator,
             event_name=Events.EPOCH_COMPLETED,
             tag="validation",
@@ -467,14 +453,14 @@ class Experiment(object):
         )
 
         # Attach the logger to the trainer to log optimizer's parameters, e.g. learning rate at each iteration
-        wandb_logger.attach_opt_params_handler(
+        self.wandb_logger.attach_opt_params_handler(
             trainer,
             event_name=Events.ITERATION_STARTED,
             optimizer=self.optimizer,
             param_name='lr'  # optional
         )
 
-        return tb_logger, wandb_logger
+        return tb_logger
 
 
     
