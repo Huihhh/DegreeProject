@@ -1,4 +1,4 @@
-from utils.wandb_init import wandb_init
+import wandb
 from utils.ema import EMA
 from utils.get_signatures import get_signatures
 from utils.utils import AverageMeter, accuracy
@@ -22,6 +22,7 @@ import logging
 from collections import Counter, defaultdict
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from pylab import *
 from functools import partial
 
 
@@ -377,13 +378,29 @@ class Experiment(object):
             #blue region: {blue_regions['count'] / (blue_regions['area'] +1e-6) }\
             #total regions: {total_regions} ")
 
+        # save confidence map
+        if self.CFG.plot_confidence:
+            fig, ax = plt.subplots(2, 2, sharex='col',sharey='row')
+            ax = ax.flatten()
+            confidence = net_out.reshape(
+                self.grid_labels.shape).detach().cpu().numpy()
+            ax0 = ax[0].scatter(xx, yy, c=confidence, vmin=0, vmax=1)
+            # ax[0].set(adjustable="box")
+            fig.colorbar(ax0, ax=ax[0])
+            c=1
+        else:
+            fig, ax = plt.subplots(2, 1, sharex='col',sharey='row')
+            ax = ax.flatten()
+            c=0
+
+        fig.subplots_adjust(hspace=0.05, wspace=0.05)
         kwargs = dict(
             interpolation="nearest",
             extent=(xx.min(), xx.max(), yy.min(), yy.max()),
             aspect="auto",
             origin="lower",
         )
-        for lables, name in zip([grid_labels, pseudo_label.squeeze()], ['true_label', 'pseudo_label']):
+        for lables, name in zip([pseudo_label.squeeze(), grid_labels], [ 'pseudo_label', 'true_label']):
             color_labels = np.zeros(lables.shape)
             for i, key in enumerate(sigs_grid_dict):
                 idx = np.where(sigs_grid == key)
@@ -393,27 +410,27 @@ class Experiment(object):
 
             color_labels = color_labels.reshape(self.grid_labels.shape).T
 
-            plt.figure()
             cmap = mpl.cm.bwr
             norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
-            plt.imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
-            plt.imshow(base_color_labels, cmap=plt.get_cmap(
+            ax[c].imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
+            ax[c].imshow(base_color_labels, cmap=plt.get_cmap(
                 'Pastel2'), alpha=0.6, **kwargs)
-            if self.CFG.plot_points:
-                input_points, labels = self.dataset.data
-                plt.scatter(input_points[:, 0],
-                            input_points[:, 1], c=labels, s=1)
+            ax[c].set(adjustable="box")
+            c += 1
 
-            plt.savefig(self.save_folder / f'{name}_epoch{epoch}.png')
-            self.wandb_logger._wandb.save(self.save_folder / f'{name}_epoch{epoch}.png')
+        # linear regions colored by true labels with sample points
+        ax[-1].imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
+        ax[-1].imshow(base_color_labels, cmap=plt.get_cmap(
+            'Pastel2'), alpha=0.6, **kwargs)
+        input_points, labels = self.dataset.data
 
-        # save confidence map
-        if self.CFG.plot_confidence:
-            confidence = net_out.reshape(
-                self.grid_labels.shape).detach().cpu().numpy()
-            plt.scatter(xx, yy, c=confidence, vmin=0, vmax=1)
-            plt.colorbar()
-            plt.savefig(self.save_folder / f'confidenc_epoch{epoch}.png')
+        ax[-1].scatter(input_points[:, 0],
+                    input_points[:, 1], c=labels, s=1)
+        ax[-1].set_xlim((xx.min(), xx.max()))
+        ax[-1].set_ylim((yy.min(), yy.max()))
+
+
+        self.wandb_logger._wandb.log({f'LinearRegions/epoch{epoch}': wandb.Image(fig)}, commit=False)
 
         return total_regions, red_regions, blue_regions, boundary_regions
 
