@@ -385,15 +385,17 @@ class Experiment(object):
             confidence = net_out.reshape(
                 self.grid_labels.shape).detach().cpu().numpy()
             ax0 = ax[0].scatter(xx, yy, c=confidence, vmin=0, vmax=1)
-            # ax[0].set(adjustable="box")
+            ax[0].set_title('confidence map')
             fig.colorbar(ax0, ax=ax[0])
             c=1
         else:
-            fig, ax = plt.subplots(2, 1, sharex='col',sharey='row')
+            fig, ax = plt.subplots(3, 1, sharex='col',sharey='row')
             ax = ax.flatten()
             c=0
+            plt.rcParams['figure.figsize'] = (4.0, 8.0)
 
-        fig.subplots_adjust(hspace=0.05, wspace=0.05)
+
+        plt.tight_layout(pad=1)
         kwargs = dict(
             interpolation="nearest",
             extent=(xx.min(), xx.max(), yy.min(), yy.max()),
@@ -415,7 +417,8 @@ class Experiment(object):
             ax[c].imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
             ax[c].imshow(base_color_labels, cmap=plt.get_cmap(
                 'Pastel2'), alpha=0.6, **kwargs)
-            ax[c].set(adjustable="box")
+            ax[c].set_title(name)
+            ax[c].set(aspect=1)
             c += 1
 
         # linear regions colored by true labels with sample points
@@ -426,8 +429,8 @@ class Experiment(object):
 
         ax[-1].scatter(input_points[:, 0],
                     input_points[:, 1], c=labels, s=1)
-        ax[-1].set_xlim((xx.min(), xx.max()))
-        ax[-1].set_ylim((yy.min(), yy.max()))
+        ax[-1].set(xlim=[xx.min(), xx.max()], ylim=[yy.min(), yy.max()], aspect=1)
+        ax[-1].set_title('true label')
 
 
         self.wandb_logger._wandb.log({f'LinearRegions/epoch{epoch}': wandb.Image(fig)}, commit=False)
@@ -458,7 +461,6 @@ class Experiment(object):
             event_name=Events.EPOCH_COMPLETED,
             tag='training',
             metric_names='all',
-            # output_transform=lambda out: {'epoch': trainer.state.epoch, **out[0]},
             global_step_transform=lambda *_: trainer.state.iteration,
         )
         self.wandb_logger.attach_output_handler(
@@ -482,8 +484,6 @@ class Experiment(object):
 
     
     def fitting(self, dataloader):
-        # initialize tensorboard
-        # self.swriter = SummaryWriter(log_dir='summaries')
         if self.CFG.resume:
             # optionally resume from a checkpoint
             self.resume_model()
