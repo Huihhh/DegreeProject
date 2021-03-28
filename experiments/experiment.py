@@ -146,6 +146,7 @@ class Experiment(object):
         x, y = batch[0].to(self.device), batch[1].to(self.device).float()
         y_pred = self.model(x)
         loss = self.criterion(y_pred, y[:, None])
+        y_pred = torch.sigmoid(y_pred)
         y_pred = torch.where(y_pred > self.CFG.TH,
                              torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
         acc = accuracy(y_pred, y)
@@ -162,6 +163,7 @@ class Experiment(object):
         with torch.no_grad():
             x, y = batch[0].to(self.device), batch[1].to(self.device).float()
             y_pred = self.model(x)
+            y_pred = torch.sigmoid(y_pred)
             return y_pred, y[:, None]
 
     def create_trainer(self):
