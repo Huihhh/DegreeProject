@@ -68,17 +68,15 @@ class Dataset(object):
         y : ndarray of shape (n_samples,)
             The integer labels (0 or 1) for class membership of each sample.
         """
-
         w = self.CFG.width
         boundary_w = self.CFG.boundary_w
         if self.CFG.boundary_w >= 1 or self.CFG.boundary_w < 0:
             raise ValueError("boundary width has to be between 0 and 1.")
 
         # each class has the same density
-        n_noise = int(self.total_samples * self.CFG.noise_ratio)
-        n_samples = self.total_samples - n_noise
-        equal_density = True
-        if equal_density:
+        # n_noise = int(self.total_samples * self.CFG.noise_ratio)
+        n_samples = self.total_samples
+        if self.CFG.equal_density:
             ratio = ((1+w/2)**2 - (1-w/2)**2) / \
                 ((boundary_w+w/2)**2 - (boundary_w-w/2)**2)
             n_samples_in = int(1 / (1+ratio) * n_samples)
@@ -182,8 +180,7 @@ class Dataset(object):
         X, y = data
         noise_n = int(self.CFG.noise_ratio * self.total_samples)
         idx = np.random.choice(np.arange(self.total_samples), size=noise_n)
-        X[idx,
-            :] += generator.normal(scale=self.CFG.noise_level, size=(noise_n, 2))
+        X[idx, :] += generator.normal(scale=self.CFG.noise_level, size=(noise_n, 2))
         return X, y
 
     def extend_input(self, data):
@@ -248,7 +245,7 @@ if __name__ == '__main__':
     import sys
     sys.path.append(os.getcwd())
 
-    @hydra.main(config_path='../config/dataset', config_name='synthetic')
+    @hydra.main(config_path='../config/dataset', config_name='circles')
     def main(CFG: DictConfig):
         # # For reproducibility, set random seed
         np.random.seed(CFG.DATASET.seed)
@@ -256,10 +253,10 @@ if __name__ == '__main__':
         torch.cuda.manual_seed_all(CFG.DATASET.seed)
         dataset = Dataset(CFG.DATASET)
 
-        # dataset.plot()
-        # grid_points, grid_labels = dataset.get_decision_boundary()
+        dataset.plot()
+        grid_points, grid_labels = dataset.get_decision_boundary()
         # plt.figure()
         # plt.imshow(np.rot90(grid_labels))
-        # plt.savefig('./mask.png')
-        # np.savetxt('./input.txt', dataset.data[0], delimiter=',')
+        plt.savefig('./mask.png')
+        np.savetxt('./input.txt', dataset.data[0], delimiter=',')
     main()
