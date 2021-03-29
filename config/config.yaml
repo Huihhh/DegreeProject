@@ -27,7 +27,7 @@ EXPERIMENT:
 
   # classification
   TH: 0.5
-  wdecay: 0.0005
+  wdecay: 0.001
   bdecay: 0.000 # bias decay TODO: only applied for circle data
   bdecay_mean: (${MODEL.fc_binit.params.b} + ${MODEL.fc_binit.params.a})/2
   bdecay_method: l1
