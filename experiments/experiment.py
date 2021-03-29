@@ -144,15 +144,14 @@ class Experiment(object):
         self.model.train()
         self.optimizer.zero_grad()
         x, y = batch[0].to(self.device), batch[1].to(self.device).float()
-        y_pred = self.model(x)
+        y_pred = self.model.forward(x)
         loss = self.criterion(y_pred, y[:, None])
-        y_pred = torch.sigmoid(y_pred)
-        y_pred = torch.where(y_pred > self.CFG.TH,
-                             torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
-        acc = accuracy(y_pred, y)
         loss.backward()
         self.optimizer.step()
         self.scheduler.step()
+        y_pred = torch.where(y_pred > self.CFG.TH,
+                             torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
+        acc = accuracy(y_pred, y)
         return {
             'loss': loss.item(),
             'acc': acc
@@ -162,8 +161,7 @@ class Experiment(object):
         self.model.eval()
         with torch.no_grad():
             x, y = batch[0].to(self.device), batch[1].to(self.device).float()
-            y_pred = self.model(x)
-            y_pred = torch.sigmoid(y_pred)
+            y_pred = self.model.forward(x)
             return y_pred, y[:, None]
 
     def create_trainer(self):
@@ -172,25 +170,25 @@ class Experiment(object):
         trainer = Engine(lambda engine, batch: self.train_step(engine, batch))
         trainer.logger = setup_logger('trainer', format=log_format)
 
-        def output_transform(out, name):
+        def output_transform_train(out, name):
             return out[name]
 
         for name in ['loss', 'acc']:
             Average(output_transform=partial(
-                output_transform, name=name)).attach(trainer, name)
+                output_transform_train, name=name)).attach(trainer, name)
 
         # evaluator
         evaluator = Engine(
             lambda engine, batch: self.validation_step(engine, batch))
         evaluator.logger = setup_logger("evaluator", level=30)
 
-        def output_transform(output):
+        def output_transform_val(output):
             y_pred = torch.where(output[0] > self.CFG.TH,
                                  torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
             y = output[1]
             return y_pred, y
 
-        acc = Accuracy(output_transform=output_transform)
+        acc = Accuracy(output_transform=output_transform_val)
         ls = Loss(self.criterion)
         ls.attach(evaluator, 'val_loss')
         acc.attach(evaluator, 'val_acc')
@@ -279,7 +277,7 @@ class Experiment(object):
             ema_evaluator = Engine(
                 lambda engine, batch: self.validation_step(engine, batch))
             ema_evaluator.logger = setup_logger('ema evaluator', level=30)
-            val_acc = Accuracy(output_transform=output_transform)
+            val_acc = Accuracy(output_transform=output_transform_val)
             val_acc.attach(ema_evaluator, 'ema_val_acc')
             val_loss = Loss(self.criterion)
             val_loss.attach(ema_evaluator, 'ema_val_loss')
