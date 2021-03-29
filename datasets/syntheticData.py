@@ -235,7 +235,7 @@ class Dataset(object):
         trainset, valset, testset = Data.random_split(
             dataset, [self.CFG.n_train, self.CFG.n_val, self.CFG.n_test])
         kwargs = dict(batch_size=self.batch_size,
-                      num_workers=self.num_workers, pin_memory=True)
+                      num_workers=self.num_workers, pin_memory=True, drop_last=True)
         self.train_loader = Data.DataLoader(trainset, shuffle=True, **kwargs)
         self.val_loader = Data.DataLoader(valset, **kwargs)
         self.test_loader = Data.DataLoader(testset, **kwargs)
@@ -255,13 +255,11 @@ if __name__ == '__main__':
         torch.manual_seed(CFG.DATASET.seed)
         torch.cuda.manual_seed_all(CFG.DATASET.seed)
         dataset = Dataset(CFG.DATASET)
-        dataset.plot()
-        grid_points, grid_labels = dataset.get_decision_boundary()
+
+        # dataset.plot()
+        # grid_points, grid_labels = dataset.get_decision_boundary()
         # plt.figure()
-        # plt.imshow(grid_points.reshape(grid_labels.shape))
-        # plt.savefig('./grid_points.png')
-        plt.figure()
-        plt.imshow(np.rot90(grid_labels))
-        plt.savefig('./mask.png')
-        np.savetxt('./input.txt', dataset.data[0], delimiter=',')
+        # plt.imshow(np.rot90(grid_labels))
+        # plt.savefig('./mask.png')
+        # np.savetxt('./input.txt', dataset.data[0], delimiter=',')
     main()

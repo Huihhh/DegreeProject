@@ -14,12 +14,11 @@ from ignite.contrib.handlers import ProgressBar
 import torch
 from torch import optim
 from torch.optim.lr_scheduler import LambdaLR
-from tensorboardX import SummaryWriter
 
 import math
 import numpy as np
 import logging
-from collections import Counter, defaultdict
+from collections import defaultdict
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from pylab import *
@@ -27,13 +26,11 @@ from functools import partial
 
 
 import os
-from os import mkdir
-from os.path import exists
-from pathlib import Path
 
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
+from utils.utils import AverageMeter
 
 
 logger = logging.getLogger(__name__)
@@ -104,10 +101,6 @@ class Experiment(object):
         if CFG.plot_every > 0 or plot_sig:
             self.grid_points, self.grid_labels = dataset.get_decision_boundary()
 
-            # dir to save plot
-            self.save_folder = Path('LinearRegions/')
-            if not exists(self.save_folder):
-                mkdir(self.save_folder)
 
         # used EWA or not
         self.ema = self.CFG.ema_used
@@ -193,18 +186,39 @@ class Experiment(object):
         ls.attach(evaluator, 'val_loss')
         acc.attach(evaluator, 'val_acc')
 
+
+        @trainer.on(Events.EPOCH_COMPLETED)
+        def run_validation_raw(engine):
+            # log training results
+            metrics = engine.state.metrics
+            logger.info(f"[train] train: train_loss={metrics['loss']} train_acc={metrics['acc']}")
+            # run validation
+            logger.info('======== Validating on original model ========')
+            evaluator.run(self.dataset.val_loader)
+            metrics = evaluator.state.metrics
+            logger.info(
+                f"[raw] validation: val_loss={metrics['val_loss']} val_acc={metrics['val_acc']}")
+
+        @trainer.on(Events.COMPLETED)
+        def test(engine):
+            logger.info("======= Testing =======")
+            evaluator.run(self.dataset.test_loader)
+            metrics = evaluator.state.metrics
+            logger.info(
+                f"[raw] Testing: test_loss={metrics['val_loss']} test_acc={metrics['val_acc']*100}")
+
         # set up TB logger & Wandb logger
         tb_logger = self.setup_tb_logger(trainer, evaluator)
 
-        def custom_event_filter(trainer, event):
-            if event in range(10) or event % self.CFG.plot_every == 0:
-                return True
-            return False
 
         if self.CFG.plot_every > 0:
+            def custom_event_filter(trainer, event):
+                if event in range(10) or event % self.CFG.plot_every == 0:
+                    return True
+                return False
             events = Events.EPOCH_STARTED(event_filter=custom_event_filter)
             @trainer.on(events)
-            def plot_signatures(engine):  # TODO: subplots
+            def plot_signatures(engine):  # TODO: EPOCH_STARTED?
                 total_regions, red_regions, blue_regions, boundary_regions = self.plot_signatures(engine.state.epoch)
                 engine.state.metrics.update({
                     'total_regions': total_regions,
@@ -243,31 +257,11 @@ class Experiment(object):
                 log_handler=WeightsHistHandler(self.model)
             )
 
-        @trainer.on(Events.EPOCH_COMPLETED)
-        def run_validation_raw(engine):
-            # log training results
-            metrics = engine.state.metrics
-            logger.info(f"[train] validation: val_loss={metrics['loss']} val_acc={metrics['acc']}")
-            # run validation
-            logger.info('======== Validating on original model ========')
-            evaluator.run(self.dataset.val_loader)
-            metrics = evaluator.state.metrics
-            logger.info(
-                f"[raw] validation: val_loss={metrics['val_loss']} val_acc={metrics['val_acc']}")
-
-        @trainer.on(Events.COMPLETED)
-        def test(engine):
-            logger.info("======= Testing =======")
-            evaluator.run(self.dataset.test_loader)
-            metrics = evaluator.state.metrics
-            logger.info(
-                f"[raw] Testing: test_loss={metrics['val_loss']} test_acc={metrics['val_acc']*100}")
-
-        def score_function(engine):
-            val_loss = engine.state.metrics['val_loss']
-            return -val_loss
-
         if self.CFG.early_stop:
+            def score_function(engine):
+                val_loss = engine.state.metrics['val_loss']
+                return -val_loss
+                
             handler = EarlyStopping(
                 patience=10, score_function=score_function, min_delta=0.0001, cumulative_delta=True, trainer=trainer)
             # Note: the handler is attached to an *Evaluator* (runs one epoch on validation dataset).
@@ -450,7 +444,7 @@ class Experiment(object):
         if self.CFG.dryrun:
             os.environ['WANDB_MODE'] = 'dryrun'
         self.wandb_logger = WandBLogger(
-            project="degree-project",
+            project=self.CFG.wandb_project,
             name=self.CFG.name,
             config=self.CFG,
             sync_tensorboard=True,
@@ -480,8 +474,6 @@ class Experiment(object):
         )
 
         return tb_logger
-
-
     
     def fitting(self, dataloader):
         if self.CFG.resume:

@@ -14,7 +14,7 @@ DATASET:
 
   # data loader
   n_train: 1400
-  n_val: 400
-  n_test: 200
+  n_val: 200
+  n_test: 400
   batch_size: 32
   num_workers: 4
