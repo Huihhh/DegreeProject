@@ -11,6 +11,7 @@ checkpoints/
 *.png
 try*
 *.txt
+note.md
 
 data/
 filter_outputs.py

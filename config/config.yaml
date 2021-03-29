@@ -1,6 +1,6 @@
 #TODO: add available choices
 defaults:
-  - dataset: synthetic
+  - dataset: circles
   - init_methods@MODEL.fc_winit: tanh
   - init_methods@MODEL.fc_binit: cos
   - init_methods@MODEL.bn_winit: ones

@@ -1,0 +1,20 @@
+#@package _global_
+DATASET:
+  name: 'circles'
+  seed: 0
+  # make data
+  total_samples: 2000
+  equal_density: False # only used for circles
+  width: 0.05
+  boundary_w: 0.5 # boundary_width [0, 1) for circles, 
+  noise_ratio: 0 # percent of noisy points
+  noise_level: 0.2 # guassian std noise
+  shuffle: True
+  increase_dim: [] # [np.cos, np.sin, np.square]
+
+  # data loader
+  n_train: 1400
+  n_val: 200
+  n_test: 400
+  batch_size: 32
+  num_workers: 4
