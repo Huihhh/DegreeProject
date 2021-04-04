@@ -9,11 +9,11 @@ from ignite.utils import setup_logger
 from ignite.contrib.engines import common
 from ignite.contrib.handlers.wandb_logger import *
 from ignite.contrib.handlers.tensorboard_logger import WeightsHistHandler
-from ignite.contrib.handlers import ProgressBar
 
 import torch
 from torch import optim
 from torch.optim.lr_scheduler import LambdaLR
+from torch import linalg as LA
 
 import math
 import numpy as np
@@ -320,9 +320,11 @@ class Experiment(object):
 
         
         if self.CFG.debug:
-            ProgressBar(persist=False).attach(
-                trainer, metric_names="all", event_name=Events.ITERATION_COMPLETED
-            )
+            @trainer.on(Events.EPOCH_COMPLETED(every=10))
+            def plot_weight_norm_per_layer(engine):
+                for name, param in self.model.named_parameters():
+                    self.wandb_logger._wandb.log({f'parameters/norm_{name}': LA.norm(param)})
+
 
         self.trainer = trainer
 
