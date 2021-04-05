@@ -8,9 +8,10 @@ from numpy.lib.arraysetops import isin
 from sklearn.utils.validation import check_random_state
 import torch
 import os
+import math
 import logging
 import torch.utils.data as Data
-from sklearn import datasets, svm
+from sklearn import svm
 from sklearn.utils import check_random_state, shuffle as util_shuffle
 import numbers
 
@@ -35,6 +36,7 @@ class Dataset(object):
         self.DATA = {
             'circles': self.make_circles,
             'moons': self.make_moons,
+            'spiral': self.make_spiral,
         }
         self.data = self.DATA[self.CFG.name]()
         logger.info('the number of negative points: %d' %
@@ -176,11 +178,61 @@ class Dataset(object):
             X, y = self.extend_input([X, y])
         return X, y
 
+    def make_spiral(self):
+        def spiral_xy(i, spiral_num):
+            """
+            Create the data for a spiral.
+
+            Arguments:
+                i runs from 0 to 96
+                spiral_num is 1 or -1
+            """
+            φ = i/16 * math.pi
+            r = 6.5 * ((104 - i)/104)
+            x = (r * math.cos(φ) * spiral_num)/13 + 0.5
+            y = (r * math.sin(φ) * spiral_num)/13 + 0.5
+            return (x, y)
+
+        def spiral(spiral_num):
+            return [spiral_xy(i, spiral_num) for i in range(97)]
+
+        self.x1 = np.array(spiral(1))
+        self.x2 = np.array(spiral(-1))
+        l1 = np.ones(self.x1.shape[0])
+        l2 = np.zeros(self.x2.shape[0])
+        X = np.concatenate([self.x1, self.x2], axis=0)
+        y = np.concatenate([l1, l2])
+        return X, y
+    
+    def get_decision_boundary_spiral(self):
+        # create grid to evaluate model
+        h = 0.01
+        xx = np.arange(self.minX, self.maxX, h)
+        yy = np.arange(self.minY, self.maxY, h)
+        YY, XX = np.meshgrid(yy, xx)
+        xy = np.vstack([XX.ravel(), YY.ravel()]).T
+        
+
+        w1 = xx.shape[0]
+        w2 = yy.shape[0]
+        matrix = [[0.0 for i in range(w1)]
+            for j in range(w2)]
+        for x, y in self.x1:
+            x = min(int(round(x * w1)), w1 - 1)
+            y = min(int(round(y * w2)), w2 - 1)
+            matrix[1 - y][x] = 1
+        for x, y in self.x2:
+            x = min(int(round(x * w1)), w1 - 1)
+            y = min(int(round(y * w2)), w2 - 1)
+            matrix[1 - y][x] = -1
+        return xy, np.array(matrix)
+
     def add_noise(self, data, generator):
         X, y = data
         noise_n = int(self.CFG.noise_ratio * self.total_samples)
         idx = np.random.choice(np.arange(self.total_samples), size=noise_n)
-        X[idx, :] += generator.normal(scale=self.CFG.noise_level, size=(noise_n, 2))
+        X[idx,
+            :] += generator.normal(scale=self.CFG.noise_level, size=(noise_n, 2))
         return X, y
 
     def extend_input(self, data):
@@ -212,7 +264,7 @@ class Dataset(object):
         grid_labels = decision_boundary + negtive_class
 
         if len(self.CFG.increase_dim) > 0:
-            xy, grid_labels= self.extend_input([xy, grid_labels])
+            xy, grid_labels = self.extend_input([xy, grid_labels])
         return xy, grid_labels
 
     def plot(self, save_dir='./'):
@@ -222,17 +274,19 @@ class Dataset(object):
         plt.ylim(self.minY-0.1, self.maxY + 0.1)
         plt.xlabel('x')
         plt.ylabel('y')
-        plt.title(f'{self.CFG.name} noise/total points:{self.CFG.noise_ratio} noise(std):{self.CFG.noise_level}')
+        plt.title(
+            f'{self.CFG.name} noise/total points:{self.CFG.noise_ratio} noise(std):{self.CFG.noise_level}')
         plt.savefig(os.path.join(save_dir, self.CFG.name + '.png'))
 
     def get_dataloader(self):
         X = torch.from_numpy(self.data[0]).float()
         Y = torch.from_numpy(self.data[1]).long()
+        print(X.shape, Y.shape)
         dataset = Data.TensorDataset(X, Y)
         trainset, valset, testset = Data.random_split(
             dataset, [self.CFG.n_train, self.CFG.n_val, self.CFG.n_test])
         kwargs = dict(batch_size=self.batch_size,
-                      num_workers=self.num_workers, pin_memory=True, drop_last=True)
+                      num_workers=self.num_workers, pin_memory=True, drop_last=False)
         self.train_loader = Data.DataLoader(trainset, shuffle=True, **kwargs)
         self.val_loader = Data.DataLoader(valset, **kwargs)
         self.test_loader = Data.DataLoader(testset, **kwargs)

@@ -66,25 +66,26 @@ class Experiment(object):
     def __init__(self, model, dataset, CFG, plot_sig=False) -> None:
         super().__init__()
         self.dataset = dataset
-        self.CFG = CFG
+        self.CFG = CFG.EXPERIMENT
+        self.config = CFG
         # used Gpu or not
-        self.use_gpu = CFG.use_gpu
+        self.use_gpu = self.CFG.use_gpu
         self.device = torch.device(
-            'cuda' if torch.cuda.is_available() and CFG.use_gpu else 'cpu')
+            'cuda' if torch.cuda.is_available() and self.CFG.use_gpu else 'cpu')
         self.model = model.to(self.device)
 
         no_decay = ['bias', 'bn']
         grouped_parameters = [
             {'params': [p for n, p in self.model.named_parameters() if not any(
-                nd in n for nd in no_decay)], 'weight_decay': CFG.wdecay},
+                nd in n for nd in no_decay)], 'weight_decay': self.CFG.wdecay},
             {'params': [p for n, p in self.model.named_parameters() if any(
                 nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
-        self.optimizer = optim.Adam(grouped_parameters, lr=CFG.optim_lr,)
+        self.optimizer = optim.Adam(grouped_parameters, lr=self.CFG.optim_lr,)
                                 #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
-        steps_per_epoch = eval(CFG.steps_per_epoch)
-        total_training_steps = CFG.n_epoch * steps_per_epoch
-        warmup_steps = CFG.warmup * steps_per_epoch
+        steps_per_epoch = eval(self.CFG.steps_per_epoch)
+        total_training_steps = self.CFG.n_epoch * steps_per_epoch
+        warmup_steps = self.CFG.warmup * steps_per_epoch
         self.scheduler = get_cosine_schedule_with_warmup(
             self.optimizer, warmup_steps, total_training_steps)
         self.init_criterion()
@@ -98,8 +99,11 @@ class Experiment(object):
         }
 
         # init grid points to plot linear regions
-        if CFG.plot_every > 0 or plot_sig:
-            self.grid_points, self.grid_labels = dataset.get_decision_boundary()
+        if self.CFG.plot_every > 0 or plot_sig:
+            if CFG.DATASET.name == 'spiral':
+                self.grid_points, self.grid_labels = dataset.get_decision_boundary_spiral()
+            else:
+                self.grid_points, self.grid_labels = dataset.get_decision_boundary()
 
 
         # used EWA or not
@@ -108,7 +112,7 @@ class Experiment(object):
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
 
-        if CFG.save_model:
+        if self.CFG.save_model:
             self.save_checkpoints()
 
     def init_criterion(self):
@@ -448,7 +452,7 @@ class Experiment(object):
         self.wandb_logger = WandBLogger(
             project=self.CFG.wandb_project,
             name=self.CFG.name,
-            config=self.CFG,
+            config=self.config,
             sync_tensorboard=True,
             # tensorboard=tb_logger
         )
