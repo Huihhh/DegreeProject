@@ -209,7 +209,7 @@ class Experiment(object):
             evaluator.run(self.dataset.test_loader)
             metrics = evaluator.state.metrics
             logger.info(
-                f"[raw] Testing: test_loss={metrics['val_loss']} test_acc={metrics['val_acc']*100}")
+                f"[raw] Testing: test_loss={metrics['val_loss']} test_acc={metrics['val_acc']}")
 
         # set up TB logger & Wandb logger
         tb_logger = self.setup_tb_logger(trainer, evaluator)
