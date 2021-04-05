@@ -67,7 +67,7 @@ class Experiment(object):
         super().__init__()
         self.dataset = dataset
         self.CFG = CFG.EXPERIMENT
-        self.config = CFG
+        self.config = CFG #TODO: one object
         # used Gpu or not
         self.use_gpu = self.CFG.use_gpu
         self.device = torch.device(
@@ -83,7 +83,7 @@ class Experiment(object):
         ]
         self.optimizer = optim.Adam(grouped_parameters, lr=self.CFG.optim_lr,)
                                 #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
-        steps_per_epoch = eval(self.CFG.steps_per_epoch)
+        steps_per_epoch = np.ceil(self.dataset.n_train / CFG.DATASET.batch_size) # eval(self.CFG.steps_per_epoch)
         total_training_steps = self.CFG.n_epoch * steps_per_epoch
         warmup_steps = self.CFG.warmup * steps_per_epoch
         self.scheduler = get_cosine_schedule_with_warmup(
@@ -545,7 +545,7 @@ if __name__ == '__main__':
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG), '\n')
         model = SimpleNet(CFG.MODEL)
         dataset = Dataset(CFG.DATASET)
-        experiment = Experiment(model, dataset, CFG.EXPERIMENT)
+        experiment = Experiment(model, dataset, CFG)
         experiment.fitting(dataset.train_loader)
 
     main()
