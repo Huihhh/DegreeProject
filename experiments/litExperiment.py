@@ -154,7 +154,7 @@ class LitExperiment(pl.LightningModule):
             logger.info("[EMA] initial ")
 
     def on_train_epoch_start(self) -> None:
-        if self.current_epoch in range(10) or self.current_epoch % self.CFG.plot_every == 0:
+        if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
             total_regions, red_regions, blue_regions, boundary_regions = self.plot_signatures(
                 self.current_epoch)
             self.log('total_regions', total_regions)
@@ -229,7 +229,7 @@ class LitExperiment(pl.LightningModule):
         )
 
         lr_monitor = LearningRateMonitor(logging_interval='step')
-        callbacks = [checkpoint_callback, lr_monitor]
+        callbacks = [lr_monitor]
         if self.CFG.early_stop:
             callbacks.append(EarlyStopping('val_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
 
@@ -237,6 +237,7 @@ class LitExperiment(pl.LightningModule):
             accelerator="ddp", # if torch.cuda.is_available() else 'ddp_cpu',
             callbacks=callbacks,
             logger=wandb_logger,
+            checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
             gpus=-1 if torch.cuda.is_available() else 0,
             max_epochs=self.CFG.n_epoch,
         )
