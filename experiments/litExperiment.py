@@ -222,6 +222,7 @@ class LitExperiment(pl.LightningModule):
             callbacks=callbacks,
             logger=wandb_logger,
             gpus=-1 if torch.cuda.is_available() else 0,
+            max_steps=self.CFG.n_epoch
         )
         logger.info("======= Training =======")
         trainer.fit(self, self.dataset.train_loader, self.dataset.val_loader)
