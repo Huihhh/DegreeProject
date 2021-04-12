@@ -194,7 +194,6 @@ class LitExperiment(pl.LightningModule):
         loss = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        print(x, y)
         self.log('test', {'loss': loss, 'acc': acc})
         return acc
 
@@ -228,9 +227,7 @@ class LitExperiment(pl.LightningModule):
         logger.info("======= Training =======")
         trainer.fit(self, self.dataset.train_loader, self.dataset.val_loader)
         logger.info("======= Testing =======")
-        result = trainer.test(test_dataloaders=self.dataset.test_loader)
-        logger.info("======= Training done =======")
-        logger.info("test", result)
+        trainer.test(test_dataloaders=self.dataset.test_loader)
 
     def plot_signatures(self, epoch):
         name = 'Linear_regions_ema' if self.CFG.ema_used else 'Linear_regions'
