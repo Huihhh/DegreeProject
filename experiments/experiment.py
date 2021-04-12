@@ -150,8 +150,8 @@ class Experiment(object):
             self.save_checkpoints()
 
     def init_criterion(self):
-        inner_r = self.config.DATASET.boundary_w + self.config.DATASET.width
-        outer_r = 1 - self.config.DATASET.width #TODO: these two values are only based on the circle data
+        inner_r = self.config.boundary_w + self.config.width
+        outer_r = 1 - self.config.width #TODO: these two values are only based on the circle data
         self.criterion = lambda pred, y: torch.nn.BCELoss()(
             pred, y) + self.CFG.dis_reg * disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
 
