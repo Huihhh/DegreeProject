@@ -435,6 +435,7 @@ class Experiment(object):
 
 
         self.wandb_logger._wandb.log({f'LinearRegions/epoch{epoch}': wandb.Image(fig)}, commit=False)
+        plt.close(fig)
 
         return total_regions, red_regions, blue_regions, boundary_regions
 
