@@ -230,9 +230,9 @@ class Experiment(object):
                     'red_regions_count': red_regions['count'],
                     'blue_regions_count': blue_regions['count'],
                     'boundary_regions_count': boundary_regions['count'],
-                    'red_regions_ratio': red_regions['count'] / (red_regions['area']+1e-6),
-                    'blue_regions_ratio': blue_regions['count'] / (blue_regions['area']+1e-6),
-                    'boundary_regions_ratio': boundary_regions['count'] / (boundary_regions['area']+1e-6),
+                    'red_regions_ratio': red_regions['ratio'] ,
+                    'blue_regions_ratio': blue_regions['ratio'],
+                    'boundary_regions_ratio': boundary_regions['ratio'],
                 })
 
                 if self.CFG.ema_used:
@@ -373,10 +373,13 @@ class Experiment(object):
                 boundary_regions['count'] += 1
                 boundary_regions['area'] += region_labels.size
 
+        red_regions['ratio'] = red_regions['count'] / (red_regions['area'] + 1e-6)
+        blue_regions['ratio'] = blue_regions['count'] / (blue_regions['area'] + 1e-6)
+        boundary_regions['ratio'] = boundary_regions['count'] / (boundary_regions['area'] + 1e-6)
         logger.info(f"[Linear regions/area] \
-            #around the boundary: {boundary_regions['count'] / (boundary_regions['area'] +1e-6)} \
-            #red region: {red_regions['count'] / (red_regions['area'] + 1e-6)} \
-            #blue region: {blue_regions['count'] / (blue_regions['area'] +1e-6) }\
+            #around the boundary: {boundary_regions['ratio']} \
+            #red region: {red_regions['ratio']} \
+            #blue region: {blue_regions['ratio'] }\
             #total regions: {total_regions} ")
 
         # save confidence map

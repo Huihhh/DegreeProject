@@ -150,8 +150,7 @@ class LitExperiment(pl.LightningModule):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
         loss = self.criterion(y_pred, y[:, None])
-        y_pred = torch.where(y_pred > self.CFG.TH,
-                             torch.tensor(1.0).to(self.device), torch.tensor(0.0).to(self.device))
+        y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         self.log('train', {'loss': loss.item(), 'acc': acc})
         return loss
@@ -178,6 +177,7 @@ class LitExperiment(pl.LightningModule):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
         loss = self.criterion(y_pred, y[:, None])
+        y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         self.log('val_loss', loss)
         self.log('val_acc', acc)
@@ -192,6 +192,7 @@ class LitExperiment(pl.LightningModule):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
         loss = self.criterion(y_pred, y[:, None])
+        y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         self.log('test', {'loss': loss, 'acc': acc})
         return acc
@@ -269,10 +270,13 @@ class LitExperiment(pl.LightningModule):
                 boundary_regions['count'] += 1
                 boundary_regions['area'] += region_labels.size
 
+        red_regions['ratio'] = red_regions['count'] / (red_regions['area'] + 1e-6)
+        blue_regions['ratio'] = blue_regions['count'] / (blue_regions['area'] + 1e-6)
+        boundary_regions['ratio'] = boundary_regions['count'] / (boundary_regions['area'] + 1e-6)
         logger.info(f"[Linear regions/area] \
-            #around the boundary: {boundary_regions['count'] / (boundary_regions['area'] +1e-6)} \
-            #red region: {red_regions['count'] / (red_regions['area'] + 1e-6)} \
-            #blue region: {blue_regions['count'] / (blue_regions['area'] +1e-6) }\
+            #around the boundary: {boundary_regions['ratio']} \
+            #red region: {red_regions['ratio']} \
+            #blue region: {blue_regions['ratio'] }\
             #total regions: {total_regions} ")
 
         # save confidence map
