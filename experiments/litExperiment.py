@@ -232,7 +232,7 @@ class LitExperiment(pl.LightningModule):
     def plot_signatures(self, epoch):
         name = 'Linear_regions_ema' if self.CFG.ema_used else 'Linear_regions'
         xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
-        net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float(), self.model)
+        net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
         net_out = torch.sigmoid(net_out)
         pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, 1.0, 0).numpy()
         sigs_grid = np.array([''.join(str(x)
