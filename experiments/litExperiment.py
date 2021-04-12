@@ -181,7 +181,7 @@ class LitExperiment(pl.LightningModule):
         acc = accuracy(y_pred, y)
         self.log('val_loss', loss)
         self.log('val_acc', acc)
-        return acc
+        return y_pred, y[:, None]
 
     def validation_epoch_end(self, *args, **kwargs):
         if self.CFG.ema_used:
