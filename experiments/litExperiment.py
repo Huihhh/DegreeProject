@@ -96,7 +96,9 @@ class LitExperiment(pl.LightningModule):
         self.model = model
         self.dataset = dataset
         self.CFG = CFG.EXPERIMENT
-        self.config = CFG  # TODO: one object
+        self.config = {}
+        for value in CFG.values():
+            self.config.update(value)
 
         self.init_criterion()
 
