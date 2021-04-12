@@ -116,9 +116,9 @@ class LitExperiment(pl.LightningModule):
             logger.info("[EMA] initial ")
 
     def init_criterion(self):
-        inner_r = self.config.DATASET.boundary_w - self.config.DATASET.width
+        inner_r = self.config.DATASET.boundary_w - self.config.DATASET.width * 2
         # TODO: these two values are only based on the circle data
-        outer_r = 1 - self.config.DATASET.width
+        outer_r = 1 - self.config.DATASET.width * 2
         self.criterion = lambda pred, y: torch.nn.BCELoss()(
             pred, y) + self.CFG.dis_reg * disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
 
