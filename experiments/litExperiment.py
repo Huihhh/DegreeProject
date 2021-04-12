@@ -59,12 +59,16 @@ def get_cosine_schedule_with_warmup(optimizer,
 def composite_relu(x, inner_r, outer_r):
     return F.relu(x-outer_r) + F.relu(inner_r-x)
 
-def abs_relu(x, a, b):
+def abs_relu(x, inner_r, outer_r):
+    a = (outer_r + inner_r) / 2
+    b = (outer_r - inner_r) / 2
     x = F.relu(x - a) + F.relu(-x + a)
     x = torch.abs(x - b)
     return x
 
-def sqrt_relu(x, a, b):
+def sqrt_relu(x, inner_r, outer_r):
+    a = (outer_r + inner_r) / 2
+    b = (outer_r - inner_r) / 2
     x = F.relu(x - a) + F.relu(-x + a)
     x = torch.abs(x - b)
     return torch.sqrt(x)
