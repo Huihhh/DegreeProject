@@ -320,13 +320,14 @@ if __name__ == '__main__':
     import sys
     sys.path.append(os.getcwd())
 
-    @hydra.main(config_path='../config/dataset', config_name='circles')
+    @hydra.main(config_path='../config/dataset', config_name='spiral')
     def main(CFG: DictConfig):
         # # For reproducibility, set random seed
         np.random.seed(CFG.DATASET.seed)
         torch.manual_seed(CFG.DATASET.seed)
         torch.cuda.manual_seed_all(CFG.DATASET.seed)
         dataset = Dataset(CFG.DATASET)
+        dataset.get_dataloader()
 
         dataset.plot()
         grid_points, grid_labels = dataset.get_decision_boundary()

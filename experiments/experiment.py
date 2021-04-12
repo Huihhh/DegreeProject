@@ -14,6 +14,7 @@ import torch
 from torch import optim
 from torch.optim.lr_scheduler import LambdaLR
 from torch import linalg as LA
+import torch.nn.functional as F
 
 import math
 import numpy as np
@@ -61,6 +62,22 @@ def get_cosine_schedule_with_warmup(optimizer,
         return max(0., math.cos(math.pi * num_cycles * no_progress))
     return LambdaLR(optimizer, _lr_lambda, last_epoch)
 
+
+def disReg(model, inner_r, outer_r):
+    acc_b = []
+    acc_W = []
+    ac = lambda x: F.relu(x-outer_r) + F.relu(inner_r-x)
+    for name, param in model.named_parameters():
+        if 'weight' in name:
+            norm_W = torch.sqrt(torch.sum(param**2, dim=1))
+            acc_W.append(norm_W)
+        elif 'bias' in name:
+            norm_b = torch.abs(param)
+            acc_b.append(norm_b)
+    loss = 0
+    for norm_w, norm_b in zip(acc_W, acc_b):
+        loss += torch.sum(ac(norm_b / norm_w))
+    return loss
 
 class Experiment(object):
     def __init__(self, model, dataset, CFG, plot_sig=False) -> None:
@@ -116,26 +133,10 @@ class Experiment(object):
             self.save_checkpoints()
 
     def init_criterion(self):
-        if self.CFG.bdecay > 0:
-            bdecay_mean = eval(self.CFG.bdecay_mean) if isinstance(
-                self.CFG.bdecay_mean, str) else self.CFG.bdecay_mean
-        else:
-            bdecay_mean = 0
-
-        def bias_reg():
-            if self.CFG.bdecay_method == 'l1':
-                def reg_func(x): return torch.sum(
-                    torch.abs(torch.abs(x) - bdecay_mean))
-            else:
-                def reg_func(x): return (
-                    torch.abs(torch.abs(x) - bdecay_mean))**2
-            bias_reg_loss = AverageMeter()
-            for name, param in self.model.named_parameters():
-                if 'bias' in name:
-                    bias_reg_loss.update(reg_func(param))
-            return bias_reg_loss.avg
+        inner_r = self.config.DATASET.boundary_w - self.config.DATASET.width
+        outer_r = 1 - self.config.DATASET.width #TODO: these two values are only based on the circle data
         self.criterion = lambda pred, y: torch.nn.BCELoss()(
-            pred, y) + self.CFG.bdecay * bias_reg()
+            pred, y) + self.CFG.dis_reg * disReg(self.model, inner_r, outer_r)
 
     def train_step(self, engine, batch):
         self.model.train()
