@@ -63,10 +63,17 @@ def get_cosine_schedule_with_warmup(optimizer,
     return LambdaLR(optimizer, _lr_lambda, last_epoch)
 
 
-def disReg(model, inner_r, outer_r):
+def composite_relu(x, inner_r, outer_r):
+    return F.relu(x-outer_r) + F.relu(inner_r-x)
+
+def cosin_relu(x, inner_r, outer_r):
+    return 
+
+
+def disReg(model, filter, inner_r, outer_r):
     acc_b = []
     acc_W = []
-    ac = lambda x: F.relu(x-outer_r) + F.relu(inner_r-x)
+    ac = lambda x: eval(filter)(x, inner_r, outer_r)
     for name, param in model.named_parameters():
         if 'weight' in name:
             norm_W = torch.sqrt(torch.sum(param**2, dim=1))
@@ -133,10 +140,10 @@ class Experiment(object):
             self.save_checkpoints()
 
     def init_criterion(self):
-        inner_r = self.config.DATASET.boundary_w - self.config.DATASET.width
+        inner_r = self.config.DATASET.boundary_w + self.config.DATASET.width
         outer_r = 1 - self.config.DATASET.width #TODO: these two values are only based on the circle data
         self.criterion = lambda pred, y: torch.nn.BCELoss()(
-            pred, y) + self.CFG.dis_reg * disReg(self.model, inner_r, outer_r)
+            pred, y) + self.CFG.dis_reg * disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
 
     def train_step(self, engine, batch):
         self.model.train()

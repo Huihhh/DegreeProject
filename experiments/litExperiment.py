@@ -18,7 +18,6 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from pylab import *
-from functools import partial
 import os
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -57,10 +56,23 @@ def get_cosine_schedule_with_warmup(optimizer,
     return LambdaLR(optimizer, _lr_lambda, last_epoch)
 
 
-def disReg(model, inner_r, outer_r):
+def composite_relu(x, inner_r, outer_r):
+    return F.relu(x-outer_r) + F.relu(inner_r-x)
+
+def abs_relu(x, a, b):
+    x = F.relu(x - a) + F.relu(-x + a)
+    x = torch.abs(x - b)
+    return x
+
+def sqrt_relu(x, a, b):
+    x = F.relu(x - a) + F.relu(-x + a)
+    x = torch.abs(x - b)
+    return torch.sqrt(x)
+
+def disReg(model, filter, inner_r, outer_r):
     acc_b = []
     acc_W = []
-    def ac(x): return F.relu(x-outer_r) + F.relu(inner_r-x)
+    ac = lambda x: eval(filter)(x, inner_r, outer_r)
     for name, param in model.named_parameters():
         if 'weight' in name:
             norm_W = torch.sqrt(torch.sum(param**2, dim=1))
@@ -102,7 +114,7 @@ class LitExperiment(pl.LightningModule):
         # TODO: these two values are only based on the circle data
         outer_r = 1 - self.config.DATASET.width
         self.criterion = lambda pred, y: torch.nn.BCELoss()(
-            pred, y) + self.CFG.dis_reg * disReg(self.model, inner_r, outer_r)
+            pred, y) + self.CFG.dis_reg * disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
 
     def configure_optimizers(self):
         # optimizer
@@ -234,7 +246,7 @@ class LitExperiment(pl.LightningModule):
         xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
         net_out = torch.sigmoid(net_out)
-        pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, 1.0, 0).numpy()
+        pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, 1.0, 0.0).numpy()
         sigs_grid = np.array([''.join(str(x)
                                       for x in s.tolist()) for s in sigs_grid])
         region_sigs = list(np.unique(sigs_grid))
