@@ -15,6 +15,7 @@ import math
 import numpy as np
 import logging
 from collections import defaultdict
+from easydict import EasyDict as edict
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from pylab import *
@@ -96,7 +97,7 @@ class LitExperiment(pl.LightningModule):
         self.model = model
         self.dataset = dataset
         self.CFG = CFG.EXPERIMENT
-        self.config = {}
+        self.config = edict()
         for value in CFG.values():
             self.config.update(value)
 
