@@ -6,11 +6,11 @@ import torch.backends.cudnn as cudnn
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import ignite
+import logging
 
 from datasets.syntheticData import Dataset
 from models.dnn import SimpleNet
-from experiments.experiment import Experiment
-import logging
+from experiments import *
  
 @hydra.main(config_path='./config', config_name='config')
 def main(CFG: DictConfig) -> None:
@@ -41,9 +41,9 @@ def main(CFG: DictConfig) -> None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device=device)
 
-    experiment = Experiment(model, dataset, CFG)
+    experiment = EXPERIEMTS[CFG.EXPERIMENT.framework](model, dataset, CFG)
     logger.info("======= Training =======")
-    experiment.fitting(dataset.train_loader)
+    experiment.run()
 
 
 if __name__ == '__main__':

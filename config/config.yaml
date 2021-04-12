@@ -20,6 +20,7 @@ MODEL:
 
 EXPERIMENT:
   name: 'ToyExperiment'
+  framework: lightning
   wandb_project: degree-project
   debug: False
   # wandb setting

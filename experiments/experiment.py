@@ -483,12 +483,12 @@ class Experiment(object):
 
         return tb_logger
     
-    def fitting(self, dataloader):
+    def run(self):
         if self.CFG.resume:
             # optionally resume from a checkpoint
             self.resume_model()
 
-        self.trainer.run(dataloader, max_epochs=self.CFG.n_epoch)
+        self.trainer.run(self.dataset.train_loader, max_epochs=self.CFG.n_epoch)
 
     def save_checkpoints(self):  # TODO: register the event using @trainer.on()
 
@@ -548,6 +548,6 @@ if __name__ == '__main__':
         model = SimpleNet(CFG.MODEL)
         dataset = Dataset(CFG.DATASET)
         experiment = Experiment(model, dataset, CFG)
-        experiment.fitting(dataset.train_loader)
+        experiment.run(dataset.train_loader, dataset.val_loader, dataset.test_loader)
 
     main()
