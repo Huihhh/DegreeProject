@@ -79,10 +79,10 @@ def disReg(model, filter, inner_r, outer_r):
     ac = lambda x: eval(filter)(x, inner_r, outer_r)
     for name, param in model.named_parameters():
         if 'weight' in name:
-            norm_W = torch.sqrt(torch.sum(param**2, dim=1))
+            norm_W = torch.sqrt(torch.sum(param**2, dim=1)) + 1e-6
             acc_W.append(norm_W)
         elif 'bias' in name:
-            norm_b = torch.abs(param)
+            norm_b = torch.abs(param) + 1e-6
             acc_b.append(norm_b)
     loss = 0
     for norm_w, norm_b in zip(acc_W, acc_b):
