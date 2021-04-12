@@ -194,6 +194,7 @@ class LitExperiment(pl.LightningModule):
         loss = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
+        print(x, y)
         self.log('test', {'loss': loss, 'acc': acc})
         return acc
 

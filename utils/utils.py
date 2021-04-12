@@ -1,14 +1,10 @@
-import torch
 import logging
 import os
 from datetime import datetime
 import sys
-import random
-import numpy as np
-
 
 def accuracy(output, target):
-    correct_n = (output.view(-1) == target).sum().item()
+    correct_n = (output.view(-1) == target).sum()
     batch_size = target.size(0)
     return correct_n / batch_size
 
