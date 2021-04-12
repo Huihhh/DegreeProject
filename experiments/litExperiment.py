@@ -152,7 +152,7 @@ class LitExperiment(pl.LightningModule):
         loss = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        self.log('train', {'loss': loss.item(), 'acc': acc})
+        self.log('train', {'loss': loss, 'acc': acc})
         return loss
 
     def training_step_end(self, loss, *args, **kwargs):
@@ -181,7 +181,7 @@ class LitExperiment(pl.LightningModule):
         acc = accuracy(y_pred, y)
         self.log('val_loss', loss)
         self.log('val_acc', acc)
-        return y_pred, y[:, None]
+        return acc
 
     def validation_epoch_end(self, *args, **kwargs):
         if self.CFG.ema_used:

@@ -37,10 +37,6 @@ def main(CFG: DictConfig) -> None:
     logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"
                                 .format(eval(CFG.MODEL.input_dim), CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 
-    if CFG.EXPERIMENT.use_gpu:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model = model.to(device=device)
-
     experiment = EXPERIEMTS[CFG.EXPERIMENT.framework](model, dataset, CFG)
     logger.info("======= Training =======")
     experiment.run()
