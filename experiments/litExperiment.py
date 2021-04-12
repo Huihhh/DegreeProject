@@ -194,8 +194,14 @@ class LitExperiment(pl.LightningModule):
         loss = self.criterion(y_pred, y[:, None])
         acc = accuracy(y_pred, y)
         self.log('test', {'loss': loss, 'acc': acc})
+        return acc
 
     def run(self):
+        wandb_logger = WandbLogger(
+            project='degree-project-lit',
+            name=self.CFG.name,
+            config=self.config,
+        )
         # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
         checkpoint_callback = ModelCheckpoint(
             monitor='val_loss',
@@ -205,18 +211,14 @@ class LitExperiment(pl.LightningModule):
             mode='min',
         )
 
-        wandb_logger = WandbLogger(
-            project='degree-project-lit',
-            name=self.CFG.name,
-            config=self.config,
-        )
-
         lr_monitor = LearningRateMonitor(logging_interval='step')
-        early_stopping = EarlyStopping('val_loss', min_delta=0.0001, patience=10, mode='min', strict=True)
+        callbacks = [checkpoint_callback, lr_monitor]
+        if self.CFG.early_stop:
+            callbacks.append(EarlyStopping('val_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
 
         trainer = pl.Trainer(
             accelerator="ddp", # if torch.cuda.is_available() else 'ddp_cpu',
-            callbacks=[checkpoint_callback, lr_monitor, early_stopping],
+            callbacks=callbacks,
             logger=wandb_logger,
             gpus=-1 if torch.cuda.is_available() else 0,
         )
