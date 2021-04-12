@@ -101,7 +101,9 @@ class Experiment(object):
         super().__init__()
         self.dataset = dataset
         self.CFG = CFG.EXPERIMENT
-        self.config = CFG #TODO: one object
+        self.config = {}
+        for value in CFG.values():
+            self.config.update(value)
         # used Gpu or not
         self.use_gpu = self.CFG.use_gpu
         self.device = torch.device(
