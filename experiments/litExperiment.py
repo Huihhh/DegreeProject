@@ -121,9 +121,10 @@ class LitExperiment(pl.LightningModule):
         # TODO: these two values are only based on the circle data
         outer_r = 1 - self.config.width * 2
         def loss_func(pred, y):
-            loss = torch.nn.BCELoss()(pred, y)
-            dis_reg = self.CFG.dis_reg * disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
-            return loss + dis_reg, loss, dis_reg
+            bce_loss = torch.nn.BCELoss()(pred, y)
+            dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
+            total_loss = bce_loss + self.CFG.dis_reg * dis_reg
+            return total_loss, bce_loss, dis_reg
         self.criterion = loss_func
 
     def configure_optimizers(self):
