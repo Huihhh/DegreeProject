@@ -85,10 +85,12 @@ def disReg(model, filter, inner_r, outer_r):
         elif 'bias' in name:
             norm_b = torch.abs(param) + 1e-6
             acc_b.append(norm_b)
-    loss = 0
+    d = 0
+    d_filtered = 0
     for norm_w, norm_b in zip(acc_W, acc_b):
-        loss += torch.sum(ac(norm_b / norm_w))
-    return loss
+        d += torch.sum(norm_b / norm_w)
+        d_filtered += torch.sum(ac(norm_b / norm_w))
+    return d, d_filtered
 
 
 class LitExperiment(pl.LightningModule):
@@ -122,9 +124,9 @@ class LitExperiment(pl.LightningModule):
         outer_r = 1 - self.config.width * 2
         def loss_func(pred, y):
             bce_loss = torch.nn.BCELoss()(pred, y)
-            dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
+            dis, dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
             total_loss = bce_loss + self.CFG.dis_reg * dis_reg
-            return total_loss, bce_loss, dis_reg
+            return total_loss, bce_loss, dis_reg, dis
         self.criterion = loss_func
 
     def configure_optimizers(self):
@@ -172,13 +174,14 @@ class LitExperiment(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        total_loss, bce_loss, dis_reg = self.criterion(y_pred, y[:, None])
+        total_loss, bce_loss, dis_reg, dis = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         self.log('train', {
             'total_loss': total_loss.item(), 
             'bce_loss': bce_loss.item(), 
             'dis_reg': dis_reg.item(), 
+            'dis': dis.item(), 
             'acc': acc})
         return total_loss
 
@@ -203,13 +206,14 @@ class LitExperiment(pl.LightningModule):
     def validation_step(self,batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        total_loss, bce_loss, dis_reg = self.criterion(y_pred, y[:, None])
+        total_loss, bce_loss, dis_reg, dis = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         self.log('val.total_loss', total_loss)
         self.log('val.bce_loss', bce_loss)
         self.log('val.dis_reg', dis_reg)
-        self.log('val.acc', acc)
+        self.log('val.dis', dis)
+        self.log('val.acc', acc) 
         return acc
 
     def validation_epoch_end(self, *args, **kwargs):
@@ -220,13 +224,14 @@ class LitExperiment(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        total_loss, bce_loss, dis_reg = self.criterion(y_pred, y[:, None])
+        total_loss, bce_loss, dis_reg, dis = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         self.log('test', {
             'total_loss': total_loss, 
             'bce_loss': bce_loss, 
             'dis_reg': dis_reg, 
+            'dis': dis, 
             'acc': acc})
         return acc
 
