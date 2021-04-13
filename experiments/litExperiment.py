@@ -261,7 +261,7 @@ class LitExperiment(pl.LightningModule):
         trainer.fit(self, self.dataset.train_loader, self.dataset.val_loader)
         logger.info("======= Testing =======")
         if self.CFG.debug:
-            trainer.test(self.model, test_dataloaders=self.dataset.test_loader)
+            trainer.test(self, test_dataloaders=self.dataset.test_loader)
         else:
             trainer.test(test_dataloaders=self.dataset.test_loader)
 
