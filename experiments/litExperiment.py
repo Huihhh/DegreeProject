@@ -120,8 +120,11 @@ class LitExperiment(pl.LightningModule):
         inner_r = self.config.boundary_w - self.config.width * 2
         # TODO: these two values are only based on the circle data
         outer_r = 1 - self.config.width * 2
-        self.criterion = lambda pred, y: torch.nn.BCELoss()(
-            pred, y) + self.CFG.dis_reg * disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
+        def loss_func(pred, y):
+            loss = torch.nn.BCELoss()(pred, y)
+            dis_reg = self.CFG.dis_reg * disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
+            return loss + dis_reg, loss, dis_reg
+        self.criterion = loss_func
 
     def configure_optimizers(self):
         # optimizer
@@ -168,11 +171,15 @@ class LitExperiment(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        loss = self.criterion(y_pred, y[:, None])
+        total_loss, bce_loss, dis_reg = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        self.log('train', {'loss': loss.item(), 'acc': acc})
-        return loss
+        self.log('train', {
+            'total_loss': total_loss.item(), 
+            'bce_loss': bce_loss.item(), 
+            'dis_reg': dis_reg.item(), 
+            'acc': acc})
+        return total_loss
 
     def training_step_end(self, loss, *args, **kwargs):
         if self.CFG.ema_used:
@@ -195,11 +202,13 @@ class LitExperiment(pl.LightningModule):
     def validation_step(self,batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        loss = self.criterion(y_pred, y[:, None])
+        total_loss, bce_loss, dis_reg = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        self.log('val_loss', loss)
-        self.log('val_acc', acc)
+        self.log('val.total_loss', total_loss)
+        self.log('val.bce_loss', bce_loss)
+        self.log('val.dis_reg', dis_reg)
+        self.log('val.acc', acc)
         return acc
 
     def validation_epoch_end(self, *args, **kwargs):
@@ -210,10 +219,14 @@ class LitExperiment(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        loss = self.criterion(y_pred, y[:, None])
+        total_loss, bce_loss, dis_reg = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        self.log('test', {'loss': loss, 'acc': acc})
+        self.log('test', {
+            'total_loss': total_loss, 
+            'bce_loss': bce_loss, 
+            'dis_reg': dis_reg, 
+            'acc': acc})
         return acc
 
     def run(self):
@@ -224,7 +237,7 @@ class LitExperiment(pl.LightningModule):
         )
         # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
         checkpoint_callback = ModelCheckpoint(
-            monitor='val_loss',
+            monitor='val.total_loss',
             dirpath='checkpoints/',
             filename='degree-project-{epoch:02d}-{val_loss:.2f}',
             save_top_k=3,
@@ -234,7 +247,7 @@ class LitExperiment(pl.LightningModule):
         lr_monitor = LearningRateMonitor(logging_interval='step')
         callbacks = [lr_monitor]
         if self.CFG.early_stop:
-            callbacks.append(EarlyStopping('val_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
+            callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
 
         trainer = pl.Trainer(
             accelerator="ddp", # if torch.cuda.is_available() else 'ddp_cpu',
