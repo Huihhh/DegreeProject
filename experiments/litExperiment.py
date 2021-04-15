@@ -85,12 +85,11 @@ def disReg(model, filter, inner_r, outer_r):
         elif 'bias' in name:
             norm_b = torch.abs(param) + 1e-6
             acc_b.append(norm_b)
-    d = 0
+
     d_filtered = 0
     for norm_w, norm_b in zip(acc_W, acc_b):
-        d += torch.sum(norm_b / norm_w)
         d_filtered += torch.sum(ac(norm_b / norm_w))
-    return d, d_filtered
+    return d_filtered
 
 
 class LitExperiment(pl.LightningModule):
@@ -119,14 +118,18 @@ class LitExperiment(pl.LightningModule):
             logger.info("[EMA] initial ")
 
     def init_criterion(self):
-        inner_r = self.config.boundary_w - self.config.width * 2
-        # TODO: these two values are only based on the circle data
-        outer_r = 1 - self.config.width * 2
-        def loss_func(pred, y):
-            bce_loss = torch.nn.BCELoss()(pred, y)
-            dis, dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
-            total_loss = bce_loss + self.CFG.dis_reg * dis_reg
-            return total_loss, bce_loss, dis_reg, dis
+        if 'boundary_w' in self.config.keys():
+            inner_r = self.config.boundary_w - self.config.width * 2
+            outer_r = 1 - self.config.width * 2
+
+            def loss_func(pred, y):
+                bce_loss = torch.nn.BCELoss()(pred, y)
+                dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
+                total_loss = bce_loss + self.CFG.dis_reg * dis_reg
+                return {'total_loss': total_loss, 'bce_loss': bce_loss.item(), 'dis_reg': dis_reg.item()}
+        else:
+            def loss_func(pred, y):
+                return {'total_loss': torch.nn.BCELoss()(pred, y)}
         self.criterion = loss_func
 
     def configure_optimizers(self):
@@ -174,16 +177,11 @@ class LitExperiment(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        total_loss, bce_loss, dis_reg, dis = self.criterion(y_pred, y[:, None])
+        losses = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        self.log('train', {
-            'total_loss': total_loss.item(), 
-            'bce_loss': bce_loss.item(), 
-            'dis_reg': dis_reg.item(), 
-            'dis': dis.item(), 
-            'acc': acc})
-        return total_loss
+        self.log('train', {**losses, 'total_loss': losses['total_loss'].item(), 'acc': acc})
+        return losses['total_loss']
 
     def training_step_end(self, loss, *args, **kwargs):
         if self.CFG.ema_used:
@@ -206,14 +204,11 @@ class LitExperiment(pl.LightningModule):
     def validation_step(self,batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        total_loss, bce_loss, dis_reg, dis = self.criterion(y_pred, y[:, None])
+        losses = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        self.log('val.total_loss', total_loss)
-        self.log('val.bce_loss', bce_loss)
-        self.log('val.dis_reg', dis_reg)
-        self.log('val.dis', dis)
-        self.log('val.acc', acc) 
+        self.log('val.total_loss', losses['total_loss'])
+        self.log('val', {**losses, 'acc': acc})
         return acc
 
     def validation_epoch_end(self, *args, **kwargs):
@@ -224,15 +219,10 @@ class LitExperiment(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        total_loss, bce_loss, dis_reg, dis = self.criterion(y_pred, y[:, None])
+        losses = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        self.log('test', {
-            'total_loss': total_loss, 
-            'bce_loss': bce_loss, 
-            'dis_reg': dis_reg, 
-            'dis': dis, 
-            'acc': acc})
+        self.log('test', {**losses, 'acc': acc})
         return acc
 
     def run(self):
