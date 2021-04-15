@@ -118,6 +118,11 @@ class LitExperiment(pl.LightningModule):
             logger.info("[EMA] initial ")
 
     def init_criterion(self):
+        # L2 regularization
+        l2_reg = torch.tensor(0.)
+        for name, param in self.model.named_parameters():
+            if 'weight' in name:
+                l2_reg += torch.norm(param)
         if 'boundary_w' in self.config.keys():
             inner_r = self.config.boundary_w - self.config.width * 2
             outer_r = 1 - self.config.width * 2
@@ -125,24 +130,26 @@ class LitExperiment(pl.LightningModule):
             def loss_func(pred, y):
                 bce_loss = torch.nn.BCELoss()(pred, y)
                 dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
-                total_loss = bce_loss + self.CFG.dis_reg * dis_reg
+                total_loss = bce_loss + self.CFG.dis_reg * dis_reg + self.CFG.wdecay * l2_reg
                 return {'total_loss': total_loss, 'bce_loss': bce_loss.item(), 'dis_reg': dis_reg.item()}
         else:
             def loss_func(pred, y):
-                return {'total_loss': torch.nn.BCELoss()(pred, y)}
+                bce_loss = torch.nn.BCELoss()(pred, y)
+                total_loss = bce_loss + self.CFG.wdecay * l2_reg
+                return {'total_loss': total_loss}
         self.criterion = loss_func
 
     def configure_optimizers(self):
         # optimizer
         # refer to https://github.com/kekmodel/FixMatch-pytorch/blob/248268b8e6777de4f5c8768ee7fc53c4f4c8a13c/train.py#L237
-        no_decay = ['bias', 'bn']
-        grouped_parameters = [
-            {'params': [p for n, p in self.model.named_parameters() if not any(
-                nd in n for nd in no_decay)], 'weight_decay': self.CFG.wdecay},
-            {'params': [p for n, p in self.model.named_parameters() if any(
-                nd in n for nd in no_decay)], 'weight_decay': 0.0}
-        ]
-        optimizer = optim.Adam(grouped_parameters, lr=self.CFG.optim_lr,)
+        # no_decay = ['bias', 'bn']
+        # grouped_parameters = [
+        #     {'params': [p for n, p in self.model.named_parameters() if not any(
+        #         nd in n for nd in no_decay)], 'weight_decay': self.CFG.wdecay},
+        #     {'params': [p for n, p in self.model.named_parameters() if any(
+        #         nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        # ]
+        optimizer = optim.Adam(self.model.parameters(), lr=self.CFG.optim_lr,)
                                 #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
         steps_per_epoch = np.ceil(self.dataset.n_train / self.config.batch_size) # eval(self.CFG.steps_per_epoch)
         total_training_steps = self.CFG.n_epoch * steps_per_epoch
