@@ -7,7 +7,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 import torch
 from torch import optim
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, StepLR
 from torch import linalg as LA
 import torch.nn.functional as F
 
@@ -118,23 +118,29 @@ class LitExperiment(pl.LightningModule):
             logger.info("[EMA] initial ")
 
     def init_criterion(self):
-        # L2 regularization
-        l2_reg = torch.tensor(0.)
-        for name, param in self.model.named_parameters():
-            if 'weight' in name:
-                l2_reg += torch.norm(param)
         if 'boundary_w' in self.config.keys():
             inner_r = self.config.boundary_w - self.config.width * 2
             outer_r = 1 - self.config.width * 2
 
             def loss_func(pred, y):
                 bce_loss = torch.nn.BCELoss()(pred, y)
+                # L2 regularization
+                l2_reg = torch.tensor(0., device='cuda' if torch.cuda.is_available() else 'cpu')
+                for name, param in self.model.named_parameters():
+                    # if 'weight' in name:
+                      l2_reg += torch.norm(param)
+                # distance regularization
                 dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
                 total_loss = bce_loss + self.CFG.dis_reg * dis_reg + self.CFG.wdecay * l2_reg
                 return {'total_loss': total_loss, 'bce_loss': bce_loss.item(), 'dis_reg': dis_reg.item()}
         else:
             def loss_func(pred, y):
                 bce_loss = torch.nn.BCELoss()(pred, y)
+                # L2 regularization
+                l2_reg = torch.tensor(0., device='cuda' if torch.cuda.is_available() else 'cpu')
+                for name, param in self.model.named_parameters():
+                    if 'weight' in name:
+                        l2_reg += torch.norm(param)
                 total_loss = bce_loss + self.CFG.wdecay * l2_reg
                 return {'total_loss': total_loss}
         self.criterion = loss_func
@@ -187,7 +193,9 @@ class LitExperiment(pl.LightningModule):
         losses = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        self.log('train', {**losses, 'total_loss': losses['total_loss'].item(), 'acc': acc})
+        for name, metric in losses.items():
+            self.log(f'tain.{name}', metric.item(), on_step=False, on_epoch=True)
+        self.log('train.acc', acc, on_step=False, on_epoch=True)
         return losses['total_loss']
 
     def training_step_end(self, loss, *args, **kwargs):
@@ -214,8 +222,9 @@ class LitExperiment(pl.LightningModule):
         losses = self.criterion(y_pred, y[:, None])
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
-        self.log('val.total_loss', losses['total_loss'])
-        self.log('val', {**losses, 'acc': acc})
+        for name, metric in losses.items():
+            self.log(f'val.{name}', metric.item(), on_step=False, on_epoch=True)
+        self.log('val.acc', acc, on_step=False, on_epoch=True)
         return acc
 
     def validation_epoch_end(self, *args, **kwargs):
@@ -259,6 +268,7 @@ class LitExperiment(pl.LightningModule):
             checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
             gpus=-1 if torch.cuda.is_available() else 0,
             max_epochs=self.CFG.n_epoch,
+            gradient_clip_val=1
         )
         logger.info("======= Training =======")
         trainer.fit(self, self.dataset.train_loader, self.dataset.val_loader)
