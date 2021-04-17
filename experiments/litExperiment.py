@@ -243,7 +243,7 @@ class LitExperiment(pl.LightningModule):
 
     def run(self):
         wandb_logger = WandbLogger(
-            project='degree-project-lit',
+            project=self.CFG.wandb_project,
             name=self.CFG.name,
             config=self.config,
         )

@@ -21,7 +21,7 @@ MODEL:
 EXPERIMENT:
   name: 'ToyExperiment'
   framework: lightning
-  wandb_project: degree-project
+  wandb_project: degree-project-lit
   debug: False
   # wandb setting
   dryrun: False
