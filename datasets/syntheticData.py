@@ -22,6 +22,7 @@ class Dataset(object):
     def __init__(self, CFG) -> None:
         super().__init__()
         self.CFG = CFG
+        self.seed = CFG.seed
         self.total_samples = CFG.total_samples
         self.n_train = CFG.n_train
         self.n_val = CFG.n_val
@@ -38,15 +39,47 @@ class Dataset(object):
             'moons': self.make_moons,
             'spiral': self.make_spiral,
         }
-        self.data = self.DATA[self.CFG.name]()
-        logger.info('the number of negative points: %d' %
-                    len(np.where(self.data[1] == 0)[0]))
-        logger.info('the number of positive points: %d' %
-                    len(np.where(self.data[1] == 1)[0]))
-        self.minX, self.minY = self.data[0].min(0)[:2]
-        self.maxX, self.maxY = self.data[0].max(0)[:2]
 
-    def make_circles(self):
+        def get_torch_dataset(np_data):
+            X = torch.from_numpy(np_data[0]).float()
+            Y = torch.from_numpy(np_data[1]).long()
+            return Data.TensorDataset(X, Y)
+
+        if self.CFG.name == 'spiral':
+            if self.CFG.fixed_valset:
+                factor_train = self.CFG.factor
+                factor_val = factor_test = 10
+            else:
+                assert (self.n_train + self.n_val + self.n_test -
+                        1.0) < 1e-5, 'n_train + n_val + n_test must equal to 1!'
+                factor_train = math.ceil(self.CFG.factor * self.n_train)
+                factor_val = math.ceil(self.CFG.factor * self.n_val)
+                factor_test = math.ceil(self.CFG.factor * self.n_test)
+            self.trainset = get_torch_dataset(
+                self.make_spiral(factor=factor_train, seed=self.CFG.seed, shuffle=True))
+            self.valset = get_torch_dataset(
+                self.make_spiral(factor=factor_val, seed=self.CFG.seed+1, shuffle=False))
+            self.testset = get_torch_dataset(
+                self.make_spiral(factor=factor_test, seed=self.CFG.seed+2, shuffle=False))
+
+        else:
+            assert (self.n_train + self.n_val + self.n_test -
+                    1.0) < 1e-5, 'n_train + n_val + n_test must equal to 1!'
+            n_train = int(self.total_samples * self.n_train)
+            n_val = int(self.total_samples * self.n_val)
+            n_test = self.total_samples - n_train - n_val
+            self.trainset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_train, seed=self.CFG.seed, shuffle=True))
+            self.valset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_val, seed=self.CFG.seed+1, shuffle=False))
+            self.testset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_test, seed=self.CFG.seed+2, shuffle=False))
+
+        logger.info('the number of negative training points: %d' %
+                    len(np.where(self.trainset.tensors[1].numpy() == 0)[0]))
+        logger.info('the number of positive training points: %d' %
+                    len(np.where(self.trainset.tensors[1].numpy() == 1)[0]))
+        self.minX, self.minY = self.trainset.tensors[0].min(0)[0][:2]
+        self.maxX, self.maxY = self.trainset.tensors[0].max(0)[0][:2]
+
+    def make_circles(self, n_samples=2000, seed=0, shuffle=True, *args, **kwargs):
         """Make a large circle containing a smaller circle in 2d.
         A simple toy dataset to visualize clustering and classification
         algorithms.
@@ -61,8 +94,8 @@ class Dataset(object):
             Determines random number generation for dataset shuffling and noise.
             Pass an int for reproducible output across multiple function calls.
             See :term:`Glossary <seed>`.
-        self.CFG.factor : float, default=.8
-            Scale self.CFG.factor between inner and outer circle in the range `(0, 1)`.
+        factor : float, default=.8
+            Scale factor between inner and outer circle in the range `(0, 1)`.
         Returns
         -------
         X : ndarray of shape (n_samples, 2)
@@ -77,7 +110,7 @@ class Dataset(object):
 
         # each class has the same density
         # n_noise = int(self.total_samples * self.CFG.noise_ratio)
-        n_samples = self.total_samples
+        # n_samples = self.total_samples
         if self.CFG.equal_density:
             ratio = ((1+w/2)**2 - (1-w/2)**2) / \
                 ((boundary_w+w/2)**2 - (boundary_w-w/2)**2)
@@ -87,7 +120,7 @@ class Dataset(object):
 
         n_samples_out = n_samples - n_samples_in
 
-        generator = check_random_state(self.CFG.seed)
+        generator = check_random_state(seed)
         # so as not to have the first point = last point, we set endpoint=False
         linspace_out = np.linspace(0, 2 * np.pi, n_samples_out, endpoint=False)
         linspace_in = np.linspace(0, 2 * np.pi, n_samples_in, endpoint=False)
@@ -100,7 +133,7 @@ class Dataset(object):
                        np.append(outer_circ_y, inner_circ_y)]).T
         y = np.hstack([np.zeros(n_samples_out, dtype=np.intp),
                        np.ones(n_samples_in, dtype=np.intp)])
-        if self.CFG.shuffle:
+        if shuffle:
             X, y = util_shuffle(X, y, random_state=generator)
 
         if w is not None:
@@ -111,7 +144,7 @@ class Dataset(object):
 
         return X, y
 
-    def make_moons(self):
+    def make_moons(self, n_samples=2000, seed=0, shuffle=True,  *args, **kwargs):
         """ Adapted from sklearn.datasets.make_moons
         Make two interleaving half circles.
         A simple toy dataset to visualize clustering and classification
@@ -141,7 +174,7 @@ class Dataset(object):
             The integer labels (0 or 1) for class membership of each sample.
         """
 
-        n_samples = self.total_samples
+        # n_samples = self.total_samples
         w = self.CFG.width
         if isinstance(n_samples, numbers.Integral):
             n_samples_out = n_samples // 2
@@ -153,7 +186,7 @@ class Dataset(object):
                 raise ValueError('`n_samples` can be either an int or '
                                  'a two-element tuple.') from e
 
-        generator = check_random_state(self.CFG.seed)
+        generator = check_random_state(seed)
 
         outer_circ_x = np.cos(np.linspace(0, np.pi, n_samples_out))
         outer_circ_y = np.sin(np.linspace(0, np.pi, n_samples_out))
@@ -166,7 +199,7 @@ class Dataset(object):
         y = np.hstack([np.zeros(n_samples_out, dtype=np.intp),
                        np.ones(n_samples_in, dtype=np.intp)])
 
-        if self.CFG.shuffle:
+        if shuffle:
             X, y = util_shuffle(X, y, random_state=generator)
 
         if w is not None:
@@ -178,7 +211,7 @@ class Dataset(object):
             X, y = self.extend_input([X, y])
         return X, y
 
-    def make_spiral(self):
+    def make_spiral(self, factor=50, seed=0, shuffle=True, *args, **kwargs):
         def spiral_xy(i, spiral_num, factor=1):
             """
             Create the data for a spiral.
@@ -196,19 +229,15 @@ class Dataset(object):
         def spiral(spiral_num, factor=1):
             return [spiral_xy(i, spiral_num, factor) for i in range(factor * 97)]
 
-        self.x1 = np.array(spiral(1, self.CFG.factor))
-        self.x2 = np.array(spiral(-1, self.CFG.factor))
+        self.x1 = np.array(spiral(1, factor))
+        self.x2 = np.array(spiral(-1, factor))
         l1 = np.ones(self.x1.shape[0])
         l2 = np.zeros(self.x2.shape[0])
         X = np.concatenate([self.x1, self.x2], axis=0)
         y = np.concatenate([l1, l2])
-        self.total_samples = X.shape[0]
-        self.n_train = int(self.CFG.n_train * self.total_samples)
-        self.n_val = int(self.CFG.n_val * self.total_samples)
-        self.n_test = self.total_samples - self.n_train - self.n_val
 
-        generator = check_random_state(self.CFG.seed)
-        if self.CFG.shuffle:
+        generator = check_random_state(seed)
+        if shuffle:
             X, y = util_shuffle(X, y, random_state=generator)
 
         if self.CFG.width is not None:
@@ -217,7 +246,7 @@ class Dataset(object):
         if self.CFG.noise_ratio:
             X, y = self.add_noise([X, y], generator)
         return X, y
-    
+
     def get_decision_boundary_spiral(self):
         # create grid to evaluate model
         h = 0.01
@@ -225,11 +254,11 @@ class Dataset(object):
         yy = np.arange(self.minY, self.maxY, h)
         YY, XX = np.meshgrid(yy, xx)
         xy = np.vstack([XX.ravel(), YY.ravel()]).T
-        
+
         w1 = xx.shape[0]
         w2 = yy.shape[0]
         matrix = [[0.0 for i in range(w1)]
-            for j in range(w2)]
+                  for j in range(w2)]
         for x, y in self.x1:
             x = min(int(round(x * w1)), w1 - 1)
             y = min(int(round(y * w2)), w2 - 1)
@@ -245,13 +274,13 @@ class Dataset(object):
         matrix[np.where(np.abs(matrix) < TH)] = 0
         matrix[np.where(matrix > TH)] = 1
         matrix[np.where(matrix < -TH)] = -1
-    
+
         return xy, np.rot90(matrix, k=-1)
 
     def add_noise(self, data, generator):
         X, y = data
-        noise_n = int(self.CFG.noise_ratio * self.total_samples)
-        idx = np.random.choice(np.arange(self.total_samples), size=noise_n)
+        noise_n = int(self.CFG.noise_ratio * X.shape[0])
+        idx = np.random.choice(np.arange(X.shape[0]), size=noise_n)
         X[idx,
             :] += generator.normal(scale=self.CFG.noise_level, size=(noise_n, 2))
         return X, y
@@ -289,7 +318,7 @@ class Dataset(object):
         return xy, grid_labels
 
     def plot(self, save_dir='./'):
-        x, l = self.data
+        x, l = self.trainset
         plt.scatter(x[:, 0], x[:, 1], c=l, cmap=plt.cm.Paired, s=8)
         plt.xlim(self.minX-0.1, self.maxX + 0.1)
         plt.ylim(self.minY-0.1, self.maxY + 0.1)
@@ -300,17 +329,12 @@ class Dataset(object):
         plt.savefig(os.path.join(save_dir, self.CFG.name + '.png'))
 
     def get_dataloader(self):
-        X = torch.from_numpy(self.data[0]).float()
-        Y = torch.from_numpy(self.data[1]).long()
-        print(X.shape, Y.shape)
-        dataset = Data.TensorDataset(X, Y)
-        trainset, valset, testset = Data.random_split(
-            dataset, [self.n_train, self.n_val, self.n_test])
         kwargs = dict(batch_size=self.batch_size,
                       num_workers=self.num_workers, pin_memory=True, drop_last=False)
-        self.train_loader = Data.DataLoader(trainset, shuffle=True, **kwargs)
-        self.val_loader = Data.DataLoader(valset, **kwargs)
-        self.test_loader = Data.DataLoader(testset, **kwargs)
+        self.train_loader = Data.DataLoader(
+            self.trainset, shuffle=True, **kwargs)
+        self.val_loader = Data.DataLoader(self.valset, **kwargs)
+        self.test_loader = Data.DataLoader(self.testset, **kwargs)
 
 
 if __name__ == '__main__':

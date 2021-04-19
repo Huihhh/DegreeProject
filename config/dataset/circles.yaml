@@ -13,8 +13,8 @@ DATASET:
   increase_dim: [] # [np.cos, np.sin, np.square]
 
   # data loader
-  n_train: 1400
-  n_val: 200
-  n_test: 400
+  n_train: 0.7
+  n_val: 0.1
+  n_test: 0.2
   batch_size: 32
   num_workers: 4

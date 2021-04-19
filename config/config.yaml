@@ -1,6 +1,6 @@
 #TODO: add available choices
 defaults:
-  - dataset: circle
+  - dataset: circles
   - init_methods@MODEL.fc_winit: normal_custom
   - init_methods@MODEL.fc_binit: default
   - init_methods@MODEL.bn_winit: ones
@@ -9,6 +9,9 @@ defaults:
 Logging:
   name: "LR"
   seed: ${DATASET.seed}
+
+DATASET:
+  fixed_valset: False
 
 MODEL:
   seed: ${DATASET.seed}

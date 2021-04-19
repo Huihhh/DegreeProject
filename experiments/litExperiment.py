@@ -132,7 +132,7 @@ class LitExperiment(pl.LightningModule):
                 # distance regularization
                 dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
                 total_loss = bce_loss + self.CFG.dis_reg * dis_reg # + self.CFG.wdecay * l2_reg
-                return {'total_loss': total_loss, 'bce_loss': bce_loss.item(), 'dis_reg': dis_reg.item()}
+                return {'total_loss': total_loss, 'bce_loss': bce_loss, 'dis_reg': dis_reg}
         else:
             def loss_func(pred, y):
                 bce_loss = torch.nn.BCELoss()(pred, y)
@@ -372,7 +372,7 @@ class LitExperiment(pl.LightningModule):
             ax[-1].imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
             ax[-1].imshow(base_color_labels, cmap=plt.get_cmap(
                 'Pastel2'), alpha=0.6, **kwargs)
-            input_points, labels = self.dataset.data
+            input_points, labels = self.dataset.trainset.tensors
 
             ax[-1].scatter(input_points[:, 0],
                         input_points[:, 1], c=labels, s=1)

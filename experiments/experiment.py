@@ -448,7 +448,7 @@ class Experiment(object):
         ax[-1].imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
         ax[-1].imshow(base_color_labels, cmap=plt.get_cmap(
             'Pastel2'), alpha=0.6, **kwargs)
-        input_points, labels = self.dataset.data
+        input_points, labels = self.dataset.trainset.tensors
 
         ax[-1].scatter(input_points[:, 0],
                     input_points[:, 1], c=labels, s=1)
