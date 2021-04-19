@@ -157,7 +157,7 @@ class LitExperiment(pl.LightningModule):
         ]
         optimizer = optim.Adam(grouped_parameters, lr=self.CFG.optim_lr,)
                                 #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
-        steps_per_epoch = np.ceil(self.dataset.n_train / self.config.batch_size) # eval(self.CFG.steps_per_epoch)
+        steps_per_epoch = np.ceil(len(self.dataset.trainset) / self.config.batch_size) # eval(self.CFG.steps_per_epoch)
         total_training_steps = self.CFG.n_epoch * steps_per_epoch
         warmup_steps = self.CFG.warmup * steps_per_epoch
         scheduler = {

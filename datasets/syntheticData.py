@@ -60,7 +60,7 @@ class Dataset(object):
             self.valset = get_torch_dataset(
                 self.make_spiral(factor=factor_val, seed=self.CFG.seed+1, shuffle=False))
             self.testset = get_torch_dataset(
-                self.make_spiral(factor=factor_test, seed=self.CFG.seed+2, shuffle=False))
+                self.make_spiral(factor=factor_test, seed=20, shuffle=False))
 
         else:
             assert (self.n_train + self.n_val + self.n_test -
@@ -70,7 +70,7 @@ class Dataset(object):
             n_test = self.total_samples - n_train - n_val
             self.trainset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_train, seed=self.CFG.seed, shuffle=True))
             self.valset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_val, seed=self.CFG.seed+1, shuffle=False))
-            self.testset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_test, seed=self.CFG.seed+2, shuffle=False))
+            self.testset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_test, seed=20, shuffle=False))
 
         logger.info('the number of negative training points: %d' %
                     len(np.where(self.trainset.tensors[1].numpy() == 0)[0]))
