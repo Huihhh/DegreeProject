@@ -268,7 +268,8 @@ class LitExperiment(pl.LightningModule):
             checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
             gpus=-1 if torch.cuda.is_available() else 0,
             max_epochs=self.CFG.n_epoch,
-            gradient_clip_val=1
+            # gradient_clip_val=1,
+            progress_bar_refresh_rate=0
         )
         logger.info("======= Training =======")
         trainer.fit(self, self.dataset.train_loader, self.dataset.val_loader)
