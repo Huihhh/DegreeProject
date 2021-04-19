@@ -204,9 +204,8 @@ class LitExperiment(pl.LightningModule):
         return loss
 
     def on_train_epoch_end(self, outputs) -> None:
-        if self.CFG.debug:
-            for name, param in self.model.named_parameters():
-                self.log(f'parameters/norm_{name}', LA.norm(param))
+        for name, param in self.model.named_parameters():
+            self.log(f'parameters/norm_{name}', LA.norm(param))
 
     def on_validation_epoch_start(self):
         if self.CFG.ema_used:
