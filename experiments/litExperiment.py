@@ -210,11 +210,11 @@ class LitExperiment(pl.LightningModule):
 
     def on_validation_epoch_start(self):
         if self.CFG.ema_used:
-            logger.info('======== Validating on EMA model ========')
+            logger.info(f'======== Validating on EMA model: epoch {self.current_epoch} ========')
             self.ema_model.update_buffer()
-            logger.info("[EMA] update buffer()")
             self.ema_model.apply_shadow()
-            logger.info("[EMA] apply shadow")
+        else:
+            logger.info(f'======== Validating on Raw model: epoch {self.current_epoch} ========')
 
     def validation_step(self,batch, batch_idx):
         x, y = batch[0], batch[1].float()
@@ -230,7 +230,6 @@ class LitExperiment(pl.LightningModule):
     def validation_epoch_end(self, *args, **kwargs):
         if self.CFG.ema_used:
             self.ema_model.restore()
-            logger.info("[EMA] restore ")
 
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
@@ -320,11 +319,11 @@ class LitExperiment(pl.LightningModule):
         red_regions['ratio'] = red_regions['count'] / (red_regions['area'] + 1e-6)
         blue_regions['ratio'] = blue_regions['count'] / (blue_regions['area'] + 1e-6)
         boundary_regions['ratio'] = boundary_regions['count'] / (boundary_regions['area'] + 1e-6)
-        logger.info(f"[Linear regions/area] \
-            #around the boundary: {boundary_regions['ratio']} \
-            #red region: {red_regions['ratio']} \
-            #blue region: {blue_regions['ratio'] }\
-            #total regions: {total_regions} ")
+        logger.info(f"[Linear regions/area] \n \
+                                                    #around the boundary: {boundary_regions['ratio']} \n \
+                                                    #red region:          {red_regions['ratio']} \n \
+                                                    #blue region:         {blue_regions['ratio'] } \n \
+                                                    #total regions:       {total_regions} ")
 
         if (epoch == 0) or (epoch + 1) % self.CFG.save_every == 0:
             # save confidence map
