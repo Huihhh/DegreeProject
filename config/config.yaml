@@ -12,6 +12,7 @@ Logging:
 
 DATASET:
   fixed_valset: True
+  fixed_val_factor: 1
 
 MODEL:
   seed: ${DATASET.seed}

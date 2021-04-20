@@ -318,7 +318,7 @@ class Dataset(object):
         return xy, grid_labels
 
     def plot(self, save_dir='./'):
-        x, l = self.trainset
+        x, l = self.trainset.tensors
         plt.scatter(x[:, 0], x[:, 1], c=l, cmap=plt.cm.Paired, s=8)
         plt.xlim(self.minX-0.1, self.maxX + 0.1)
         plt.ylim(self.minY-0.1, self.maxY + 0.1)
@@ -358,5 +358,5 @@ if __name__ == '__main__':
         # plt.figure()
         # plt.imshow(np.rot90(grid_labels))
         plt.savefig('./mask.png')
-        np.savetxt('./input.txt', dataset.data[0], delimiter=',')
+        # np.savetxt('./input.txt', dataset.data[0], delimiter=',')
     main()

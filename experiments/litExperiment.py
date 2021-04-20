@@ -1,4 +1,5 @@
 
+from typing import Counter
 import wandb
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.trainer import Trainer
@@ -286,8 +287,9 @@ class LitExperiment(pl.LightningModule):
         sigs_grid = np.array([''.join(str(x)
                                       for x in s.tolist()) for s in sigs_grid])
         region_sigs = list(np.unique(sigs_grid))
-        total_regions = len(region_sigs)
-        region_ids = np.random.permutation(total_regions)
+        total_regions = {}
+        total_regions['density'] = len(region_sigs)
+        region_ids = np.random.permutation(total_regions['density'])
 
         sigs_grid_dict = dict(zip(region_sigs, region_ids))
         base_color_labels = np.array(
@@ -295,6 +297,12 @@ class LitExperiment(pl.LightningModule):
         base_color_labels = base_color_labels.reshape(self.grid_labels.shape).T
 
         grid_labels = self.grid_labels.reshape(-1)
+        input_points, labels = self.dataset.trainset.tensors
+        _, sigs_train, _ = get_signatures(input_points.to(self.device), self.model)
+        sigs_train = np.array([''.join(str(x)
+                                for x in s.tolist()) for s in sigs_train])
+        sigs_train = Counter(sigs_train)
+
         boundary_regions, blue_regions, red_regions = defaultdict(
             int), defaultdict(int), defaultdict(int)
         if isinstance(self.CFG.TH_bounds, float):
@@ -306,23 +314,27 @@ class LitExperiment(pl.LightningModule):
             region_labels = grid_labels[idx]
             ratio = sum(region_labels) / region_labels.size
             if ratio > bounds[1]:
-                red_regions['count'] += 1
+                red_regions['density'] += 1
                 red_regions['area'] += region_labels.size
+                red_regions['non_empty_regions'] += int(sigs_train[key] > 0)
             elif ratio < bounds[0]:
-                blue_regions['count'] += 1
+                blue_regions['density'] += 1
                 blue_regions['area'] += region_labels.size
+                blue_regions['non_empty_regions'] += int(sigs_train[key] > 0)
             else:
-                boundary_regions['count'] += 1
+                boundary_regions['density'] += 1
                 boundary_regions['area'] += region_labels.size
+                boundary_regions['non_empty_regions'] += int(sigs_train[key] > 0)
 
-        red_regions['ratio'] = red_regions['count'] / (red_regions['area'] + 1e-6)
-        blue_regions['ratio'] = blue_regions['count'] / (blue_regions['area'] + 1e-6)
-        boundary_regions['ratio'] = boundary_regions['count'] / (boundary_regions['area'] + 1e-6)
+        red_regions['ratio'] = red_regions['density'] / (red_regions['area'] + 1e-6)
+        blue_regions['ratio'] = blue_regions['density'] / (blue_regions['area'] + 1e-6)
+        boundary_regions['ratio'] = boundary_regions['density'] / (boundary_regions['area'] + 1e-6)
+        total_regions['non_empty_regions'] = boundary_regions['non_empty_regions'] + red_regions['non_empty_regions'] + blue_regions['non_empty_regions']
         logger.info(f"[Linear regions/area] \n \
-                                                    #around the boundary: {boundary_regions['ratio']} \n \
-                                                    #red region:          {red_regions['ratio']} \n \
-                                                    #blue region:         {blue_regions['ratio'] } \n \
-                                                    #total regions:       {total_regions} ")
+                                                    #around the boundary: {boundary_regions['density']} \n \
+                                                    #red region:          {red_regions['density']} \n \
+                                                    #blue region:         {blue_regions['density'] } \n \
+                                                    #total regions:       {total_regions['density']} ")
 
         if (epoch == 0) or (epoch + 1) % self.CFG.save_every == 0:
             # save confidence map
@@ -371,7 +383,6 @@ class LitExperiment(pl.LightningModule):
             ax[-1].imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
             ax[-1].imshow(base_color_labels, cmap=plt.get_cmap(
                 'Pastel2'), alpha=0.6, **kwargs)
-            input_points, labels = self.dataset.trainset.tensors
 
             ax[-1].scatter(input_points[:, 0],
                         input_points[:, 1], c=labels, s=1)
