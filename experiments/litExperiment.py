@@ -330,6 +330,7 @@ class LitExperiment(pl.LightningModule):
         blue_regions['ratio'] = blue_regions['density'] / (blue_regions['area'] + 1e-6)
         boundary_regions['ratio'] = boundary_regions['density'] / (boundary_regions['area'] + 1e-6)
         total_regions['non_empty_regions'] = boundary_regions['non_empty_regions'] + red_regions['non_empty_regions'] + blue_regions['non_empty_regions']
+        total_regions['non_empty_ratio'] = total_regions['non_empty_regions'] / total_regions['density']
         logger.info(f"[Linear regions/area] \n \
                                                     #around the boundary: {boundary_regions['density']} \n \
                                                     #red region:          {red_regions['density']} \n \
