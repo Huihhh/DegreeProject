@@ -181,12 +181,12 @@ class LitExperiment(pl.LightningModule):
 
     def on_train_epoch_start(self) -> None:
         if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
-            total_regions, red_regions, blue_regions, boundary_regions = self.plot_signatures(
+            self.total_regions, self.red_regions, self.blue_regions, self.boundary_regions = self.plot_signatures(
                 self.current_epoch)
-        self.log('total_regions', total_regions)
-        self.log('red_regions', red_regions)
-        self.log('blue_regions', blue_regions)
-        self.log('boundary_regions', boundary_regions)
+        self.log('total_regions', self.total_regions)
+        self.log('red_regions', self.red_regions)
+        self.log('blue_regions', self.blue_regions)
+        self.log('boundary_regions', self.boundary_regions)
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
