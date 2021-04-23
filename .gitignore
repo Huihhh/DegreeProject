@@ -14,4 +14,4 @@ try*
 note.md
 
 data/
-filter_outputs.py
+debug/
