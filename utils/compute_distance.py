@@ -1,10 +1,11 @@
 import torch
+from torch._C import device
 import torch.nn as nn
 import numpy as np
 
 def compute_distance(data, net, min_distance = None):
     if min_distance is None:
-        min_distance = torch.ones((data.shape[0])) * np.inf
+        min_distance = torch.ones((data.shape[0]), device='cuda' if torch.cuda.is_available() else 'cpu') * np.inf
     if type(net) is nn.Sequential or issubclass(type(net), nn.Sequential):
         # Sequential: go over each layer and record activation patterns
         for op in net:
