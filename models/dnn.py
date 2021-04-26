@@ -58,6 +58,7 @@ class SimpleNet(nn.Sequential):
         self.cfg = cfg
         self.layers = []
         self.h_nodes = [eval(cfg.input_dim)] + list(cfg.h_nodes)
+        self.n_neurons = sum(self.h_nodes) + 1
         self.out_dim = cfg.out_dim
         self.use_bn = cfg.use_bn
 
@@ -114,6 +115,7 @@ if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.append(BASE_DIR)
     from utils.get_signatures import get_signatures
+    from utils.compute_distance import compute_distance
 
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
@@ -123,6 +125,7 @@ if __name__ == "__main__":
         xx, yy = np.meshgrid(np.arange(-1, 1, h),
                              np.arange(-1, 1, h))
         grid_points = np.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], 1)
+        out, min_distance = compute_distance(torch.tensor([[0.1, 0.2], [0.5, 0.7]]), net)
         sigs_grid, net_out, _ = get_signatures(
             torch.tensor(grid_points).float(), net)
 

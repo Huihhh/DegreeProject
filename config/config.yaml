@@ -51,6 +51,7 @@ EXPERIMENT:
   plot_every: 10
   plot_points: False
   plot_confidence: True
+  plot_avg_distance: True
   TH_bounds: [-0.2, 0.2]
 
   save_model: True
