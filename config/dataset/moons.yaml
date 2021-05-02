@@ -18,3 +18,9 @@ DATASET:
   n_test: 0.2
   batch_size: 32
   num_workers: 4
+
+# plot linear regions
+EXPERIMENT:
+  plot_every: 10
+  plot_confidence: True
+  TH_bounds: [-0.2, 0.2] # used to tell if a lr is in the boundary

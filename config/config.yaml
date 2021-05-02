@@ -16,7 +16,6 @@ DATASET:
 
 MODEL:
   seed: ${DATASET.seed}
-  input_dim: len(${DATASET.increase_dim}) * 2 + 2
   h_nodes: [16]
   out_dim: 1
   activation: 'relu' # or leakyRelU
@@ -25,13 +24,12 @@ MODEL:
 EXPERIMENT:
   name: 'ToyExperiment'
   framework: lightning
-  wandb_project: degree-project-lit
-  debug: False
+
   # wandb setting
   dryrun: False
+  wandb_project: degree-project-lit
 
-  # classification
-  TH: 0.5
+  # regularization
   wdecay: 0.001
   dis_reg: 0.00 # coefficient of distance reg term 
   reg_filter: composite_relu # or abs_relu, or sqrt_relu
@@ -46,17 +44,13 @@ EXPERIMENT:
   ema_used: True
   ema_decay: 0.999
 
+  TH: 0.5
   n_epoch: 1024
-  steps_per_epoch: np.ceil(${DATASET.n_train} / ${DATASET.batch_size})
-  plot_every: 10
-  plot_points: False
-  plot_confidence: True
+  debug: False # if debug, don't save checkpoints
   plot_avg_distance: True
-  TH_bounds: [-0.2, 0.2]
 
   save_model: True
   save_every: 64
-  #TODO: MODEL.fc_winit.params.gain might not be in struct
   out_folder: ${EXPERIMENT.name}_${DATASET.name}_${MODEL.fc_winit.name}_${MODEL.fc_binit.name}_${EXPERIMENT.TH_bounds}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   resume: False

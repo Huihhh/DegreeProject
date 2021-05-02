@@ -1,8 +1,15 @@
 import torch
-from torch._C import device
 import torch.nn as nn
 import numpy as np
-
+##
+# Compute the distance of a point to its nearest linear region.
+# Input:
+#  * data: Nx? matrix of N data points
+#  * net: pytorch network,
+# Output:
+#  * data_out: net(data)
+#  * min_distance: Nx(Q1+Q2+..+Ql) binary matrix,
+##
 def compute_distance(data, net, min_distance = None):
     if min_distance is None:
         min_distance = torch.ones((data.shape[0]), device='cuda' if torch.cuda.is_available() else 'cpu') * np.inf

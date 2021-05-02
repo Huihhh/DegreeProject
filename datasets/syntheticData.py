@@ -4,7 +4,6 @@ python datasets/syntheticData.py hydra.run.dir='./outputs/check_datasets'
 '''
 import numpy as np
 import matplotlib.pyplot as plt
-from numpy.lib.arraysetops import isin
 import torch
 import os
 import math
@@ -14,6 +13,8 @@ from sklearn import svm
 from sklearn.utils import check_random_state, shuffle as util_shuffle
 from scipy.ndimage import gaussian_filter
 import numbers
+
+from utils.utils import get_torch_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,6 @@ class Dataset(object):
             'moons': self.make_moons,
             'spiral': self.make_spiral,
         }
-
-        def get_torch_dataset(np_data):
-            X = torch.from_numpy(np_data[0]).float()
-            Y = torch.from_numpy(np_data[1]).long()
-            return Data.TensorDataset(X, Y)
 
         if self.CFG.name == 'spiral':
             if self.CFG.fixed_valset:

@@ -2,6 +2,8 @@ import logging
 import os
 from datetime import datetime
 import sys
+import torch
+import torch.utils.data as Data
 
 def accuracy(output, target):
     correct_n = (output.view(-1) == target).sum()
@@ -79,5 +81,10 @@ def setup_default_logging(params, string = 'Train', default_level=logging.INFO,
     logger.addHandler(console_handler)
 
     return logger
+
+def get_torch_dataset(np_data):
+    X = torch.from_numpy(np_data[0]).float()
+    Y = torch.from_numpy(np_data[1]).long()
+    return Data.TensorDataset(X, Y)
 
 

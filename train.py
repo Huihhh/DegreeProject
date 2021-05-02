@@ -1,3 +1,4 @@
+from datasets.sat import Sat
 import random
 import numpy as np
 import torch
@@ -30,12 +31,16 @@ def main(CFG: DictConfig) -> None:
     cudnn.benchmark = False
 
     # get datasets
-    dataset = Dataset(CFG.DATASET)
+    if 'SAT' in CFG.DATASET.name:
+        dataset = Sat(CFG.DATASET)
+    else:
+        dataset = Dataset(CFG.DATASET)
+    input_dim = dataset.trainset[0][0].shape[0]
 
     # build model
-    model = SimpleNet(CFG.MODEL)
+    model = SimpleNet(CFG.MODEL, input_dim)
     logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"
-                                .format(eval(CFG.MODEL.input_dim), CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
+                                .format(input_dim, CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 
     if CFG.EXPERIMENT.use_gpu:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

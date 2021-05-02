@@ -54,10 +54,10 @@ ACT_METHOD = {
 
 
 class SimpleNet(nn.Sequential):
-    def __init__(self, cfg) -> None:
+    def __init__(self, cfg, input_dim) -> None:
         self.cfg = cfg
         self.layers = []
-        self.h_nodes = [eval(cfg.input_dim)] + list(cfg.h_nodes)
+        self.h_nodes = [input_dim] + list(cfg.h_nodes)
         self.n_neurons = sum(self.h_nodes) + 1
         self.out_dim = cfg.out_dim
         self.use_bn = cfg.use_bn

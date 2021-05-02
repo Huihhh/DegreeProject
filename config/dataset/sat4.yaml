@@ -1,0 +1,20 @@
+#@package _global_
+DATASET:
+  name: 'SAT4'
+  seed: 0
+  # load data
+  classes: [0,1]
+  data_dir: data/SAT-4
+  shuffle: True
+
+  # data loader
+  n_train: 0.8
+  n_val: 0.2
+  batch_size: 32
+  num_workers: 4
+
+# plot linear regions
+EXPERIMENT:
+  plot_every: 10
+  plot_confidence: True
+  TH_bounds: [-0.2, 0.2] # used to tell if a lr is in the boundary
