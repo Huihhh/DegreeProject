@@ -1,6 +1,6 @@
 #@package _global_
 DATASET:
-  name: 'iris'
+  name: 'titanic'
   seed: 0
   # make data
   species_id: [1,2] # selecct two from [1,2,3]

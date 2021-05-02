@@ -49,14 +49,20 @@ def get_signatures(data, net):
         raise Exception('Unknown operation: ' + str(net))
 
 
-def plot_linear_regions(grid_data, trainset, model, TH, TH_bounds=0.2, plot_LR=False, plot_confidence=True):
+def plot_linear_regions(trainer):
+    grid_data = trainer.grid_points
+    trainset = trainer.dataset.trainset
+    model = trainer.model
+    TH = trainer.CFG.TH
+    TH_bounds = trainer.CFG.TH_bounds
+    plot_confidence = trainer.CFG.plot_confidence
     xx, yy, grid_labels = grid_data[0][:, 0], grid_data[0][:, 1], grid_data[1]
     img_shape = grid_labels.shape
     net_out, sigs_grid, _ = get_signatures(torch.tensor(grid_data[0]).float().to(device), model)
     net_out = torch.sigmoid(net_out)
     pseudo_label = torch.where(net_out.cpu() > TH, 1.0, 0.0).numpy()
     sigs_grid = np.array([''.join(str(x)
-                                for x in s.tolist()) for s in sigs_grid])
+                                  for x in s.tolist()) for s in sigs_grid])
 
     region_sigs = list(np.unique(sigs_grid))
     total_regions = {}
@@ -153,7 +159,7 @@ def plot_linear_regions(grid_data, trainset, model, TH, TH_bounds=0.2, plot_LR=F
             c -= 1
 
         # linear regions colored by true labels with sample points
-        #TODO:change points color
+        # TODO:change points color
         ax[2].imshow(color_labels, cmap=cmap, norm=norm, alpha=0.8, **kwargs)
         ax[2].imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.5, **kwargs)
         ax[2].scatter(train_data[:, 0], train_data[:, 1], c=train_labels, s=1)
@@ -161,7 +167,7 @@ def plot_linear_regions(grid_data, trainset, model, TH, TH_bounds=0.2, plot_LR=F
         ax[2].set(xlim=[xx.min(), xx.max()], ylim=[yy.min(), yy.max()], aspect=1)
         if plot_confidence:
             confidence = net_out.reshape(img_shape).detach().cpu().numpy()
-            ax0 = ax[-1].scatter(xx, yy, c=confidence)
+            ax0 = ax[-1].scatter(xx, yy, c=confidence, vmin=0, vmax=1)
             ax[-1].set(xlim=[xx.min(), xx.max()], ylim=[yy.min(), yy.max()], aspect=1)
             ax[-1].set_title('confidence map')
             fig.colorbar(ax0, ax=ax.ravel().tolist())

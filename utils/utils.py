@@ -6,7 +6,7 @@ import torch
 import torch.utils.data as Data
 
 def accuracy(output, target):
-    correct_n = (output.view(-1) == target).sum()
+    correct_n = (output == target).sum()
     batch_size = target.size(0)
     return correct_n / batch_size
 

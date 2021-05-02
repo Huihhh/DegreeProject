@@ -10,6 +10,7 @@ import ignite
 import logging
 
 from datasets.syntheticData import Dataset
+from datasets.multiDimPoints import MultiDimPoints
 from models.dnn import SimpleNet
 from experiments import *
  
@@ -33,6 +34,8 @@ def main(CFG: DictConfig) -> None:
     # get datasets
     if 'SAT' in CFG.DATASET.name:
         dataset = Sat(CFG.DATASET)
+    elif 'iris' in CFG.DATASET.name:
+        dataset = Iris(CFG.DATASET)
     else:
         dataset = Dataset(CFG.DATASET)
     input_dim = dataset.trainset[0][0].shape[0]

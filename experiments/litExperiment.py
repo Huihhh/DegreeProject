@@ -108,9 +108,11 @@ class LitExperiment(pl.LightningModule):
         # init grid points to plot linear regions
         if self.CFG.plot_every > 0 or plot_sig:
             if CFG.DATASET.name == 'spiral':
-                self.grid_points = dataset.get_decision_boundary_spiral()
+                self.grid_points, self.grid_labels = dataset.get_decision_boundary_spiral()
+            elif CFG.DATASET.name in ['iris', 'SAT4']:
+                self.grid_points, self.grid_labels = dataset.make_data()
             else:
-                self.grid_points = dataset.get_decision_boundary()
+                self.grid_points, self.grid_labels = dataset.get_decision_boundary()
 
         # used EWA or not
         self.ema = self.CFG.ema_used
@@ -179,30 +181,14 @@ class LitExperiment(pl.LightningModule):
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
 
-    def on_train_epoch_start(self) -> None:
-        plot_LR = (self.current_epoch == 0) or (self.current_epoch + 1) % self.CFG.save_every == 0
-        kwargs = dict(
-            grid_data=self.grid_points,
-            trainset = self.dataset.trainset,
-            model=self.model,
-            TH=self.CFG.TH,
-            TH_bounds=self.CFG.TH_bounds,
-            plot_confidence=self.CFG.plot_confidence
-        )
-        
+    def on_train_epoch_start(self) -> None:       
         if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
-            total_regions, red_regions, blue_regions, boundary_regions, fig = plot_linear_regions(plot_LR=plot_LR, **kwargs)
-            self.log(f'LinearRegions/epoch{self.current_epoch}', wandb.Image(fig))
-            self.log('epoch', self.current_epoch)
-            self.log('total_regions', total_regions)
-            self.log('red_regions', red_regions)
-            self.log('blue_regions', blue_regions)
-            self.log('boundary_regions', boundary_regions)
+            self.plot_signatures()
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        losses = self.criterion(y_pred, y[:, None])
+        losses = self.criterion(y_pred, y)
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         for name, metric in losses.items():
@@ -230,7 +216,7 @@ class LitExperiment(pl.LightningModule):
     def validation_step(self,batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        losses = self.criterion(y_pred, y[:, None])
+        losses = self.criterion(y_pred, y)
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         for name, metric in losses.items():
@@ -245,7 +231,7 @@ class LitExperiment(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
         y_pred = self.model.forward(x)
-        losses = self.criterion(y_pred, y[:, None])
+        losses = self.criterion(y_pred, y)
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         self.log('test', {**losses, 'acc': acc})
@@ -289,8 +275,7 @@ class LitExperiment(pl.LightningModule):
         else:
             trainer.test(test_dataloaders=self.dataset.test_loader)
 
-    def plot_signatures(self, epoch):
-        name = 'Linear_regions_ema' if self.CFG.ema_used else 'Linear_regions'
+    def plot_signatures(self):
         xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
         net_out = torch.sigmoid(net_out)
@@ -348,7 +333,7 @@ class LitExperiment(pl.LightningModule):
                                                     #blue region:         {blue_regions['density'] } \n \
                                                     #total regions:       {total_regions['density']} ")
 
-        if (epoch == 0) or (epoch + 1) % self.CFG.save_every == 0:
+        if (self.current_epoch == 0) or (self.current_epoch + 1) % (self.CFG.plot_every*10) == 0:
             # save confidence map
             if self.CFG.plot_confidence:
                 fig, ax = plt.subplots(2, 2, sharex='col', sharey='row')
@@ -393,15 +378,19 @@ class LitExperiment(pl.LightningModule):
             
             if self.CFG.plot_confidence:
                 confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
-                ax0 = ax[-1].scatter(xx, yy, c=confidence)
+                ax0 = ax[-1].scatter(xx, yy, c=confidence, vmin=0, vmax=1)
                 ax[-1].set(xlim=[xx.min(), xx.max()], ylim=[yy.min(), yy.max()], aspect=1)
                 ax[-1].set_title('confidence map')
                 fig.colorbar(ax0, ax=ax.ravel().tolist())
 
-            self.log(f'LinearRegions/epoch{epoch}', wandb.Image(fig))
+            self.log(f'LinearRegions/epoch{self.current_epoch}', wandb.Image(fig))
             plt.close(fig)
 
-        return total_regions, red_regions, blue_regions, boundary_regions
+        self.log('epoch', self.current_epoch)
+        self.log('total_regions', total_regions)
+        self.log('red_regions', red_regions)
+        self.log('blue_regions', blue_regions)
+        self.log('boundary_regions', boundary_regions)
 
     def resume_model(self, train_loader, val_loader, test_loader):
         if self.CFG.resume:

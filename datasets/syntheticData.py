@@ -138,7 +138,7 @@ class Dataset(object):
         if self.CFG.noise_ratio:
             X, y = self.add_noise([X, y], generator)
 
-        return X, y
+        return X, y[:, None]
 
     def make_moons(self, n_samples=2000, seed=0, shuffle=True,  *args, **kwargs):
         """ Adapted from sklearn.datasets.make_moons
@@ -205,7 +205,7 @@ class Dataset(object):
 
         if len(self.CFG.increase_dim) > 0:
             X, y = self.extend_input([X, y])
-        return X, y
+        return X, y[:, None]
 
     def make_spiral(self, factor=50, seed=0, shuffle=True, *args, **kwargs):
         def spiral_xy(i, spiral_num, factor=1):
@@ -241,7 +241,7 @@ class Dataset(object):
 
         if self.CFG.noise_ratio:
             X, y = self.add_noise([X, y], generator)
-        return X, y
+        return X, y[:, None]
 
     def get_decision_boundary_spiral(self):
         # create grid to evaluate model
