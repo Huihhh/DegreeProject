@@ -268,36 +268,6 @@ class Dataset(object):
         targets = np.vstack([y1, y2])
         return data, targets
 
-    def make_grid_points_with_labels_spiral(self):
-        # create grid to evaluate model
-        h = 0.01
-        xx = np.arange(self.minX, self.maxX, h)
-        yy = np.arange(self.minY, self.maxY, h)
-        YY, XX = np.meshgrid(yy, xx)
-        xy = np.vstack([XX.ravel(), YY.ravel()]).T
-
-        w1 = xx.shape[0]
-        w2 = yy.shape[0]
-        matrix = [[0.0 for i in range(w1)]
-                  for j in range(w2)]
-        for x, y in self.x1:
-            x = min(int(round(x * w1)), w1 - 1)
-            y = min(int(round(y * w2)), w2 - 1)
-            matrix[1 - y][x] = 1
-        for x, y in self.x2:
-            x = min(int(round(x * w1)), w1 - 1)
-            y = min(int(round(y * w2)), w2 - 1)
-            matrix[1 - y][x] = -1
-
-        matrix = np.array(matrix)
-        matrix = gaussian_filter(matrix, sigma=1)
-        TH = 0.01
-        matrix[np.where(np.abs(matrix) < TH)] = 0
-        matrix[np.where(matrix > TH)] = 1
-        matrix[np.where(matrix < -TH)] = -1
-
-        return xy, np.rot90(matrix, k=-1)
-
     def add_noise(self, data, generator):
         X, y = data
         noise_n = int(self.CFG.noise_ratio * X.shape[0])
@@ -347,6 +317,36 @@ class Dataset(object):
             xy, grid_labels = self.extend_input([xy, grid_labels])
 
         return xy, grid_labels
+
+    def make_grid_points_with_labels_spiral(self):
+        # create grid to evaluate model
+        h = 0.01
+        xx = np.arange(self.minX, self.maxX, h)
+        yy = np.arange(self.minY, self.maxY, h)
+        YY, XX = np.meshgrid(yy, xx)
+        xy = np.vstack([XX.ravel(), YY.ravel()]).T
+
+        w1 = xx.shape[0]
+        w2 = yy.shape[0]
+        matrix = [[0.0 for i in range(w1)]
+                  for j in range(w2)]
+        for x, y in self.x1:
+            x = min(int(round(x * w1)), w1 - 1)
+            y = min(int(round(y * w2)), w2 - 1)
+            matrix[1 - y][x] = 1
+        for x, y in self.x2:
+            x = min(int(round(x * w1)), w1 - 1)
+            y = min(int(round(y * w2)), w2 - 1)
+            matrix[1 - y][x] = -1
+
+        matrix = np.array(matrix)
+        matrix = gaussian_filter(matrix, sigma=1)
+        TH = 0.01
+        matrix[np.where(np.abs(matrix) < TH)] = 0
+        matrix[np.where(matrix > TH)] = 1
+        matrix[np.where(matrix < -TH)] = -1
+
+        return xy, np.rot90(matrix, k=-1)
 
     def plot(self, save_dir='./'):
         x, l = self.trainset.tensors

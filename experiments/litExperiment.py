@@ -25,6 +25,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 from utils.utils import accuracy
+from utils.compute_distance import compute_distance
 from utils.get_signatures import get_signatures, plot_linear_regions
 from utils.ema import EMA
 
@@ -111,6 +112,23 @@ class LitExperiment(pl.LightningModule):
                 self.grid_points, self.grid_labels = dataset.make_grid_points_with_labels_spiral()
             else:
                 self.grid_points, self.grid_labels = dataset.make_points_to_plot_LR(CFG.EXPERIMENT.plot_LR)
+        
+        # init random points to plot average distance
+        if self.CFG.plot_avg_distance:
+            if CFG.DATASET.name == 'spiral':
+                self.random_points, _ = dataset.make_spiral(Nfactor=50, seed=50)
+            elif CFG.DATASET.name == 'circles':
+                self.random_points, _ = dataset.make_circles(
+                    n_samples=10000, seed=50)
+            elif CFG.DATASET.name == 'moons':
+                self.random_points, _ = dataset.make_moons(
+                    n_samples=10000, seed=50)
+            elif CFG.DATASET.name == 'sphere':
+                self.random_points, _ = dataset.make_sphere(Nfactor=100, seed=50)
+            else:
+                self.random_points = self.grid_points
+            self.random_points = torch.tensor(
+                self.random_points, device='cuda' if torch.cuda.is_available() else 'cpu', dtype=torch.float)
 
         # used EWA or not
         self.ema = self.CFG.ema_used
@@ -178,10 +196,16 @@ class LitExperiment(pl.LightningModule):
         if self.CFG.ema_used:
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
+        
 
     def on_train_epoch_start(self) -> None:       
         if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
             self.plot_signatures()
+            if self.CFG.plot_avg_distance:
+                _, min_distances = compute_distance(
+                    self.random_points, self.model)
+                self.dis_x_neurons = torch.mean(min_distances) * self.model.n_neurons
+                self.log('dis_x_neurons', self.dis_x_neurons)
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
