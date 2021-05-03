@@ -37,9 +37,10 @@ class Iris(object):
     def make_iris(self, species_id):
         df = px.data.iris()
         df = df.loc[df['species_id'].isin(species_id)]
-        data = df[['sepal_length', 'sepal_width',  'petal_length', 'petal_width']].values
-        targets = df[['species_id']].values - 1
-        return data, targets
+        data = df[['sepal_length', 'sepal_width',  'petal_length', 'petal_width']]
+        normalized_data=(data-data.mean())/data.std()
+        targets = (df[['species_id']].values > min(species_id)).astype(int)
+        return normalized_data.values, targets
 
     def get_dataset(self):
         data, targets = self.make_iris(self.CFG.species_id)

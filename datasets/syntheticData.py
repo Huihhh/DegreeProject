@@ -14,12 +14,10 @@ from sklearn.utils import check_random_state, shuffle as util_shuffle
 from scipy.ndimage import gaussian_filter
 import numbers
 
-from utils.utils import get_torch_dataset
-
 logger = logging.getLogger(__name__)
 
 
-class Dataset(object):
+class SyntheticData(object):
     def __init__(self, CFG) -> None:
         super().__init__()
         self.CFG = CFG
@@ -40,6 +38,11 @@ class Dataset(object):
             'spiral': self.make_spiral,
             'sphere': self.make_sphere
         }
+
+        def get_torch_dataset(np_data):
+            X = torch.from_numpy(np_data[0]).float()
+            Y = torch.from_numpy(np_data[1]).float()
+            return Data.TensorDataset(X, Y)
 
         if self.CFG.name in ['spiral', 'sphere']:
             if self.CFG.fixed_valset:
@@ -381,7 +384,7 @@ if __name__ == '__main__':
         np.random.seed(CFG.DATASET.seed)
         torch.manual_seed(CFG.DATASET.seed)
         torch.cuda.manual_seed_all(CFG.DATASET.seed)
-        dataset = Dataset(CFG.DATASET)
+        dataset = SyntheticData(CFG.DATASET)
         dataset.get_dataloader()
 
         dataset.plot()

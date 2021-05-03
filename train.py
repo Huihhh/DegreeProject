@@ -1,4 +1,4 @@
-from datasets.sat import Sat
+from experiments.experiment_multiclass import ExperimentMulti
 import random
 import numpy as np
 import torch
@@ -9,9 +9,8 @@ import hydra
 import ignite
 import logging
 
-from datasets.syntheticData import Dataset
-from datasets.iris import Iris
-from models.dnn import SimpleNet
+from datasets import *
+from models import *
 from experiments import *
  
 @hydra.main(config_path='./config', config_name='config')
@@ -32,16 +31,11 @@ def main(CFG: DictConfig) -> None:
     cudnn.benchmark = False
 
     # get datasets
-    if 'SAT' in CFG.DATASET.name:
-        dataset = Sat(CFG.DATASET)
-    elif 'iris' in CFG.DATASET.name:
-        dataset = Iris(CFG.DATASET)
-    else:
-        dataset = Dataset(CFG.DATASET)
+    dataset = DATA[CFG.DATASET.name](CFG.DATASET)
     input_dim = dataset.trainset[0][0].shape[0]
 
     # build model
-    model = SimpleNet(CFG.MODEL, input_dim)
+    model = MODEL[CFG.MODEL.name](CFG.MODEL, input_dim)
     logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"
                                 .format(input_dim, CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 
@@ -49,7 +43,10 @@ def main(CFG: DictConfig) -> None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device=device)
 
-    experiment = EXPERIEMTS[CFG.EXPERIMENT.framework](model, dataset, CFG)
+    if CFG.MODEL.name == 'resnet':
+        experiment = ExperimentMulti(model, dataset, CFG)
+    else:
+        experiment = LitExperiment(model, dataset, CFG)
     logger.info("======= Training =======")
     experiment.run()
 

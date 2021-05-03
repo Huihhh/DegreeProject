@@ -26,7 +26,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 from utils.utils import accuracy
 from utils.compute_distance import compute_distance
-from utils.get_signatures import get_signatures, plot_linear_regions
+from utils.get_signatures import get_signatures
 from utils.ema import EMA
 
 
@@ -98,6 +98,7 @@ class LitExperiment(pl.LightningModule):
     def __init__(self, model, dataset, CFG, plot_sig=False) -> None:
         super().__init__()
         self.model = model
+        self.model_name = CFG.MODEL.name
         self.dataset = dataset
         self.CFG = CFG.EXPERIMENT
         self.config = edict()
@@ -143,26 +144,14 @@ class LitExperiment(pl.LightningModule):
 
             def loss_func(pred, y):
                 bce_loss = torch.nn.BCELoss()(pred, y)
-                # # L2 regularization
-                # l2_reg = torch.tensor(0., device='cuda' if torch.cuda.is_available() else 'cpu')
-                # for name, param in self.model.named_parameters():
-                #     # if 'weight' in name:
-                #       l2_reg += torch.norm(param)
-                # distance regularization
                 dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
                 total_loss = bce_loss + self.CFG.dis_reg * dis_reg # + self.CFG.wdecay * l2_reg
                 return {'total_loss': total_loss, 'bce_loss': bce_loss, 'dis_reg': dis_reg}
         else:
             def loss_func(pred, y):
                 bce_loss = torch.nn.BCELoss()(pred, y)
-                # # L2 regularization
-                # l2_reg = torch.tensor(0., device='cuda' if torch.cuda.is_available() else 'cpu')
-                # for name, param in self.model.named_parameters():
-                #     if 'weight' in name:
-                #         l2_reg += torch.norm(param)
-                # total_loss = bce_loss + self.CFG.wdecay * l2_reg
                 return {'total_loss': bce_loss}
-        self.criterion = loss_func
+        self.criterion = F.cross_entropy if self.model_name == 'resnet' else loss_func
 
     def configure_optimizers(self):
         # optimizer
@@ -236,7 +225,7 @@ class LitExperiment(pl.LightningModule):
             logger.info(f'======== Validating on Raw model: epoch {self.current_epoch} ========')
 
     def validation_step(self,batch, batch_idx):
-        x, y = batch[0], batch[1].float()
+        x, y = batch[0], batch[1]
         y_pred = self.model.forward(x)
         losses = self.criterion(y_pred, y)
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
@@ -298,6 +287,9 @@ class LitExperiment(pl.LightningModule):
             trainer.test(test_dataloaders=self.dataset.test_loader)
 
     def plot_signatures(self):
+        for batch_x, batch_y in self.dataset.trainset:
+            feature = self.model.resnet18(batch_x.to(self.device))
+            net_out, sigs_grid, _ = get_signatures(feature, self.model)    
         xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
         net_out = torch.sigmoid(net_out)

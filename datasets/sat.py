@@ -126,32 +126,6 @@ class Sat(VisionDataset):
         self.val_loader = Data.DataLoader(self.valset, **kwargs)
         self.test_loader = Data.DataLoader(self.testset, **kwargs)
         
-    
-    def get_decision_boundary(self):
-        # create grid to evaluate model
-        h = 0.01
-        xx = np.arange(self.minX, self.maxX, h)
-        yy = np.arange(self.minY, self.maxY, h)
-        YY, XX = np.meshgrid(yy, xx)
-        xy = np.vstack([XX.ravel(), YY.ravel()]).T
-
-        temp = self.CFG.noise_ratio
-        self.CFG.noise_ratio = None
-        X, y = self.DATA[self.CFG.name]()
-        self.CFG.noise_ratio = temp
-        clf = svm.SVC(kernel='rbf', C=100)
-        clf.fit(X[:, :2], y)
-        prob = clf.decision_function(xy).reshape(XX.shape)
-        TH = 1
-        decision_boundary = 1 - \
-            ((-TH <= prob) & (prob <= TH)).astype(float)
-        negtive_class = -2 * (prob < -TH).astype(float)
-        grid_labels = decision_boundary + negtive_class
-
-        if len(self.CFG.increase_dim) > 0:
-            xy, grid_labels = self.extend_input([xy, grid_labels])
-        return xy, grid_labels
-
 
 if __name__ == '__main__':
     import sys, os

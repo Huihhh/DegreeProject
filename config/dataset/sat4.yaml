@@ -1,6 +1,6 @@
 #@package _global_
 DATASET:
-  name: 'SAT4'
+  name: 'sat4'
   seed: 0
   # load data
   classes: [0,1]
