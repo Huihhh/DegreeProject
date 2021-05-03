@@ -15,6 +15,7 @@ DATASET:
 
 # plot linear regions
 EXPERIMENT:
+  plot_LR: False
   plot_every: 10
   plot_confidence: True
   TH_bounds: [-0.2, 0.2] # used to tell if a lr is in the boundary

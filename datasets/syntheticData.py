@@ -24,7 +24,6 @@ class Dataset(object):
         super().__init__()
         self.CFG = CFG
         self.seed = CFG.seed
-        self.total_samples = CFG.total_samples
         self.n_train = CFG.n_train
         self.n_val = CFG.n_val
         self.n_test = CFG.n_test
@@ -39,34 +38,38 @@ class Dataset(object):
             'circles': self.make_circles,
             'moons': self.make_moons,
             'spiral': self.make_spiral,
+            'sphere': self.make_sphere
         }
 
-        if self.CFG.name == 'spiral':
+        if self.CFG.name in ['spiral', 'sphere']:
             if self.CFG.fixed_valset:
-                factor_train = self.CFG.factor
-                factor_val = factor_test = 10
+                Nfactor_train = self.CFG.Nfactor
+                Nfactor_val = Nfactor_test = self.CFG.fixed_val_factor
             else:
                 assert (self.n_train + self.n_val + self.n_test -
                         1.0) < 1e-5, 'n_train + n_val + n_test must equal to 1!'
-                factor_train = math.ceil(self.CFG.factor * self.n_train)
-                factor_val = math.ceil(self.CFG.factor * self.n_val)
-                factor_test = math.ceil(self.CFG.factor * self.n_test)
+                Nfactor_train = math.ceil(self.CFG.Nfactor * self.n_train)
+                Nfactor_val = math.ceil(self.CFG.Nfactor * self.n_val)
+                Nfactor_test = math.ceil(self.CFG.Nfactor * self.n_test)
             self.trainset = get_torch_dataset(
-                self.make_spiral(factor=factor_train, seed=self.CFG.seed, shuffle=True))
+                self.DATA[self.CFG.name](**{**self.CFG, 'Nfactor': Nfactor_train}))
             self.valset = get_torch_dataset(
-                self.make_spiral(factor=factor_val, seed=self.CFG.seed+1, shuffle=False))
+                self.DATA[self.CFG.name](**{**self.CFG, 'Nfactor': Nfactor_val, 'seed': self.CFG.seed+1}))
             self.testset = get_torch_dataset(
-                self.make_spiral(factor=factor_test, seed=20, shuffle=False))
+                self.DATA[self.CFG.name](**{**self.CFG, 'Nfactor': Nfactor_test, 'seed': 20}))
 
         else:
             assert (self.n_train + self.n_val + self.n_test -
                     1.0) < 1e-5, 'n_train + n_val + n_test must equal to 1!'
-            n_train = int(self.total_samples * self.n_train)
-            n_val = int(self.total_samples * self.n_val)
-            n_test = self.total_samples - n_train - n_val
-            self.trainset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_train, seed=self.CFG.seed, shuffle=True))
-            self.valset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_val, seed=self.CFG.seed+1, shuffle=False))
-            self.testset = get_torch_dataset(self.DATA[self.CFG.name](n_samples=n_test, seed=20, shuffle=False))
+            n_train = int(self.CFG.total_samples * self.n_train)
+            n_val = int(self.CFG.total_samples * self.n_val)
+            n_test = self.CFG.total_samples - n_train - n_val
+            self.trainset = get_torch_dataset(self.DATA[self.CFG.name](
+                n_samples=n_train, seed=self.CFG.seed, shuffle=True))
+            self.valset = get_torch_dataset(self.DATA[self.CFG.name](
+                n_samples=n_val, seed=self.CFG.seed+1, shuffle=False))
+            self.testset = get_torch_dataset(
+                self.DATA[self.CFG.name](n_samples=n_test, seed=20, **self.CFG))
 
         logger.info('the number of negative training points: %d' %
                     len(np.where(self.trainset.tensors[1].numpy() == 0)[0]))
@@ -90,8 +93,8 @@ class Dataset(object):
             Determines random number generation for dataset shuffling and noise.
             Pass an int for reproducible output across multiple function calls.
             See :term:`Glossary <seed>`.
-        factor : float, default=.8
-            Scale factor between inner and outer circle in the range `(0, 1)`.
+        Nfactor : float, default=.8
+            Scale Nfactor between inner and outer circle in the range `(0, 1)`.
         Returns
         -------
         X : ndarray of shape (n_samples, 2)
@@ -105,8 +108,8 @@ class Dataset(object):
             raise ValueError("boundary width has to be between 0 and 1.")
 
         # each class has the same density
-        # n_noise = int(self.total_samples * self.CFG.noise_ratio)
-        # n_samples = self.total_samples
+        # n_noise = int(self.CFG.total_samples * self.CFG.noise_ratio)
+        # n_samples = self.CFG.total_samples
         if self.CFG.equal_density:
             ratio = ((1+w/2)**2 - (1-w/2)**2) / \
                 ((boundary_w+w/2)**2 - (boundary_w-w/2)**2)
@@ -170,7 +173,7 @@ class Dataset(object):
             The integer labels (0 or 1) for class membership of each sample.
         """
 
-        # n_samples = self.total_samples
+        # n_samples = self.CFG.total_samples
         w = self.CFG.width
         if isinstance(n_samples, numbers.Integral):
             n_samples_out = n_samples // 2
@@ -207,8 +210,8 @@ class Dataset(object):
             X, y = self.extend_input([X, y])
         return X, y[:, None]
 
-    def make_spiral(self, factor=50, seed=0, shuffle=True, *args, **kwargs):
-        def spiral_xy(i, spiral_num, factor=1):
+    def make_spiral(self, Nfactor=50, seed=0, shuffle=True, *args, **kwargs):
+        def spiral_xy(i, spiral_num, Nfactor=1):
             """
             Create the data for a spiral.
 
@@ -216,17 +219,17 @@ class Dataset(object):
                 i runs from 0 to 96
                 spiral_num is 1 or -1
             """
-            φ = i/(16*factor) * math.pi
-            r = 6.5 * ((104*factor - i)/(104*factor))
+            φ = i/(16*Nfactor) * math.pi
+            r = 6.5 * ((104*Nfactor - i)/(104*Nfactor))
             x = (r * math.cos(φ) * spiral_num)/13 + 0.5
             y = (r * math.sin(φ) * spiral_num)/13 + 0.5
             return (x, y)
 
-        def spiral(spiral_num, factor=1):
-            return [spiral_xy(i, spiral_num, factor) for i in range(factor * 97)]
+        def spiral(spiral_num, Nfactor=1):
+            return [spiral_xy(i, spiral_num, Nfactor) for i in range(Nfactor * 97)]
 
-        self.x1 = np.array(spiral(1, factor))
-        self.x2 = np.array(spiral(-1, factor))
+        self.x1 = np.array(spiral(1, Nfactor))
+        self.x2 = np.array(spiral(-1, Nfactor))
         l1 = np.ones(self.x1.shape[0])
         l2 = np.zeros(self.x2.shape[0])
         X = np.concatenate([self.x1, self.x2], axis=0)
@@ -243,7 +246,29 @@ class Dataset(object):
             X, y = self.add_noise([X, y], generator)
         return X, y[:, None]
 
-    def get_decision_boundary_spiral(self):
+    def make_sphere(self, Nfactor=50, seed=0, *args, **kwargs):
+        generator = check_random_state(seed)
+        n = complex(imag=Nfactor)
+
+        def make_sphere(r, w, sign, center, n=100j):
+            phi, theta = np.mgrid[0:np.pi:n, 0:2*np.pi:n]
+            x = r * np.sin(phi) * np.cos(theta) + center[0]
+            y = r * np.sin(phi) * np.sin(theta) + center[1]
+            z = r * np.cos(phi) + center[2]
+            x += generator.normal(scale=w, size=x.shape)
+            y += generator.normal(scale=w, size=y.shape)
+            z += generator.normal(scale=w, size=z.shape)
+            data = np.vstack([x.reshape(-1), y.reshape(-1), z.reshape(-1)]).T
+            targets = np.ones_like(x.reshape(-1)) * sign
+            return data, targets[:, None]
+
+        x1, y1 = make_sphere(self.CFG.r, self.CFG.w, sign=0, center=self.CFG.center0, n=n)
+        x2, y2 = make_sphere(self.CFG.r, self.CFG.w, sign=1, center=self.CFG.center1, n=n)
+        data = np.vstack([x1, x2])
+        targets = np.vstack([y1, y2])
+        return data, targets
+
+    def make_grid_points_with_labels_spiral(self):
         # create grid to evaluate model
         h = 0.01
         xx = np.arange(self.minX, self.maxX, h)
@@ -288,7 +313,16 @@ class Dataset(object):
             X = np.concatenate([X, eval(m)(xx)], -1)
         return X, y
 
-    def get_decision_boundary(self):
+    def make_points_to_plot_LR(self, use_grid=True):
+        if use_grid:
+            return self.make_grid_points_with_labels()
+        else:
+            if self.CFG.name in ['spiral', 'sphere']:
+                return self.DATA[self.CFG.name](Nfactor=self.CFG.Nfactor*2)
+            else:
+                return self.DATA[self.CFG.name](n_samples=self.CFG.total_samples*2)
+
+    def make_grid_points_with_labels(self):
         # create grid to evaluate model
         h = 0.01
         xx = np.arange(self.minX, self.maxX, h)
@@ -311,6 +345,7 @@ class Dataset(object):
 
         if len(self.CFG.increase_dim) > 0:
             xy, grid_labels = self.extend_input([xy, grid_labels])
+
         return xy, grid_labels
 
     def plot(self, save_dir='./'):
@@ -340,7 +375,7 @@ if __name__ == '__main__':
     import sys
     sys.path.append(os.getcwd())
 
-    @hydra.main(config_path='../config/dataset', config_name='spiral')
+    @hydra.main(config_path='../config', config_name='config')
     def main(CFG: DictConfig):
         # # For reproducibility, set random seed
         np.random.seed(CFG.DATASET.seed)
@@ -350,7 +385,7 @@ if __name__ == '__main__':
         dataset.get_dataloader()
 
         dataset.plot()
-        grid_points, grid_labels = dataset.get_decision_boundary()
+        grid_points, grid_labels = dataset.make_grid_points_with_labels()
         # plt.figure()
         # plt.imshow(np.rot90(grid_labels))
         plt.savefig('./mask.png')

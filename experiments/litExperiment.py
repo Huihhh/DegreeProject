@@ -108,11 +108,9 @@ class LitExperiment(pl.LightningModule):
         # init grid points to plot linear regions
         if self.CFG.plot_every > 0 or plot_sig:
             if CFG.DATASET.name == 'spiral':
-                self.grid_points, self.grid_labels = dataset.get_decision_boundary_spiral()
-            elif CFG.DATASET.name in ['iris', 'SAT4']:
-                self.grid_points, self.grid_labels = dataset.make_data()
+                self.grid_points, self.grid_labels = dataset.make_grid_points_with_labels_spiral()
             else:
-                self.grid_points, self.grid_labels = dataset.get_decision_boundary()
+                self.grid_points, self.grid_labels = dataset.make_points_to_plot_LR(CFG.EXPERIMENT.plot_LR)
 
         # used EWA or not
         self.ema = self.CFG.ema_used
@@ -332,65 +330,65 @@ class LitExperiment(pl.LightningModule):
                                                     #red region:          {red_regions['density']} \n \
                                                     #blue region:         {blue_regions['density'] } \n \
                                                     #total regions:       {total_regions['density']} ")
-
-        if (self.current_epoch == 0) or (self.current_epoch + 1) % (self.CFG.plot_every*10) == 0:
-            # save confidence map
-            if self.CFG.plot_confidence:
-                fig, ax = plt.subplots(2, 2, sharex='col', sharey='row')
-                ax = ax.flatten()
-            else:
-                fig, ax = plt.subplots(1, 3, sharex='col', sharey='row')
-                ax = ax.flatten()
-                plt.rcParams['figure.figsize'] = (4.0, 8.0)
-
-            plt.tight_layout(w_pad=-0.2, h_pad=0.8)
-            kwargs = dict(
-                interpolation="nearest",
-                extent=(xx.min(), xx.max(), yy.min(), yy.max()),
-                aspect="auto",
-                origin="lower",
-            )
-            c = 1
-            for lables, name in zip([pseudo_label.squeeze(), grid_labels], ['pseudo_label', 'true_label']):
-                color_labels = np.zeros(lables.shape)
-                for i, key in enumerate(sigs_grid_dict):
-                    idx = np.where(sigs_grid == key)
-                    region_labels = lables[idx]
-                    ratio = sum(region_labels) / region_labels.size
-                    color_labels[idx] = ratio
-
-                color_labels = color_labels.reshape(self.grid_labels.shape).T
-
-                cmap = mpl.cm.bwr
-                norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
-                ax[c].imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
-                ax[c].imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.6, **kwargs)
-                ax[c].set_title(name)
-                ax[c].set(aspect=1)
-                c -= 1
-
-            # linear regions colored by true labels with sample points
-            ax[2].imshow(color_labels, cmap=cmap, norm=norm, alpha=0.8, **kwargs)
-            ax[2].imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.5, **kwargs)
-            ax[2].scatter(input_points[:, 0], input_points[:, 1], c=labels, s=1)
-            ax[2].set_title('true label')
-            ax[2].set(xlim=[xx.min(), xx.max()], ylim=[yy.min(), yy.max()], aspect=1)            
-            
-            if self.CFG.plot_confidence:
-                confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
-                ax0 = ax[-1].scatter(xx, yy, c=confidence, vmin=0, vmax=1)
-                ax[-1].set(xlim=[xx.min(), xx.max()], ylim=[yy.min(), yy.max()], aspect=1)
-                ax[-1].set_title('confidence map')
-                fig.colorbar(ax0, ax=ax.ravel().tolist())
-
-            self.log(f'LinearRegions/epoch{self.current_epoch}', wandb.Image(fig))
-            plt.close(fig)
-
         self.log('epoch', self.current_epoch)
         self.log('total_regions', total_regions)
         self.log('red_regions', red_regions)
         self.log('blue_regions', blue_regions)
         self.log('boundary_regions', boundary_regions)
+
+        if self.CFG.plot_LR:
+            if (self.current_epoch == 0) or (self.current_epoch + 1) % (self.CFG.plot_every*10) == 0:
+                # save confidence map
+                if self.CFG.plot_confidence:
+                    fig, ax = plt.subplots(2, 2, sharex='col', sharey='row')
+                    ax = ax.flatten()
+                else:
+                    fig, ax = plt.subplots(1, 3, sharex='col', sharey='row')
+                    ax = ax.flatten()
+                    plt.rcParams['figure.figsize'] = (4.0, 8.0)
+
+                plt.tight_layout(w_pad=-0.2, h_pad=0.8)
+                kwargs = dict(
+                    interpolation="nearest",
+                    extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+                    aspect="auto",
+                    origin="lower",
+                )
+                c = 1
+                for lables, name in zip([pseudo_label.squeeze(), grid_labels], ['pseudo_label', 'true_label']):
+                    color_labels = np.zeros(lables.shape)
+                    for i, key in enumerate(sigs_grid_dict):
+                        idx = np.where(sigs_grid == key)
+                        region_labels = lables[idx]
+                        ratio = sum(region_labels) / region_labels.size
+                        color_labels[idx] = ratio
+
+                    color_labels = color_labels.reshape(self.grid_labels.shape).T
+
+                    cmap = mpl.cm.bwr
+                    norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
+                    ax[c].imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
+                    ax[c].imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.6, **kwargs)
+                    ax[c].set_title(name)
+                    ax[c].set(aspect=1)
+                    c -= 1
+
+                # linear regions colored by true labels with sample points
+                ax[2].imshow(color_labels, cmap=cmap, norm=norm, alpha=0.8, **kwargs)
+                ax[2].imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.5, **kwargs)
+                ax[2].scatter(input_points[:, 0], input_points[:, 1], c=labels, s=1)
+                ax[2].set_title('true label')
+                ax[2].set(xlim=[xx.min(), xx.max()], ylim=[yy.min(), yy.max()], aspect=1)            
+                
+                if self.CFG.plot_confidence:
+                    confidence = net_out.reshape(self.grid_labels.shape).detach().cpu().numpy()
+                    ax0 = ax[-1].scatter(xx, yy, c=confidence, vmin=0, vmax=1)
+                    ax[-1].set(xlim=[xx.min(), xx.max()], ylim=[yy.min(), yy.max()], aspect=1)
+                    ax[-1].set_title('confidence map')
+                    fig.colorbar(ax0, ax=ax.ravel().tolist())
+
+                self.log(f'LinearRegions/epoch{self.current_epoch}', wandb.Image(fig))
+                plt.close(fig)
 
     def resume_model(self, train_loader, val_loader, test_loader):
         if self.CFG.resume:

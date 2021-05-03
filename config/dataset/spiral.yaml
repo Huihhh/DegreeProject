@@ -3,7 +3,8 @@ DATASET:
   name: 'spiral'
   seed: 0
   # make data
-  factor: 50
+  Nfactor: 50
+  fixed_val_factor: 10
   total_samples: ${DATASET.factor} * 97 * 2
   width: 0.008 # band width
   
@@ -21,6 +22,7 @@ DATASET:
 
 # plot linear regions
 EXPERIMENT:
+  plot_LR: True
   plot_every: 10
   plot_confidence: True
   TH_bounds: [-0.2, 0.2] # used to tell if a lr is in the boundary

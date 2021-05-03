@@ -1,6 +1,6 @@
 #TODO: add available choices
 defaults:
-  - dataset: iris
+  - dataset: sphere
   - init_methods@MODEL.fc_winit: normal_custom
   - init_methods@MODEL.fc_binit: default
   - init_methods@MODEL.bn_winit: ones
@@ -12,7 +12,6 @@ Logging:
 
 DATASET:
   fixed_valset: True
-  fixed_val_factor: 1
 
 MODEL:
   seed: ${DATASET.seed}
@@ -41,7 +40,7 @@ EXPERIMENT:
   used_nesterov: True
   early_stop: False
   use_gpu: True
-  ema_used: True
+  ema_used: False
   ema_decay: 0.999
 
   TH: 0.5

@@ -35,7 +35,7 @@ def main(CFG: DictConfig) -> None:
     if 'SAT' in CFG.DATASET.name:
         dataset = Sat(CFG.DATASET)
     elif 'iris' in CFG.DATASET.name:
-        dataset = Iris(CFG.DATASET)
+        dataset = MultiDimPoints(CFG.DATASET)
     else:
         dataset = Dataset(CFG.DATASET)
     input_dim = dataset.trainset[0][0].shape[0]

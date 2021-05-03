@@ -74,7 +74,7 @@ if __name__ == '__main__':
     print(sys.path)
 
     import pandas as pd
-    df = pd.read_table('./data/titanic.dat', skiprows=9, delimiter=',', header=None, engine='python')
+    df = pd.read_table('./data/titanic-5-1tra.dat', skiprows=8, delimiter=',', header=None, engine='python')
     print('ok')
     # @hydra.main(config_path='../config/dataset/', config_name='iris')
     # def main(CFG: DictConfig):
