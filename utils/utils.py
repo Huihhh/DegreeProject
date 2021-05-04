@@ -86,7 +86,7 @@ def setup_default_logging(params, string = 'Train', default_level=logging.INFO,
 
 def get_torch_dataset(np_data):
     X = torch.from_numpy(np_data[0]).float()
-    Y = torch.from_numpy(np_data[1]).long()
+    Y = torch.from_numpy(np_data[1]).float()
     return Data.TensorDataset(X, Y)
 
 

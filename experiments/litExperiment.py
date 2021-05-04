@@ -287,9 +287,6 @@ class LitExperiment(pl.LightningModule):
             trainer.test(test_dataloaders=self.dataset.test_loader)
 
     def plot_signatures(self):
-        for batch_x, batch_y in self.dataset.trainset:
-            feature = self.model.resnet18(batch_x.to(self.device))
-            net_out, sigs_grid, _ = get_signatures(feature, self.model)    
         xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
         net_out = torch.sigmoid(net_out)
