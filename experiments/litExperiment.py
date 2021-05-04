@@ -156,14 +156,14 @@ class LitExperiment(pl.LightningModule):
     def configure_optimizers(self):
         # optimizer
         # refer to https://github.com/kekmodel/FixMatch-pytorch/blob/248268b8e6777de4f5c8768ee7fc53c4f4c8a13c/train.py#L237
-        no_decay = ['bias', 'bn']
-        grouped_parameters = [
-            {'params': [p for n, p in self.model.named_parameters() if not any(
-                nd in n for nd in no_decay)], 'weight_decay': self.CFG.wdecay},
-            {'params': [p for n, p in self.model.named_parameters() if any(
-                nd in n for nd in no_decay)], 'weight_decay': 0.0}
-        ]
-        optimizer = optim.Adam(grouped_parameters, lr=self.CFG.optim_lr,)
+        # no_decay = ['bias', 'bn']
+        # grouped_parameters = [
+        #     {'params': [p for n, p in self.model.named_parameters() if not any(
+        #         nd in n for nd in no_decay)], 'weight_decay': self.CFG.wdecay},
+        #     {'params': [p for n, p in self.model.named_parameters() if any(
+        #         nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        # ]
+        optimizer = optim.Adam(self.model.parameters(), lr=self.CFG.optim_lr, weight_decay=self.CFG.wdecay)
                                 #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
         steps_per_epoch = np.ceil(len(self.dataset.trainset) / self.config.batch_size) # eval(self.CFG.steps_per_epoch)
         total_training_steps = self.CFG.n_epoch * steps_per_epoch
