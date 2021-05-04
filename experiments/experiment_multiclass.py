@@ -53,19 +53,19 @@ class ExperimentMulti(pl.LightningModule):
             logger.info("[EMA] initial ")
 
     def init_criterion(self):
-        self.criterion = lambda y_pred, y: {'ce_loss': F.cross_entropy(y_pred, y)}
+        self.criterion = lambda y_pred, y: {'total_loss': F.cross_entropy(y_pred, y)}
 
     def configure_optimizers(self):
         # optimizer
         # refer to https://github.com/kekmodel/FixMatch-pytorch/blob/248268b8e6777de4f5c8768ee7fc53c4f4c8a13c/train.py#L237
-        no_decay = ['bias', 'bn']
-        grouped_parameters = [
-            {'params': [p for n, p in self.model.named_parameters() if not any(
-                nd in n for nd in no_decay)], 'weight_decay': self.CFG.wdecay},
-            {'params': [p for n, p in self.model.named_parameters() if any(
-                nd in n for nd in no_decay)], 'weight_decay': 0.0}
-        ]
-        optimizer = optim.Adam(grouped_parameters, lr=self.CFG.optim_lr,)
+        # no_decay = ['bias', 'bn']
+        # grouped_parameters = [
+        #     {'params': [p for n, p in self.model.named_parameters() if not any(
+        #         nd in n for nd in no_decay)], 'weight_decay': self.CFG.wdecay},
+        #     {'params': [p for n, p in self.model.named_parameters() if any(
+        #         nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        # ]
+        optimizer = optim.Adam(self.model.parameters(), lr=self.CFG.optim_lr, weight_decay=self.CFG.wdecay)
                                 #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
         steps_per_epoch = np.ceil(len(self.dataset.trainset) / self.config.batch_size) # eval(self.CFG.steps_per_epoch)
         total_training_steps = self.CFG.n_epoch * steps_per_epoch
@@ -89,13 +89,13 @@ class ExperimentMulti(pl.LightningModule):
             logger.info("[EMA] initial ")
         
 
-    def on_train_epoch_start(self) -> None:       
+    def on_train_epoch_start(self) -> None:    
         if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
             self.plot_signatures()
             if self.CFG.plot_avg_distance:
                 min_distances = AverageMeter()
-                for batch_x, _ in self.dataset.test_loader:
-                    features = self.model.resnet18(batch_x)
+                for batch_x, _ in self.dataset.train_loader:
+                    features = self.model.resnet18(batch_x.to(self.device))
                     _, dis = compute_distance(features.squeeze(), self.model.fcs)
                     min_distances.update(torch.mean(dis))
                 self.dis_x_neurons = min_distances.avg * self.model.n_neurons
@@ -190,7 +190,7 @@ class ExperimentMulti(pl.LightningModule):
 
     def plot_signatures(self):
         sigs = []
-        for batch_x, batch_y in self.dataset.test_loader:
+        for batch_x, batch_y in self.dataset.train_loader:
             feature = self.model.resnet18(batch_x.to(self.device))
             net_out, sig, _ = get_signatures(feature.squeeze(), self.model.fcs)  
             sigs.append(sig)

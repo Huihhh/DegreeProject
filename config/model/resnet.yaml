@@ -1,7 +1,7 @@
 #@package _global_
 MODEL:
   name: resnet
-  h_nodes: [256, 128]
+  h_nodes: [128]
   out_dim: 10
   activation: 'relu' # or leakyRelU
   use_bn: False
