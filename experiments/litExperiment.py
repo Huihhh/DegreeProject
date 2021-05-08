@@ -8,7 +8,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 import torch
 from torch import optim
-from torch.optim.lr_scheduler import LambdaLR, StepLR
+from torch.optim.lr_scheduler import LambdaLR
 from torch import linalg as LA
 import torch.nn.functional as F
 
