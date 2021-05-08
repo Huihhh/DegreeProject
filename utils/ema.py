@@ -2,6 +2,7 @@
 
 import torch
 
+
 class EMA(object):
     def __init__(self, model, alpha=0.999):
         self.model = model
@@ -16,9 +17,8 @@ class EMA(object):
         decay = self.alpha
         state = self.model.state_dict()  # current params
         for name in self.param_keys:
-            self.shadow[name].copy_(
-                decay * self.shadow[name] + (1 - decay) * state[name]
-            )
+            self.shadow[name].copy_(decay * self.shadow[name] +
+                                    (1 - decay) * state[name])
 
     def update_buffer(self):
         # without EMA
@@ -40,10 +40,7 @@ class EMA(object):
         }
 
     def load_state_dict(self, checkpoint_state_dict):
-        self.shadow = {
-            k: v.clone()
-            for k, v in checkpoint_state_dict.items()
-        }
+        self.shadow = {k: v.clone() for k, v in checkpoint_state_dict.items()}
 
 
 if __name__ == '__main__':

@@ -1,14 +1,12 @@
 import numpy as np
 import torch
 
+
 def range_uniform(x, a=0.8, b=1.2):
     n = x.shape[0] // 2
     x1 = torch.nn.init.uniform_(x[:n, ], a, b)
     x2 = torch.nn.init.uniform_(x[n:, ], -b, -a)
     return torch.cat([x1, x2], 0)
-    # signs = torch.randint(0,2, x.shape)
-    # signs[torch.where(signs==0)] = -1
-    # return signs * torch.nn.init.uniform_(x, a, b)
 
 
 def tanh(w, a=-np.pi, b=np.pi):
@@ -17,20 +15,18 @@ def tanh(w, a=-np.pi, b=np.pi):
     for i in range(m):
         wn = np.tanh(np.linspace(a, b, n))
         ww[:, i] = wn
-    w = torch.tensor(ww, requires_grad=True,
+    w = torch.tensor(ww,
+                     requires_grad=True,
                      device="cuda" if torch.cuda.is_available() else 'cpu')
-    # w.to("cuda" if torch.cuda.is_available() else 'cpu')
-    # w.requires_grad = True
     return w
 
 
 def cos(w, a=-np.pi, b=np.pi):
     n, = w.shape
     wn = np.cos(np.linspace(a, b, n))
-    w = torch.tensor(wn, requires_grad=True,
+    w = torch.tensor(wn,
+                     requires_grad=True,
                      device="cuda" if torch.cuda.is_available() else 'cpu')
-    # w.to("cuda" if torch.cuda.is_available() else 'cpu')
-    # w.requires_grad = True
     return w
 
 
@@ -38,8 +34,8 @@ def _no_grad_normal_(tensor, mean, std):
     with torch.no_grad():
         return tensor.normal_(mean, std)
 
+
 def normal_custom(w):
     fan_out, fan_in = w.shape
     std = float(fan_in + fan_out) / float(fan_in * fan_out)
-
     return _no_grad_normal_(w, 0., std)

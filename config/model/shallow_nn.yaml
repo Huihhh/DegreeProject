@@ -1,6 +1,6 @@
 #@package _global_
 MODEL:
-  name: shallow_dnn
+  name: shallow_nn
   h_nodes: [16]
   out_dim: 1
   activation: 'relu' # or leakyRelU

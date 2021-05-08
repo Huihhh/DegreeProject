@@ -7,11 +7,6 @@ DATASET:
   data_dir: data/SAT-4
   shuffle: True
 
-  # data loader
-  n_train: 0.8
-  n_val: 0.2
-  batch_size: 32
-  num_workers: 4
 
 # plot linear regions
 EXPERIMENT:
