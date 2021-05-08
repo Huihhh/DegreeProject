@@ -1,22 +1,10 @@
-
-from PIL import Image
-from hydra.types import TargetConf
 from omegaconf import DictConfig, OmegaConf
-import numpy as np
-
 import hydra
 import logging
-import zipfile
-import urllib.request as Request
-import scipy.io
 from sklearn.model_selection import train_test_split
 import plotly.express as px
 
 import torch.utils.data as Data
-from torch.utils.data import Dataset
-from torchvision.datasets.vision import VisionDataset
-from torchvision import transforms as T
-from typing import Any, Callable, Optional, Tuple
 from utils.utils import get_torch_dataset
 
 logger = logging.getLogger(__name__)
@@ -31,8 +19,6 @@ class Iris(object):
         self.n_test = CFG.n_test
         self.batch_size = CFG.batch_size
         self.num_workers = CFG.num_workers
-        self.get_dataset()
-        self.get_dataloader()
 
     def make_iris(self, species_id):
         df = px.data.iris()

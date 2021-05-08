@@ -12,7 +12,12 @@ Logging:
   seed: ${DATASET.seed}
 
 DATASET:
-  fixed_valset: True
+  # data loader
+  n_train: 0.7
+  n_val: 0.1
+  n_test: 0.2
+  batch_size: 32
+  num_workers: 4
 
 MODEL:
   seed: ${DATASET.seed}

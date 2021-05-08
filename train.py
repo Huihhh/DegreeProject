@@ -9,7 +9,7 @@ import hydra
 import ignite
 import logging
 
-from datasets import *
+from datasets.dataset import Dataset
 from models import *
 from experiments import *
  
@@ -31,11 +31,11 @@ def main(CFG: DictConfig) -> None:
     cudnn.benchmark = False
 
     # get datasets
-    dataset = DATA[CFG.DATASET.name](CFG.DATASET)
+    dataset = Dataset(**CFG.DATASET)
     input_dim = dataset.trainset[0][0].shape[0]
 
     # build model
-    model = MODEL[CFG.MODEL.name](CFG.MODEL, input_dim)
+    model = MODEL[CFG.MODEL.name](input_dim=input_dim, **CFG.MODEL)
     logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"
                                 .format(input_dim, CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 

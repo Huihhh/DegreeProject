@@ -1,6 +1,3 @@
-
-from typing import Counter
-import wandb
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
@@ -11,16 +8,13 @@ from torch import optim
 from torch import linalg as LA
 import torch.nn.functional as F
 
-import math
 import numpy as np
 import logging
-from collections import defaultdict
 from easydict import EasyDict as edict
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 from pylab import *
 import os
 import sys
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 from utils.utils import AverageMeter, acc_topk, get_cosine_schedule_with_warmup
@@ -28,9 +22,7 @@ from utils.compute_distance import compute_distance
 from utils.get_signatures import get_signatures
 from utils.ema import EMA
 
-
 logger = logging.getLogger(__name__)
-
 
 
 class ExperimentMulti(pl.LightningModule):
@@ -57,23 +49,14 @@ class ExperimentMulti(pl.LightningModule):
 
     def configure_optimizers(self):
         # optimizer
-        # refer to https://github.com/kekmodel/FixMatch-pytorch/blob/248268b8e6777de4f5c8768ee7fc53c4f4c8a13c/train.py#L237
-        # no_decay = ['bias', 'bn']
-        # grouped_parameters = [
-        #     {'params': [p for n, p in self.model.named_parameters() if not any(
-        #         nd in n for nd in no_decay)], 'weight_decay': self.CFG.wdecay},
-        #     {'params': [p for n, p in self.model.named_parameters() if any(
-        #         nd in n for nd in no_decay)], 'weight_decay': 0.0}
-        # ]
         optimizer = optim.Adam(self.model.parameters(), lr=self.CFG.optim_lr, weight_decay=self.CFG.wdecay)
-                                #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
-        steps_per_epoch = np.ceil(len(self.dataset.trainset) / self.config.batch_size) # eval(self.CFG.steps_per_epoch)
+        #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
+        steps_per_epoch = np.ceil(len(self.dataset.trainset) / self.config.batch_size)  # eval(self.CFG.steps_per_epoch)
         total_training_steps = self.CFG.n_epoch * steps_per_epoch
         warmup_steps = self.CFG.warmup * steps_per_epoch
         scheduler = {
             'scheduler': get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_training_steps),
             'interval': 'step',
-            # 'strict': True,
         }
         return [optimizer], [scheduler]
 
@@ -87,9 +70,8 @@ class ExperimentMulti(pl.LightningModule):
         if self.CFG.ema_used:
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
-        
 
-    def on_train_epoch_start(self) -> None:    
+    def on_train_epoch_start(self) -> None:
         if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
             self.plot_signatures()
             if self.CFG.plot_avg_distance:
@@ -128,7 +110,7 @@ class ExperimentMulti(pl.LightningModule):
         else:
             logger.info(f'======== Validating on Raw model: epoch {self.current_epoch} ========')
 
-    def validation_step(self,batch, batch_idx):
+    def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
         y_pred = self.model.forward(x)
         losses = self.criterion(y_pred, y)
@@ -171,15 +153,14 @@ class ExperimentMulti(pl.LightningModule):
             callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
 
         trainer = pl.Trainer(
-            accelerator="ddp", # if torch.cuda.is_available() else 'ddp_cpu',
+            accelerator="ddp",  # if torch.cuda.is_available() else 'ddp_cpu',
             callbacks=callbacks,
             logger=wandb_logger,
             checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
             gpus=-1 if torch.cuda.is_available() else 0,
             max_epochs=self.CFG.n_epoch,
             # gradient_clip_val=1,
-            progress_bar_refresh_rate=0
-        )
+            progress_bar_refresh_rate=0)
         logger.info("======= Training =======")
         trainer.fit(self, self.dataset.train_loader, self.dataset.val_loader)
         logger.info("======= Testing =======")
@@ -192,7 +173,7 @@ class ExperimentMulti(pl.LightningModule):
         sigs = []
         for batch_x, batch_y in self.dataset.train_loader:
             feature = self.model.resnet18(batch_x.to(self.device))
-            net_out, sig, _ = get_signatures(feature.squeeze(), self.model.fcs)  
+            net_out, sig, _ = get_signatures(feature.squeeze(), self.model.fcs)
             sigs.append(sig)
         sigs = torch.cat(sigs, dim=0)
         sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
@@ -220,13 +201,13 @@ if __name__ == '__main__':
     import sys
     sys.path.append(os.getcwd())
     from models.dnn import SimpleNet
-    from datasets.syntheticData import Dataset
+    from datasets.dataset import Dataset
 
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG), '\n')
-        model = SimpleNet(CFG.MODEL)
-        dataset = Dataset(CFG.DATASET)
+        model = SimpleNet(**CFG.MODEL)
+        dataset = Dataset(**CFG.DATASET)
         experiment = ExperimentMulti(model, dataset, CFG)
         experiment.run()
 

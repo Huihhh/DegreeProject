@@ -4,44 +4,53 @@ import torchvision.models as models
 import torch
 from utils.init_methods import *
 
-ACT_METHOD = {
-    'relu': nn.ReLU(),
-    'leaky_relu': nn.LeakyReLU()
-}
+ACT_METHOD = {'relu': nn.ReLU(), 'leaky_relu': nn.LeakyReLU()}
 
 
 class ResNet(Module):
-    def __init__(self, cfg, *args, **kwargs) -> None:
+    def __init__(self,
+                 h_nodes,
+                 out_dim,
+                 activation,
+                 use_bn,
+                 fc_winit,
+                 fc_binit,
+                 bn_winit,
+                 bn_binit,
+                 seed=0,
+                 *args,
+                 **kwargs) -> None:
         super().__init__()
         resnet18 = models.resnet18(pretrained=True)
-        
+
         # *** FC layers ***
-        self.h_nodes = [resnet18.fc.in_features] + list(cfg.h_nodes)
-        self.n_neurons = sum(self.h_nodes) + cfg.out_dim
+        h_nodes = [resnet18.fc.in_features] + list(h_nodes)
+        self.use_bn = use_bn
+        self.n_neurons = sum(h_nodes) + out_dim
         self.layers = []
         for i in range(len(self.h_nodes) - 1):
-            torch.random.manual_seed(i+cfg.seed)
-            fc = nn.Linear(self.h_nodes[i], self.h_nodes[i+1])
-            if cfg.fc_winit.name != 'default':  # TODO: more elegant way
-                eval(cfg.fc_winit.func)(fc.weight, **cfg.fc_winit.params)
-            if cfg.fc_binit.name != 'default':
-                eval(cfg.fc_binit.func)(fc.bias, **cfg.fc_binit.params)
-            ac = ACT_METHOD[cfg.activation]
-            if cfg.use_bn:
-                bn = nn.BatchNorm1d(self.h_nodes[i+1])
-                if cfg.bn_winit.name != 'default':
-                    eval(cfg.bn_winit.func)(bn.weight, **cfg.bn_winit.params)
-                if cfg.bn_binit.name != 'default':
-                    eval(cfg.bn_binit.func)(bn.bias, **cfg.bn_binit.params)
+            torch.random.manual_seed(i + seed)
+            fc = nn.Linear(h_nodes[i], h_nodes[i + 1])
+            if fc_winit.name != 'default':  # TODO: more elegant way
+                eval(fc_winit.func)(fc.weight, **fc_winit.params)
+            if fc_binit.name != 'default':
+                eval(fc_binit.func)(fc.bias, **fc_binit.params)
+            ac = ACT_METHOD[activation]
+            if use_bn:
+                bn = nn.BatchNorm1d(self.h_nodes[i + 1])
+                if bn_winit.name != 'default':
+                    eval(bn_winit.func)(bn.weight, **bn_winit.params)
+                if bn_binit.name != 'default':
+                    eval(bn_binit.func)(bn.bias, **bn_binit.params)
                 self.layers.append(nn.Sequential(fc, bn, ac))
             else:
                 self.layers.append(nn.Sequential(fc, ac))
 
-        predict = nn.Linear(self.h_nodes[-1], cfg.out_dim)
-        if cfg.fc_winit.name != 'default':
-            eval(cfg.fc_winit.func)(predict.weight, **cfg.fc_winit.params)
-        if cfg.fc_binit.name != 'default':
-            eval(cfg.fc_binit.func)(predict.bias, **cfg.fc_binit.params)
+        predict = nn.Linear(self.h_nodes[-1], out_dim)
+        if fc_winit.name != 'default':
+            eval(fc_winit.func)(predict.weight, **fc_winit.params)
+        if fc_binit.name != 'default':
+            eval(fc_binit.func)(predict.bias, **fc_binit.params)
         self.layers.append(predict)
         self.fcs = torch.nn.Sequential(*self.layers)
 
@@ -72,6 +81,7 @@ if __name__ == "__main__":
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG.MODEL), '\n')
-        net = ResNet(CFG.MODEL)
+        net = ResNet(**CFG.MODEL)
         print(net)
+
     main()

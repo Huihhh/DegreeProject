@@ -7,13 +7,14 @@ import torch.utils.data as Data
 from torch.optim.lr_scheduler import LambdaLR
 import math
 
+
 def accuracy(output, target):
     correct_n = (output == target).sum()
     batch_size = target.size(0)
     return correct_n / batch_size
 
 
-def acc_topk(output, target, topk=(1,)):
+def acc_topk(output, target, topk=(1, )):
     """Computes the accuracy over the k top predictions for the specified values of k
     Imported from https://github.com/pytorch/examples/blob/master/imagenet/main.py#L247-L262 """
     with torch.no_grad():
@@ -34,7 +35,7 @@ def acc_topk(output, target, topk=(1,)):
 class AverageMeter(object):
     """Computes and stores the average and current value
     Imported from https://github.com/pytorch/examples/blob/master/imagenet/main.py#L247-L262 """
-    def __init__(self,):
+    def __init__(self, ):
         self.reset()
 
     def reset(self):
@@ -48,15 +49,18 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
     #
     # def __str__(self):
     #     fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
     #     return fmtstr.format(**self.__dict__)
 
 
-
-def setup_default_logging(params, string = 'Train', default_level=logging.INFO,
-                          format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s"):
+def setup_default_logging(
+        params,
+        string='Train',
+        default_level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s"):
     print(params.EXPERIMENT.log_path)
     output_dir = os.path.join(params.EXPERIMENT.log_path)
     os.makedirs(output_dir, exist_ok=True)
@@ -83,6 +87,7 @@ def setup_default_logging(params, string = 'Train', default_level=logging.INFO,
     logger.addHandler(console_handler)
 
     return logger
+
 
 def get_torch_dataset(np_data):
     X = torch.from_numpy(np_data[0]).float()
@@ -113,4 +118,5 @@ def get_cosine_schedule_with_warmup(optimizer,
             float(max(1, num_training_steps - num_warmup_steps))
         # this is correct
         return max(0., math.cos(math.pi * num_cycles * no_progress))
+
     return LambdaLR(optimizer, _lr_lambda, last_epoch)
