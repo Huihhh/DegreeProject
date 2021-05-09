@@ -8,24 +8,27 @@ import os
 import zipfile
 import urllib.request as Request
 
+import torch
+import torch.utils.data as Data
 from torchvision.datasets.vision import VisionDataset
 from torchvision import transforms as T
 from typing import Any, Callable, Optional, Tuple
 
-
 TRANSFORM = {
-        'mean': (0.5, 0.5, 0.5), #(0.4914, 0.4822, 0.4465),  #
-        'std': (0.25, 0.25, 0.25)#}, # (0.2471, 0.2435, 0.2616),  # 
+    'mean': (0.5, 0.5, 0.5),  #(0.4914, 0.4822, 0.4465),  #
+    'std': (0.25, 0.25, 0.25)  #}, # (0.2471, 0.2435, 0.2616),  # 
 }
+
 
 def unzip_file(zip_src, dst_dir):
     r = zipfile.is_zipfile(zip_src)
-    if r:     
+    if r:
         fz = zipfile.ZipFile(zip_src, 'r')
         for file in fz.namelist():
-            fz.extract(file, dst_dir)       
+            fz.extract(file, dst_dir)
     else:
         print('This is not zip')
+
 
 def download_data(_save_path, _url):
     try:
@@ -35,9 +38,15 @@ def download_data(_save_path, _url):
         print('\nError when retrieving the URL:\n{}'.format(_url))
         return False
 
+
 class EuroSat(VisionDataset):
-    def __init__(self, data_dir, transform: Optional[Callable] = None, target_transform: Optional[Callable] = None,) -> None:
-        super(EuroSat, self).__init__(data_dir, transform= transform, target_transform=target_transform)
+    def __init__(
+        self,
+        data_dir,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ) -> None:
+        super(EuroSat, self).__init__(data_dir, transform=transform, target_transform=target_transform)
         self.data = []
         self.targets = []
         class_counter = Counter()
@@ -62,11 +71,7 @@ class EuroSat(VisionDataset):
 
         self.mean = TRANSFORM['mean']
         self.std = TRANSFORM['std']
-        self.transform = T.Compose([
-            T.ToTensor(),
-            T.Normalize(mean=self.mean,
-                        std=self.std)
-        ])
+        self.transform = T.Compose([T.ToTensor(), T.Normalize(mean=self.mean, std=self.std)])
 
     def __len__(self) -> int:
         return len(self.data)
@@ -93,13 +98,15 @@ class EuroSat(VisionDataset):
 
         return img, target
 
-
-    def sampling_to_plot_LR(self, mean, var, noise_size, seed=0, *args, **kwargs):
+    def sampling_to_plot_LR(self, mean, var, noise_size, *args, **kwargs):
         idx = np.random.permutation(len(self.data))
-        data = self.data[idx[:noise_size],...]
-        targets = self.targets[idx]
-        noise = np.random.normal(mean, var ** 0.5, data.size)
-        noise_label = np.random.randint(0, 9, size=len(noise)) #TODO: how to set the label of noise?
-        data = np.concatenate([data, noise])
-        targets = np.concatenate([targets, noise_label])
-        return [data, targets]
+        subset = Data.Subset(self, idx[:noise_size])
+        noise = np.random.normal(mean, var**0.5, [noise_size, 3, 64, 64])
+        noise_label = np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
+        noise = torch.from_numpy(noise).float()
+        noise_label = torch.from_numpy(noise_label).long()
+        dataset = Data.TensorDataset(noise, noise_label)
+        concatDataset = Data.ConcatDataset([subset, dataset])
+        loader = Data.DataLoader(concatDataset, batch_size=32, num_workers=4, pin_memory=True, drop_last=False)
+
+        return loader

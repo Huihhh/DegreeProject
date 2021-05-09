@@ -100,7 +100,8 @@ class ExperimentMulti(pl.LightningModule):
 
     def on_train_epoch_end(self, outputs) -> None:
         for name, param in self.model.named_parameters():
-            self.log(f'parameters/norm_{name}', LA.norm(param))
+            if param.requires_grad:
+                self.log(f'parameters/norm_{name}', LA.norm(param))
 
     def on_validation_epoch_start(self):
         if self.CFG.ema_used:
@@ -171,7 +172,7 @@ class ExperimentMulti(pl.LightningModule):
 
     def plot_signatures(self):
         sigs = []
-        for batch_x, batch_y in self.dataset.train_loader:
+        for batch_x, batch_y in self.dataset.sigs_loader:
             feature = self.model.resnet18(batch_x.to(self.device))
             net_out, sig, _ = get_signatures(feature.squeeze(), self.model.fcs)
             sigs.append(sig)

@@ -32,14 +32,7 @@ def get_torch_dataset(ndarray, name):
 
 
 class Dataset(Data.TensorDataset):
-    def __init__(self,
-                 name,
-                 n_train,
-                 n_val,
-                 n_test,
-                 batch_size=32,
-                 num_workers=4,
-                 **kwargs) -> None:
+    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, **kwargs) -> None:
         self.name = name
         self.n_train = n_train
         self.n_val = n_val
@@ -62,22 +55,21 @@ class Dataset(Data.TensorDataset):
             n_train = n_samples
             n_val = n_test = fixed_valset
         else:
-            assert (self.n_train + self.n_val + self.n_test -
-                    1.0) < 1e-5, 'n_train + n_val + n_test must equal to 1!'
+            assert (self.n_train + self.n_val + self.n_test - 1.0) < 1e-5, 'n_train + n_val + n_test must equal to 1!'
             n_train = math.ceil(n_samples * self.n_train)
             n_val = math.ceil(n_samples * self.n_val)
             n_test = n_test = n_samples - n_train - n_val
 
-        self.trainset = get_torch_dataset(
-            DATA[self.name].make_data(n_train, **kwargs), self.name)
-        self.valset = get_torch_dataset(
-            DATA[self.name].make_data(n_val, **kwargs), self.name)
-        self.testset = get_torch_dataset(
-            DATA[self.name].make_data(n_test, **kwargs), self.name)
+        dataset = DATA[self.name]()
+        self.sigs_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=5000, **kwargs)
+        self.trainset = get_torch_dataset(dataset.make_data(n_train, **kwargs), self.name)
+        self.valset = get_torch_dataset(dataset.make_data(n_val, **kwargs), self.name)
+        self.testset = get_torch_dataset(dataset.make_data(n_test, **kwargs), self.name)
 
     def gen_image_dataset(self, data_dir, **kwargs):
         shuffle = kwargs['shuffle']
         dataset = DATA[self.name](data_dir)
+        self.sigs_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=50000, **kwargs)
         N = len(dataset.targets)
         if isinstance(self.n_test, int):
             n_test = self.n_test
@@ -85,13 +77,10 @@ class Dataset(Data.TensorDataset):
             n_test = int(N * self.n_test)
 
         # sample labeled
-        categorized_idx = [
-            list(np.where(np.array(dataset.targets) == i)[0])
-            for i in range(dataset.num_classes)
-        ]  #[[], [],]
+        categorized_idx = [list(np.where(np.array(dataset.targets) == i)[0])
+                           for i in range(dataset.num_classes)]  #[[], [],]
 
-        sample_distrib = np.array(
-            [len(idx_group) for idx_group in categorized_idx])
+        sample_distrib = np.array([len(idx_group) for idx_group in categorized_idx])
         sample_distrib = sample_distrib / sample_distrib.max()
 
         if shuffle:
@@ -104,8 +93,7 @@ class Dataset(Data.TensorDataset):
         idx_test = []
         for i in range(n_test):
             c = np.argmax(sample_distrib - npos / max(npos.max(), 1))
-            idx_test.append(
-                categorized_idx[c][npos[c]])  # the indexs of examples
+            idx_test.append(categorized_idx[c][npos[c]])  # the indexs of examples
             npos[c] += 1
 
         idx_train = np.setdiff1d(np.array(np.arange(N)), np.array(idx_test))
@@ -123,13 +111,8 @@ class Dataset(Data.TensorDataset):
         self.testset = TransformedDataset(dataset, idx_test)
 
     def gen_dataloader(self):
-        kwargs = dict(batch_size=self.batch_size,
-                      num_workers=self.num_workers,
-                      pin_memory=True,
-                      drop_last=False)
-        self.train_loader = Data.DataLoader(self.trainset,
-                                            shuffle=True,
-                                            **kwargs)
+        kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
+        self.train_loader = Data.DataLoader(self.trainset, shuffle=True, **kwargs)
         self.val_loader = Data.DataLoader(self.valset, **kwargs)
         self.test_loader = Data.DataLoader(self.testset, **kwargs)
 

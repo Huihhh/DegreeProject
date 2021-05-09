@@ -11,7 +11,7 @@ import logging
 
 from datasets.dataset import Dataset
 from models import *
-from experiments import *
+from experiments.litExperiment import LitExperiment
  
 @hydra.main(config_path='./config', config_name='config')
 def main(CFG: DictConfig) -> None:

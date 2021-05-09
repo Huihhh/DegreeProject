@@ -28,7 +28,7 @@ class ResNet(Module):
         self.use_bn = use_bn
         self.n_neurons = sum(h_nodes) + out_dim
         self.layers = []
-        for i in range(len(self.h_nodes) - 1):
+        for i in range(len(h_nodes) - 1):
             torch.random.manual_seed(i + seed)
             fc = nn.Linear(h_nodes[i], h_nodes[i + 1])
             if fc_winit.name != 'default':  # TODO: more elegant way
@@ -37,7 +37,7 @@ class ResNet(Module):
                 eval(fc_binit.func)(fc.bias, **fc_binit.params)
             ac = ACT_METHOD[activation]
             if use_bn:
-                bn = nn.BatchNorm1d(self.h_nodes[i + 1])
+                bn = nn.BatchNorm1d(h_nodes[i + 1])
                 if bn_winit.name != 'default':
                     eval(bn_winit.func)(bn.weight, **bn_winit.params)
                 if bn_binit.name != 'default':
@@ -46,7 +46,7 @@ class ResNet(Module):
             else:
                 self.layers.append(nn.Sequential(fc, ac))
 
-        predict = nn.Linear(self.h_nodes[-1], out_dim)
+        predict = nn.Linear(h_nodes[-1], out_dim)
         if fc_winit.name != 'default':
             eval(fc_winit.func)(predict.weight, **fc_winit.params)
         if fc_binit.name != 'default':
