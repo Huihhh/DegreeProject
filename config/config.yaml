@@ -57,6 +57,8 @@ EXPERIMENT:
   resume_checkpoints: './checkpoints/ToyExperiment_epoch_0.pth.tar' # folder or file
   resumed_epochs: [0,1023]
 
+  log_weights: True
+
 
 hydra:
   run:

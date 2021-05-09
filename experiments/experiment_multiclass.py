@@ -7,6 +7,7 @@ import torch
 from torch import optim
 from torch import linalg as LA
 import torch.nn.functional as F
+import wandb
 
 import numpy as np
 import logging
@@ -82,6 +83,15 @@ class ExperimentMulti(pl.LightningModule):
                     min_distances.update(torch.mean(dis))
                 self.dis_x_neurons = min_distances.avg * self.model.n_neurons
                 self.log('dis_x_neurons', self.dis_x_neurons)
+        # if self.current_epoch == 0:
+        #     for name, param in self.model.named_parameters():
+        #         if param.requires_grad and self.CFG.log_weights:        
+        #             wandb.log({f'historgram/{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
+            # features = []
+            # for batch_x, _ in self.dataset.train_loader:
+            #     features.extend(list(self.model.resnet18(batch_x.to(self.device)).detach().cpu().view(-1)))
+            # self.log(f'historgram.features', wandb.Histogram(features))
+
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
@@ -102,6 +112,8 @@ class ExperimentMulti(pl.LightningModule):
         for name, param in self.model.named_parameters():
             if param.requires_grad:
                 self.log(f'parameters/norm_{name}', LA.norm(param))
+                if self.CFG.log_weights:
+                    wandb.log({f'historgram/{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
 
     def on_validation_epoch_start(self):
         if self.CFG.ema_used:
