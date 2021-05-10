@@ -83,14 +83,21 @@ class ExperimentMulti(pl.LightningModule):
                     min_distances.update(torch.mean(dis))
                 self.dis_x_neurons = min_distances.avg * self.model.n_neurons
                 self.log('dis_x_neurons', self.dis_x_neurons)
-        # if self.current_epoch == 0:
-        #     for name, param in self.model.named_parameters():
-        #         if param.requires_grad and self.CFG.log_weights:        
-        #             wandb.log({f'historgram/{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
-            # features = []
-            # for batch_x, _ in self.dataset.train_loader:
-            #     features.extend(list(self.model.resnet18(batch_x.to(self.device)).detach().cpu().view(-1)))
-            # self.log(f'historgram.features', wandb.Histogram(features))
+        if self.current_epoch == 0:
+            for name, param in self.model.named_parameters():
+                if param.requires_grad and self.CFG.log_weights:        
+                    wandb.log({f'historgram/init_{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
+            features = []
+            features_norm = []
+            for i, (batch_x, _) in enumerate(self.dataset.train_loader):
+                feature = self.model.resnet18(batch_x.to(self.device)).detach().cpu()
+                feature_norm = torch.norm(feature, dim=1)
+                features_norm.extend(list(feature_norm))
+                features.extend(feature.view(-1))
+                if i > 19:
+                    break
+            self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
+            self.log(f'historgram.features', wandb.Histogram(features))
 
 
     def training_step(self, batch, batch_idx):
