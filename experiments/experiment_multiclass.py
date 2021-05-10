@@ -89,17 +89,17 @@ class ExperimentMulti(pl.LightningModule):
             for name, param in self.model.named_parameters():
                 if param.requires_grad and self.CFG.log_weights:        
                     wandb.log({f'historgram/init_{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
-        features = []
-        features_norm = []
-        for i, (batch_x, _) in enumerate(self.dataset.train_loader):
-            feature = self.model.resnet18(batch_x.to(self.device)).detach().cpu()
-            feature_norm = torch.norm(feature, dim=1)
-            features_norm.extend(list(feature_norm))
-            features.extend(feature.view(-1))
-            if i > 19:
-                break
-        self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
-        self.log(f'historgram.features', wandb.Histogram(features))
+            features = []
+            features_norm = []
+            for i, (batch_x, _) in enumerate(self.dataset.train_loader):
+                feature = self.model.resnet18(batch_x.to(self.device)).detach().cpu()
+                feature_norm = torch.norm(feature, dim=1)
+                features_norm.extend(list(feature_norm))
+                features.extend(feature.view(-1))
+                if i > 19:
+                    break
+            self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
+            self.log(f'historgram.features', wandb.Histogram(features))
 
 
     def training_step(self, batch, batch_idx):
@@ -191,18 +191,19 @@ class ExperimentMulti(pl.LightningModule):
         else:
             trainer.test(test_dataloaders=self.dataset.test_loader)
 
-    def plot_signatures(self):
-        
+    def plot_signatures(self):   
+        self.model.eval()
         def get_sigs(dataloader):
             sigs = []
-            for batch_x, _ in dataloader:
+            for i, (batch_x, _) in enumerate(dataloader):               
                 feature = self.model.resnet18(batch_x.to(self.device))
                 _, sig, _ = get_signatures(feature.squeeze(), self.model.fcs)
                 sigs.append(sig)
             sigs = torch.cat(sigs, dim=0)
             sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
-            return sigs
+            return sigs 
         sigs_grid = get_sigs(self.dataset.sigs_loader)
+        sigs_train = get_sigs(self.dataset.train_loader)
         # get the unique signature of each region 
         region_sigs = list(np.unique(sigs_grid))
         total_regions = defaultdict(int)
@@ -223,6 +224,7 @@ class ExperimentMulti(pl.LightningModule):
         logger.info(f"[Linear regions] \n   #total regions: {total_regions['density']} ")
         self.log('epoch', self.current_epoch)
         self.log('total_regions', total_regions)
+        self.model.train()
 
     def resume_model(self, train_loader, val_loader, test_loader):
         if self.CFG.resume:
