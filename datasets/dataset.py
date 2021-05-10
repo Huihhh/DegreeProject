@@ -69,7 +69,7 @@ class Dataset(Data.TensorDataset):
     def gen_image_dataset(self, data_dir, **kwargs):
         shuffle = kwargs['shuffle']
         dataset = DATA[self.name](data_dir)
-        self.sigs_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=5000, **kwargs)
+        self.sigs_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=3000, **kwargs)
         N = len(dataset.targets)
         if isinstance(self.n_test, int):
             n_test = self.n_test

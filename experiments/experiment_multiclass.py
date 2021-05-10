@@ -1,3 +1,5 @@
+from typing import Counter
+from collections import defaultdict
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
@@ -87,17 +89,17 @@ class ExperimentMulti(pl.LightningModule):
             for name, param in self.model.named_parameters():
                 if param.requires_grad and self.CFG.log_weights:        
                     wandb.log({f'historgram/init_{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
-            features = []
-            features_norm = []
-            for i, (batch_x, _) in enumerate(self.dataset.train_loader):
-                feature = self.model.resnet18(batch_x.to(self.device)).detach().cpu()
-                feature_norm = torch.norm(feature, dim=1)
-                features_norm.extend(list(feature_norm))
-                features.extend(feature.view(-1))
-                if i > 19:
-                    break
-            self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
-            self.log(f'historgram.features', wandb.Histogram(features))
+        features = []
+        features_norm = []
+        for i, (batch_x, _) in enumerate(self.dataset.train_loader):
+            feature = self.model.resnet18(batch_x.to(self.device)).detach().cpu()
+            feature_norm = torch.norm(feature, dim=1)
+            features_norm.extend(list(feature_norm))
+            features.extend(feature.view(-1))
+            if i > 19:
+                break
+        self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
+        self.log(f'historgram.features', wandb.Histogram(features))
 
 
     def training_step(self, batch, batch_idx):
@@ -190,16 +192,34 @@ class ExperimentMulti(pl.LightningModule):
             trainer.test(test_dataloaders=self.dataset.test_loader)
 
     def plot_signatures(self):
-        sigs = []
-        for batch_x, batch_y in self.dataset.sigs_loader:
-            feature = self.model.resnet18(batch_x.to(self.device))
-            net_out, sig, _ = get_signatures(feature.squeeze(), self.model.fcs)
-            sigs.append(sig)
-        sigs = torch.cat(sigs, dim=0)
-        sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
-        region_sigs = list(np.unique(sigs))
-        total_regions = {}
+        
+        def get_sigs(dataloader):
+            sigs = []
+            for batch_x, _ in dataloader:
+                feature = self.model.resnet18(batch_x.to(self.device))
+                _, sig, _ = get_signatures(feature.squeeze(), self.model.fcs)
+                sigs.append(sig)
+            sigs = torch.cat(sigs, dim=0)
+            sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
+            return sigs
+        sigs_grid = get_sigs(self.dataset.sigs_loader)
+        # get the unique signature of each region 
+        region_sigs = list(np.unique(sigs_grid))
+        total_regions = defaultdict(int)
         total_regions['density'] = len(region_sigs)
+        # get the mapping of region signature and region index
+        region_ids = np.random.permutation(total_regions['density'])
+        sigs_grid_dict = dict(zip(region_sigs, region_ids))
+        # get the number of training points in regions identified by training samples
+        sigs_train = get_sigs(self.dataset.train_loader)
+        sigs_train = Counter(sigs_train)
+
+        for i, key in enumerate(sigs_grid_dict):
+            idx = np.where(sigs_grid == key)
+            total_regions['non_empty_regions'] += int(sigs_train[key] > 0)
+            total_regions['density_region_size_over1'] += len(idx[0]) - 1
+
+
         logger.info(f"[Linear regions] \n   #total regions: {total_regions['density']} ")
         self.log('epoch', self.current_epoch)
         self.log('total_regions', total_regions)

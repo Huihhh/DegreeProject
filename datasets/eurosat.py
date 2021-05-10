@@ -99,14 +99,14 @@ class EuroSat(VisionDataset):
         return img, target
 
     def sampling_to_plot_LR(self, mean, var, noise_size, *args, **kwargs):
-        idx = np.random.permutation(len(self.data))
-        subset = Data.Subset(self, idx[:noise_size])
+        # idx = np.random.permutation(len(self.data))
+        # subset = Data.Subset(self, idx[:noise_size])
         noise = np.random.normal(mean, var**0.5, [noise_size, 3, 64, 64])
-        noise_label = np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
+        noise_label = np.zeros(len(noise)) * -1 #np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
         noise = torch.from_numpy(noise).float()
         noise_label = torch.from_numpy(noise_label).long()
         dataset = Data.TensorDataset(noise, noise_label)
-        concatDataset = Data.ConcatDataset([subset, dataset])
+        concatDataset = Data.ConcatDataset([self, dataset])
         loader = Data.DataLoader(concatDataset, batch_size=32, num_workers=4, pin_memory=True, drop_last=False)
 
         return loader
