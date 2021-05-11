@@ -1,6 +1,7 @@
 import math
 import logging
 import torch
+from torch._C import device
 import torch.utils.data as Data
 import numpy as np
 from .synthetic_data.circles import Circles
@@ -32,7 +33,7 @@ def get_torch_dataset(ndarray, name):
 
 
 class Dataset(Data.TensorDataset):
-    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, **kwargs) -> None:
+    def __init__(self, resnet, name, n_train, n_val, n_test, batch_size=32, num_workers=4, **kwargs) -> None:
         self.name = name
         self.n_train = n_train
         self.n_val = n_val
@@ -41,7 +42,7 @@ class Dataset(Data.TensorDataset):
         self.num_workers = num_workers
         self.kwargs = kwargs
         if name == 'eurosat':
-            self.gen_image_dataset(**kwargs)
+            self.gen_image_dataset(resnet, **kwargs)
         else:
             self.gen_point_dataset(**kwargs)
         self.gen_dataloader()
@@ -61,15 +62,36 @@ class Dataset(Data.TensorDataset):
             n_test = n_test = n_samples - n_train - n_val
 
         dataset = DATA[self.name]()
+        #TODO: sampling_to_plot_LR
         self.sigs_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=5000, **kwargs)
         self.trainset = get_torch_dataset(dataset.make_data(n_train, **kwargs), self.name)
         self.valset = get_torch_dataset(dataset.make_data(n_val, **kwargs), self.name)
         self.testset = get_torch_dataset(dataset.make_data(n_test, **kwargs), self.name)
 
-    def gen_image_dataset(self, data_dir, **kwargs):
-        shuffle = kwargs['shuffle']
+    def gen_image_dataset(self, resnet, data_dir, **kwargs):
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        resnet = resnet.to(device)
         dataset = DATA[self.name](data_dir)
-        self.sigs_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=3000, **kwargs)
+        dataloader = Data.DataLoader(dataset, batch_size=64, num_workers=4, shuffle=False, pin_memory=True, drop_last=False)
+        
+        def get_features(dataloader):
+            features = []
+            for i, (batch_x, _) in enumerate(dataloader):               
+                feature = resnet(batch_x.to(device)).squeeze()
+                features.append(feature)
+            features = torch.cat(features, dim=0)
+            return features
+        features = get_features(dataloader)
+        dataset.data = features.cpu().numpy()
+        noise_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=3000, **kwargs)
+        features_noise = get_features(noise_loader)
+        noise_label = np.zeros(len(features_noise)) * -1 #np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
+        sigs_data = torch.cat([features, features_noise]).cpu()
+        sigs_targets = np.concatenate([dataset.targets, noise_label])
+        sigs_targets = torch.from_numpy(sigs_targets).long()
+        sigs_dataset = Data.TensorDataset(sigs_data, sigs_targets)
+        self.sigs_loader = Data.DataLoader(sigs_dataset, batch_size=64, num_workers=4, pin_memory=True, drop_last=False)
+        
         N = len(dataset.targets)
         if isinstance(self.n_test, int):
             n_test = self.n_test
@@ -83,7 +105,7 @@ class Dataset(Data.TensorDataset):
         sample_distrib = np.array([len(idx_group) for idx_group in categorized_idx])
         sample_distrib = sample_distrib / sample_distrib.max()
 
-        if shuffle:
+        if kwargs['shuffle']:
             for i in range(dataset.num_classes):
                 np.random.shuffle(categorized_idx[i])
 
@@ -127,7 +149,7 @@ class TransformedDataset(Dataset):
         self.index = index
 
     def __getitem__(self, i):
-        img, target = self.dataset[self.index[i]]
+        img, target = self.dataset.data[self.index[i]], self.dataset.targets[self.index[i]]
         # to return a PIL Image
 
         if self.transform is not None:

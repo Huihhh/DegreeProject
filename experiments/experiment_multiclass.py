@@ -10,6 +10,7 @@ from torch import optim
 from torch import linalg as LA
 import torch.nn.functional as F
 import wandb
+from sklearn.decomposition import PCA
 
 import numpy as np
 import logging
@@ -47,6 +48,9 @@ class ExperimentMulti(pl.LightningModule):
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
 
+        # init pca for visualizing linear regions
+        self.pca = PCA(n_components=2)
+
     def init_criterion(self):
         self.criterion = lambda y_pred, y: {'total_loss': F.cross_entropy(y_pred, y)}
 
@@ -73,6 +77,20 @@ class ExperimentMulti(pl.LightningModule):
         if self.CFG.ema_used:
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
+        
+
+        features = []
+        for i, (batch_x, _) in enumerate(self.dataset.sigs_loader):               
+            features.append(batch_x)
+        features = torch.cat(features, dim=0)
+
+        if self.CFG.plot_dim is not None:
+            self.xy_grid = features[:, self.CFG.plot_dim]
+        else:
+            self.pca.fit_transform(features.cpu().T)
+            self.xy_grid = self.pca.components_.T
+            
+
 
     def on_train_epoch_start(self) -> None:
         if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
@@ -80,8 +98,7 @@ class ExperimentMulti(pl.LightningModule):
             if self.CFG.plot_avg_distance:
                 min_distances = AverageMeter()
                 for batch_x, _ in self.dataset.train_loader:
-                    features = self.model.resnet18(batch_x.to(self.device))
-                    _, dis = compute_distance(features.squeeze(), self.model.fcs)
+                    _, dis = compute_distance(batch_x.to(self.device), self.model.fcs)
                     min_distances.update(torch.mean(dis))
                 self.dis_x_neurons = min_distances.avg * self.model.n_neurons
                 self.log('dis_x_neurons', self.dis_x_neurons)
@@ -91,8 +108,7 @@ class ExperimentMulti(pl.LightningModule):
                     wandb.log({f'historgram/init_{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
             features = []
             features_norm = []
-            for i, (batch_x, _) in enumerate(self.dataset.train_loader):
-                feature = self.model.resnet18(batch_x.to(self.device)).detach().cpu()
+            for i, (feature, _) in enumerate(self.dataset.train_loader):
                 feature_norm = torch.norm(feature, dim=1)
                 features_norm.extend(list(feature_norm))
                 features.extend(feature.view(-1))
@@ -104,7 +120,7 @@ class ExperimentMulti(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        y_pred = self.model.forward(x)
+        y_pred = self.model.fcs(x)
         losses = self.criterion(y_pred, y)
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
@@ -134,7 +150,7 @@ class ExperimentMulti(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        y_pred = self.model.forward(x)
+        y_pred = self.model.fcs(x)
         losses = self.criterion(y_pred, y)
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
@@ -148,7 +164,7 @@ class ExperimentMulti(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        y_pred = self.model.forward(x)
+        y_pred = self.model.fcs(x)
         losses = self.criterion(y_pred, y)
         acc, = acc_topk(y_pred, y)
         self.log('test', {**losses, 'acc': acc})
@@ -196,14 +212,15 @@ class ExperimentMulti(pl.LightningModule):
         def get_sigs(dataloader):
             sigs = []
             for i, (batch_x, _) in enumerate(dataloader):               
-                feature = self.model.resnet18(batch_x.to(self.device))
-                _, sig, _ = get_signatures(feature.squeeze(), self.model.fcs)
+                _, sig, _ = get_signatures(batch_x.to(self.device), self.model.fcs)
                 sigs.append(sig)
             sigs = torch.cat(sigs, dim=0)
             sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
-            return sigs 
+            return sigs
         sigs_grid = get_sigs(self.dataset.sigs_loader)
         sigs_train = get_sigs(self.dataset.train_loader)
+        self.model.train()
+
         # get the unique signature of each region 
         region_sigs = list(np.unique(sigs_grid))
         total_regions = defaultdict(int)
@@ -212,7 +229,6 @@ class ExperimentMulti(pl.LightningModule):
         region_ids = np.random.permutation(total_regions['density'])
         sigs_grid_dict = dict(zip(region_sigs, region_ids))
         # get the number of training points in regions identified by training samples
-        sigs_train = get_sigs(self.dataset.train_loader)
         sigs_train = Counter(sigs_train)
 
         for i, key in enumerate(sigs_grid_dict):
@@ -224,7 +240,15 @@ class ExperimentMulti(pl.LightningModule):
         logger.info(f"[Linear regions] \n   #total regions: {total_regions['density']} ")
         self.log('epoch', self.current_epoch)
         self.log('total_regions', total_regions)
-        self.model.train()
+
+        # visualize linear regions
+        if self.current_epoch in range(10) or (self.current_epoch + 1) % 10 == 0:
+
+            base_color_labels = np.array([sigs_grid_dict[sig] for sig in sigs_grid])
+            plt.scatter(self.xy_grid[:, 0], self.xy_grid[:, 1], c=base_color_labels, s=0.2, cmap=plt.get_cmap('Pastel2'))
+            self.log(f'LinearRegions/epoch{self.current_epoch}', wandb.Image(plt))
+            plt.close()
+        
 
     def resume_model(self, train_loader, val_loader, test_loader):
         if self.CFG.resume:

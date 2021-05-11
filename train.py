@@ -30,12 +30,17 @@ def main(CFG: DictConfig) -> None:
     cudnn.deterministic = True
     cudnn.benchmark = False
 
-    # get datasets
-    dataset = Dataset(**CFG.DATASET)
-    input_dim = dataset.trainset[0][0].shape[0]
+    if CFG.DATASET.name == 'eurosat':
+        model = ResNet(**CFG.MODEL)
+        dataset = Dataset(model.resnet18, **CFG.DATASET)
+        input_dim = 512
+    else:
+        # get datasets
+        dataset = Dataset(**CFG.DATASET)
+        input_dim = dataset.trainset[0][0].shape[0]
 
-    # build model
-    model = MODEL[CFG.MODEL.name](input_dim=input_dim, **CFG.MODEL)
+        # build model
+        model = MODEL[CFG.MODEL.name](input_dim=input_dim, **CFG.MODEL)
     logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"
                                 .format(input_dim, CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 
