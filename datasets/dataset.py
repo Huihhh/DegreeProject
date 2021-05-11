@@ -71,6 +71,7 @@ class Dataset(Data.TensorDataset):
     def gen_image_dataset(self, resnet, data_dir, **kwargs):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         resnet = resnet.to(device)
+        resnet.eval()
         dataset = DATA[self.name](data_dir)
         dataloader = Data.DataLoader(dataset, batch_size=64, num_workers=4, shuffle=False, pin_memory=True, drop_last=False)
         
