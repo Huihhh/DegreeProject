@@ -1,15 +1,15 @@
 import math
 import logging
 import torch
-from torch._C import device
 import torch.utils.data as Data
+from torchvision import transforms as T
 import numpy as np
 from .synthetic_data.circles import Circles
 from .synthetic_data.moons import Moons
 from .synthetic_data.sphere import Sphere
 from .synthetic_data.spiral import Spiral
 # from .iris import Iris
-from .eurosat import EuroSat
+from .eurosat import *
 
 DATA = {
     'circles': Circles,
@@ -73,26 +73,34 @@ class Dataset(Data.TensorDataset):
         resnet = resnet.to(device)
         resnet.eval()
         dataset = DATA[self.name](data_dir)
-        dataloader = Data.DataLoader(dataset, batch_size=64, num_workers=4, shuffle=False, pin_memory=True, drop_last=False)
-        
+        dataloader = Data.DataLoader(dataset,
+                                     batch_size=64,
+                                     num_workers=4,
+                                     shuffle=False,
+                                     pin_memory=True,
+                                     drop_last=False)
+
         def get_features(dataloader):
             features = []
-            for i, (batch_x, _) in enumerate(dataloader):               
+            targets = []
+            for i, (batch_x, batch_y) in enumerate(dataloader):
                 feature = resnet(batch_x.to(device)).squeeze()
                 features.append(feature)
-            features = torch.cat(features, dim=0)
-            return features
-        features = get_features(dataloader)
-        dataset.data = features.cpu().numpy()
+                targets.append(batch_y)
+            features = torch.cat(features, dim=0).cpu()
+            targets = torch.cat(targets, dim=0)
+            return [features, targets]
+
+        features = get_features(dataloader)       
         noise_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=3000, **kwargs)
         features_noise = get_features(noise_loader)
-        noise_label = np.zeros(len(features_noise)) * -1 #np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
-        sigs_data = torch.cat([features, features_noise]).cpu()
-        sigs_targets = np.concatenate([dataset.targets, noise_label])
-        sigs_targets = torch.from_numpy(sigs_targets).long()
+        sigs_data = torch.cat([features[0], features_noise[0]])
+        sigs_targets = torch.cat([features[1], features_noise[1]])
         sigs_dataset = Data.TensorDataset(sigs_data, sigs_targets)
         self.sigs_loader = Data.DataLoader(sigs_dataset, batch_size=64, num_workers=4, pin_memory=True, drop_last=False)
-        
+
+        dataset.data = features[0]
+        dataset.targets = features[1]
         N = len(dataset.targets)
         if isinstance(self.n_test, int):
             n_test = self.n_test
@@ -129,7 +137,29 @@ class Dataset(Data.TensorDataset):
             idx_val = np.concatenate((idx_val, idx), axis=None)
         idx_val = list(idx_val.astype(int))
         idx_train = np.setdiff1d(idx_train, np.array(idx_val))
+
+        # *** stack augmented data ***
+        # mean = TRANSFORM['mean']
+        # std = TRANSFORM['std']
+        # transform = T.Compose([
+        #     T.RandomHorizontalFlip(),
+        #     T.RandomCrop(size=64, padding=int(64 * 0.125), padding_mode='reflect'),
+        #     T.ToTensor(),
+        #     T.Normalize(mean=mean, std=std)
+        # ])        
+        # data_aug = torch.cat([transform(Image.fromarray(img))[None,...] for img in dataset.data[idx_train]])
+        # targets_aug = torch.tensor([t for t in np.array(dataset.targets)[idx_train]])
+        # dataset_aug = Data.TensorDataset(data_aug, targets_aug)
+        # dataloader_aug = Data.DataLoader(dataset_aug, batch_size=64, num_workers=4, pin_memory=True, drop_last=False)
+        # features_aug = []
+        # for x, _ in dataloader_aug:
+        #     feature = resnet(x.to(device)).squeeze().cpu()
+        #     features_aug.append(feature)
+        # features_aug = torch.cat(features_aug)
+        # dataset_aug = Data.TensorDataset(features_aug, targets_aug)
+
         self.trainset = TransformedDataset(dataset, idx_train)
+        # self.trainset = Data.ConcatDataset([self.trainset, dataset_aug])
         self.valset = TransformedDataset(dataset, idx_val)
         self.testset = TransformedDataset(dataset, idx_test)
 
@@ -143,7 +173,7 @@ class Dataset(Data.TensorDataset):
 class TransformedDataset(Dataset):
     def __init__(self, dataset, index, transform=None, target_transform=None):
         self.dataset = dataset
-        self.data = dataset.data
+        self.data = dataset.data[index]
         self.targets = np.array(dataset.targets)[index]
         self.transform = transform
         self.target_transform = target_transform

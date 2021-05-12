@@ -71,7 +71,10 @@ class EuroSat(VisionDataset):
 
         self.mean = TRANSFORM['mean']
         self.std = TRANSFORM['std']
-        self.transform = T.Compose([T.ToTensor(), T.Normalize(mean=self.mean, std=self.std)])
+        if transform is not None:
+            self.transform = transform
+        else:
+            self.transform = T.Compose([T.ToTensor(), T.Normalize(mean=self.mean, std=self.std)])
 
     def __len__(self) -> int:
         return len(self.data)

@@ -97,7 +97,7 @@ class ExperimentMulti(pl.LightningModule):
             self.plot_signatures()
             if self.CFG.plot_avg_distance:
                 min_distances = AverageMeter()
-                for batch_x, _ in self.dataset.train_loader:
+                for batch_x, _ in self.dataset.val_loader:
                     _, dis = compute_distance(batch_x.to(self.device), self.model.fcs)
                     min_distances.update(torch.mean(dis))
                 self.dis_x_neurons = min_distances.avg * self.model.n_neurons
