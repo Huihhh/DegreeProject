@@ -110,6 +110,6 @@ class EuroSat(VisionDataset):
         noise_label = torch.from_numpy(noise_label).long()
         dataset = Data.TensorDataset(noise, noise_label)
         # concatDataset = Data.ConcatDataset([self, dataset])
-        loader = Data.DataLoader(dataset, batch_size=32, num_workers=4, pin_memory=True, drop_last=False)
+        # loader = Data.DataLoader(dataset, batch_size=32, num_workers=4, pin_memory=True, drop_last=False)
 
-        return loader
+        return dataset

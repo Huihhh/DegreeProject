@@ -3,7 +3,7 @@ DATASET:
     name: eurosat
     data_dir: '/data/EuroSAT_RGB/2750'
     seed: 0
-    shuffle: True
+    shuffle: False
 
 # plot linear regions
 EXPERIMENT:
