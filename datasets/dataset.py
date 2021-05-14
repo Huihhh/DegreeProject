@@ -132,45 +132,58 @@ class Dataset(Data.TensorDataset):
         self.valset = TransformedDataset(dataset, idx_val)
         self.testset = TransformedDataset(dataset, idx_test)
 
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        resnet = resnet.to(device)
+        # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # resnet = resnet.to(device)
 
-        def get_feature_dataset(dataset, shuffle=False):
-            dataloader = Data.DataLoader(dataset,
-                                         batch_size=self.batch_size,
-                                         num_workers=self.num_workers,
-                                         shuffle=shuffle,
-                                         pin_memory=True,
-                                         drop_last=False)
-            if not shuffle:
-                resnet.eval()
-            else: resnet.train()
-            features = []
-            targets = []
-            for i, (batch_x, batch_y) in enumerate(dataloader):
-                feature = resnet(batch_x.to(device)).squeeze()
-                features.append(feature)
-                targets.append(batch_y)
-            features = torch.cat(features, dim=0).cpu()
-            targets = torch.cat(targets, dim=0)
-            dataset = Data.TensorDataset(features, targets)
-            return dataset
+        # def get_feature_dataset(dataset, shuffle=False, train=False):
+        #     dataloader = Data.DataLoader(dataset,
+        #                                  batch_size=self.batch_size,
+        #                                  num_workers=self.num_workers,
+        #                                  shuffle=shuffle,
+        #                                  pin_memory=True,
+        #                                  drop_last=False)
+        #     if not train:
+        #         resnet.eval()
+        #     else: resnet.train()
+        #     features = []
+        #     targets = []
+        #     for i, (batch_x, batch_y) in enumerate(dataloader):
+        #         feature = resnet(batch_x.to(device)).squeeze()
+        #         features.append(feature)
+        #         targets.append(batch_y)
+        #     features = torch.cat(features, dim=0).cpu()
+        #     targets = torch.cat(targets, dim=0)
+        #     dataset = Data.TensorDataset(features, targets)
+        #     return dataset
 
-        self.trainset = get_feature_dataset(self.trainset, shuffle=True)
-        self.valset = get_feature_dataset(self.valset)
-        self.testset = get_feature_dataset(self.testset)
-        noise_dataset = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=3000, **kwargs)
-        noise_dataset = get_feature_dataset(noise_dataset)
-        sigs_dataset = Data.ConcatDataset([self.testset, noise_dataset])
-        self.sigs_loader = Data.DataLoader(sigs_dataset,
+        # self.trainset = get_feature_dataset(self.trainset, shuffle=True, train=True)
+        # self.valset = get_feature_dataset(self.valset)
+        # self.testset = get_feature_dataset(self.testset)
+        noise_dataset = dataset.sampling_to_plot_LR(
+            mean=0,
+            var=1,
+            noise_size=3000,
+        )
+        noise_dataset = Data.ConcatDataset([self.trainset, noise_dataset])
+        self.sigs_loader = Data.DataLoader(noise_dataset,
                                            batch_size=self.batch_size,
                                            num_workers=self.num_workers,
                                            pin_memory=True,
                                            drop_last=False)
+        #    batch_size=self.batch_size,
+        #    num_workers=self.num_workers,
+        #    **kwargs)
+        # noise_dataset = get_feature_dataset(noise_dataset)
+        # sigs_dataset = Data.ConcatDataset([self.testset, noise_dataset])
+        # self.sigs_loader = Data.DataLoader(sigs_dataset,
+        #                                    batch_size=self.batch_size,
+        #                                    num_workers=self.num_workers,
+        #                                    pin_memory=True,
+        #                                    drop_last=False)
 
     def gen_dataloader(self):
         kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
-        self.train_loader = Data.DataLoader(self.trainset, shuffle=False, **kwargs)
+        self.train_loader = Data.DataLoader(self.trainset, shuffle=True, **kwargs)
         self.val_loader = Data.DataLoader(self.valset, **kwargs)
         self.test_loader = Data.DataLoader(self.testset, **kwargs)
 

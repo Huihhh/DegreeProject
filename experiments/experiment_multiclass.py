@@ -70,57 +70,60 @@ class ExperimentMulti(pl.LightningModule):
     def forward(self, x):
         return self.model.forward(x)
 
-    # def on_post_move_to_device(self):
-    #     super().on_post_move_to_device()
-    #     # used EWA or not
-    #     # init ema model after model moved to device
-    #     if self.CFG.ema_used:
-    #         self.ema_model = EMA(self.model, self.CFG.ema_decay)
-    #         logger.info("[EMA] initial ")
+    def on_post_move_to_device(self):
+        super().on_post_move_to_device()
+        # used EWA or not
+        # init ema model after model moved to device
+        if self.CFG.ema_used:
+            self.ema_model = EMA(self.model, self.CFG.ema_decay)
+            logger.info("[EMA] initial ")
         
 
-    #     features = []
-    #     for i, (batch_x, _) in enumerate(self.dataset.sigs_loader):               
-    #         features.append(batch_x)
-    #     features = torch.cat(features, dim=0)
+        features = []
+        for i, (batch_x, _) in enumerate(self.dataset.sigs_loader):
+            feature = self.model.resnet18(batch_x.to(self.device))               
+            features.append(feature.squeeze())
+        features = torch.cat(features, dim=0)
 
-    #     if self.CFG.plot_dim is not None:
-    #         self.xy_grid = features[:, self.CFG.plot_dim]
-    #     else:
-    #         self.pca.fit_transform(features.cpu().T)
-    #         self.xy_grid = self.pca.components_.T
+        if self.CFG.plot_dim is not None:
+            self.xy_grid = features[:, self.CFG.plot_dim]
+        else:
+            self.pca.fit_transform(features.cpu().T)
+            self.xy_grid = self.pca.components_.T
             
 
 
-    # def on_train_epoch_start(self) -> None:
-    #     if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
-    #         self.plot_signatures()
-    #         if self.CFG.plot_avg_distance:
-    #             min_distances = AverageMeter()
-    #             for batch_x, _ in self.dataset.val_loader:
-    #                 _, dis = compute_distance(batch_x.to(self.device), self.model.fcs)
-    #                 min_distances.update(torch.mean(dis))
-    #             self.dis_x_neurons = min_distances.avg * self.model.n_neurons
-    #             self.log('dis_x_neurons', self.dis_x_neurons)
-    #     if self.current_epoch == 0:
-    #         for name, param in self.model.named_parameters():
-    #             if param.requires_grad and self.CFG.log_weights:        
-    #                 wandb.log({f'historgram/init_{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
-    #         features = []
-    #         features_norm = []
-    #         for i, (feature, _) in enumerate(self.dataset.train_loader):
-    #             feature_norm = torch.norm(feature, dim=1)
-    #             features_norm.extend(list(feature_norm))
-    #             features.extend(feature.view(-1))
-    #             if i > 19:
-    #                 break
-    #         self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
-    #         self.log(f'historgram.features', wandb.Histogram(features))
+    def on_train_epoch_start(self) -> None:
+        if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
+            self.plot_signatures()
+            if self.CFG.plot_avg_distance:
+                min_distances = AverageMeter()
+                for batch_x, _ in self.dataset.val_loader:
+                    feature = self.model.resnet18(batch_x.to(self.device)).squeeze()   
+                    _, dis = compute_distance(feature, self.model.fcs)
+                    min_distances.update(torch.mean(dis))
+                self.dis_x_neurons = min_distances.avg * self.model.n_neurons
+                self.log('dis_x_neurons', self.dis_x_neurons)
+        if self.current_epoch == 0:
+            for name, param in self.model.named_parameters():
+                if param.requires_grad and self.CFG.log_weights:        
+                    wandb.log({f'historgram/init_{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
+            features = []
+            features_norm = []
+            for i, (batch_x, _) in enumerate(self.dataset.train_loader):
+                feature = self.model.resnet18(batch_x.to(self.device)).squeeze().cpu()
+                feature_norm = torch.norm(feature, dim=1)
+                features_norm.extend(list(feature_norm))
+                features.extend(feature.view(-1))
+                if i > 19:
+                    break
+            self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
+            self.log(f'historgram.features', wandb.Histogram(features))
 
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        y_pred = self.model.fcs(x)
+        y_pred = self.model.forward(x)
         losses = self.criterion(y_pred, y)
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
@@ -133,24 +136,24 @@ class ExperimentMulti(pl.LightningModule):
     #         self.ema_model.update_params()
     #     return loss
 
-    # def on_train_epoch_end(self, outputs) -> None:
-    #     for name, param in self.model.named_parameters():
-    #         if param.requires_grad:
-    #             self.log(f'parameters/norm_{name}', LA.norm(param))
-    #             if self.CFG.log_weights:
-    #                 wandb.log({f'historgram/{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
+    def on_train_epoch_end(self, outputs) -> None:
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                self.log(f'parameters/norm_{name}', LA.norm(param))
+                if self.CFG.log_weights:
+                    wandb.log({f'historgram/{name}': wandb.Histogram(param.detach().cpu().view(-1)), 'epoch': self.current_epoch})
 
-    # def on_validation_epoch_start(self):
-    #     if self.CFG.ema_used:
-    #         logger.info(f'======== Validating on EMA model: epoch {self.current_epoch} ========')
-    #         self.ema_model.update_buffer()
-    #         self.ema_model.apply_shadow()
-    #     else:
-    #         logger.info(f'======== Validating on Raw model: epoch {self.current_epoch} ========')
+    def on_validation_epoch_start(self):
+        if self.CFG.ema_used:
+            logger.info(f'======== Validating on EMA model: epoch {self.current_epoch} ========')
+            self.ema_model.update_buffer()
+            self.ema_model.apply_shadow()
+        else:
+            logger.info(f'======== Validating on Raw model: epoch {self.current_epoch} ========')
 
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        y_pred = self.model.fcs(x)
+        y_pred = self.model.forward(x)
         losses = self.criterion(y_pred, y)
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
@@ -164,7 +167,7 @@ class ExperimentMulti(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        y_pred = self.model.fcs(x)
+        y_pred = self.model.forward(x)
         losses = self.criterion(y_pred, y)
         acc, = acc_topk(y_pred, y)
         self.log('test', {**losses, 'acc': acc})
@@ -211,8 +214,9 @@ class ExperimentMulti(pl.LightningModule):
         self.model.eval()
         def get_sigs(dataloader):
             sigs = []
-            for i, (batch_x, _) in enumerate(dataloader):               
-                _, sig, _ = get_signatures(batch_x.to(self.device), self.model.fcs)
+            for i, (batch_x, _) in enumerate(dataloader):  
+                feature = self.model.resnet18(batch_x.to(self.device)).squeeze()             
+                _, sig, _ = get_signatures(feature, self.model.fcs)
                 sigs.append(sig)
             sigs = torch.cat(sigs, dim=0)
             sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
