@@ -176,13 +176,13 @@ class ExperimentMulti(pl.LightningModule):
             config=self.config,
         )
         # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
-        # checkpoint_callback = ModelCheckpoint(
-        #     monitor='val.total_loss',
-        #     dirpath='checkpoints/',
-        #     filename='degree-project-{epoch:02d}-{val_loss:.2f}',
-        #     save_top_k=3,
-        #     mode='min',
-        # )
+        checkpoint_callback = ModelCheckpoint(
+            monitor='val.total_loss',
+            dirpath='checkpoints/',
+            filename='degree-project-{epoch:02d}-{val_loss:.2f}',
+            save_top_k=3,
+            mode='min',
+        )
 
         lr_monitor = LearningRateMonitor(logging_interval='step')
         callbacks = [lr_monitor]
@@ -194,7 +194,7 @@ class ExperimentMulti(pl.LightningModule):
             accelerator="ddp",  # if torch.cuda.is_available() else 'ddp_cpu',
             callbacks=callbacks,
             logger=wandb_logger,
-            checkpoint_callback=False,  # if self.CFG.debug else checkpoint_callback,
+            checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
             gpus=-1 if torch.cuda.is_available() else 0,
             max_epochs=self.CFG.n_epoch,
             # gradient_clip_val=1,
