@@ -1,10 +1,7 @@
-import logging
-import os
-from datetime import datetime
-import sys
 import torch
 import torch.utils.data as Data
 from torch.optim.lr_scheduler import LambdaLR
+from torch.utils.data.dataloader import DataLoader
 import math
 
 
@@ -56,44 +53,26 @@ class AverageMeter(object):
     #     return fmtstr.format(**self.__dict__)
 
 
-def setup_default_logging(
-        params,
-        string='Train',
-        default_level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s"):
-    print(params.EXPERIMENT.log_path)
-    output_dir = os.path.join(params.EXPERIMENT.log_path)
-    os.makedirs(output_dir, exist_ok=True)
-
-    logger = logging.getLogger(string)
-
-    def time_str(fmt=None):
-        if fmt is None:
-            fmt = '%Y-%m-%d_%H:%M:%S'
-        return datetime.today().strftime(fmt)
-
-    logging.basicConfig(  # unlike the root logger, a custom logger can’t be configured using basicConfig()
-        filename=os.path.join(output_dir, f'{time_str()}.log'),
-        format=format,
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=default_level)
-
-    # print
-    # file_handler = logging.FileHandler(filename=os.path.join(output_dir, f'{time_str()}.log'), mode='a')
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(default_level)
-    console_handler.setFormatter(logging.Formatter(format))
-    # logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-    return logger
-
-
 def get_torch_dataset(np_data):
     X = torch.from_numpy(np_data[0]).float()
     Y = torch.from_numpy(np_data[1]).float()
     return Data.TensorDataset(X, Y)
 
+
+def get_feature_loader(dataloader, net, device):
+    features = []
+    for batch_x, batch_y in dataloader:
+        feature = net(batch_x.to(device)).squeeze()
+        features.append(feature.cpu())
+    features = torch.cat(features)
+    feature_dataset = Data.TensorDataset(features)
+    feature_dataloader = DataLoader(feature_dataset,
+                                        batch_size=64,
+                                        num_workers=4,
+                                        drop_last=False,
+                                        pin_memory=True
+                                        )
+    return feature_dataloader
 
 def get_cosine_schedule_with_warmup(optimizer,
                                     num_warmup_steps,

@@ -164,7 +164,7 @@ class Dataset(Data.TensorDataset):
             var=1,
             noise_size=3000,
         )
-        noise_dataset = Data.ConcatDataset([self.trainset, noise_dataset])
+        noise_dataset = Data.ConcatDataset([self.valset, self.testset, noise_dataset])
         self.sigs_loader = Data.DataLoader(noise_dataset,
                                            batch_size=self.batch_size,
                                            num_workers=self.num_workers,

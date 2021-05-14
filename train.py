@@ -52,7 +52,6 @@ def main(CFG: DictConfig) -> None:
         experiment = ExperimentMulti(model, dataset, CFG)
     else:
         experiment = LitExperiment(model, dataset, CFG)
-    logger.info("======= Training =======")
     experiment.run()
 
 
