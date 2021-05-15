@@ -39,6 +39,10 @@ EXPERIMENT:
   optim_momentum: 0.9
   warmup: 0
   used_nesterov: True
+  # scheduler
+  step_size: 30
+  steplr_gamma: 0.5
+  
   early_stop: False
   use_gpu: True
   ema_used: False

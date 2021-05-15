@@ -61,7 +61,7 @@ class ExperimentMulti(pl.LightningModule):
         optimizer = optim.Adam(self.model.parameters(), lr=self.CFG.optim_lr, weight_decay=self.CFG.wdecay)
         #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
         scheduler = {
-            'scheduler': StepLR(optimizer, step_size=30, gamma=0.5),
+            'scheduler': StepLR(optimizer, step_size=self.CFG.step_size, gamma=self.CFG.steplr_gamma),
             'interval': 'epoch',
         }
         return [optimizer], [scheduler]
