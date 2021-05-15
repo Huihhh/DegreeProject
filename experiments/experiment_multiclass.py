@@ -9,8 +9,7 @@ import torch
 from torch import optim
 from torch import linalg as LA
 import torch.nn.functional as F
-import torch.utils.data as Data
-from torch.utils.data.dataloader import DataLoader
+from torch.optim.lr_scheduler import StepLR
 import wandb
 from sklearn.decomposition import PCA
 
@@ -61,12 +60,9 @@ class ExperimentMulti(pl.LightningModule):
         # optimizer
         optimizer = optim.Adam(self.model.parameters(), lr=self.CFG.optim_lr, weight_decay=self.CFG.wdecay)
         #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
-        steps_per_epoch = np.ceil(len(self.dataset.trainset[0]) / self.config.batch_size)  # eval(self.CFG.steps_per_epoch)
-        total_training_steps = self.CFG.n_epoch * steps_per_epoch
-        warmup_steps = self.CFG.warmup * steps_per_epoch
         scheduler = {
-            'scheduler': get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_training_steps),
-            'interval': 'step',
+            'scheduler': StepLR(optimizer, step_size=30, gamma=0.5),
+            'interval': 'epoch',
         }
         return [optimizer], [scheduler]
 
@@ -137,10 +133,9 @@ class ExperimentMulti(pl.LightningModule):
             if param.requires_grad:
                 self.log(f'parameters/norm_{name}', LA.norm(param))
                 if self.CFG.log_weights:
-                    wandb.log({
-                        f'historgram/{name}': wandb.Histogram(param.detach().cpu().view(-1)),
-                        'epoch': self.current_epoch
-                    })
+                    self.log(
+                        f'historgram/{name}', wandb.Histogram(param.detach().cpu().view(-1)))
+                    self.log('epoch', self.current_epoch)
         if self.CFG.ema_used:
             logger.info(f'======== Validating on EMA model: epoch {self.current_epoch} ========')
             self.ema_model.update_buffer()
