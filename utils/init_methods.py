@@ -39,3 +39,9 @@ def normal_custom(w):
     fan_out, fan_in = w.shape
     std = float(fan_in + fan_out) / float(fan_in * fan_out)
     return _no_grad_normal_(w, 0., std)
+
+
+def normal_custom2(w):
+    fan_out, fan_in = w.shape
+    std = np.sqrt(1 / np.abs(fan_in - fan_out))
+    return _no_grad_normal_(w, 0., std)

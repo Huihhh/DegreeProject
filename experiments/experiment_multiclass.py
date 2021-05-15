@@ -23,7 +23,8 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import AverageMeter, acc_topk, get_cosine_schedule_with_warmup, get_feature_loader
+from utils.utils import acc_topk
+from utils.lr_schedulers import get_cosine_schedule_with_warmup
 from utils.compute_distance import compute_distance
 from utils.get_signatures import get_signatures
 from utils.ema import EMA
@@ -60,7 +61,7 @@ class ExperimentMulti(pl.LightningModule):
         # optimizer
         optimizer = optim.Adam(self.model.parameters(), lr=self.CFG.optim_lr, weight_decay=self.CFG.wdecay)
         #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
-        steps_per_epoch = np.ceil(len(self.dataset.trainset) / self.config.batch_size)  # eval(self.CFG.steps_per_epoch)
+        steps_per_epoch = np.ceil(len(self.dataset.trainset[0]) / self.config.batch_size)  # eval(self.CFG.steps_per_epoch)
         total_training_steps = self.CFG.n_epoch * steps_per_epoch
         warmup_steps = self.CFG.warmup * steps_per_epoch
         scheduler = {
@@ -99,7 +100,7 @@ class ExperimentMulti(pl.LightningModule):
 
         features = []
         features_norm = []
-        for i, (batch_x, _) in enumerate(self.dataset.train_loader):
+        for i, (batch_x, _) in enumerate(self.dataset.train_loader[0]):
             feature = self.model.resnet18(batch_x.to(self.device)).squeeze().cpu()
             feature_norm = torch.norm(feature, dim=1)
             features_norm.extend(list(feature_norm))
@@ -110,7 +111,14 @@ class ExperimentMulti(pl.LightningModule):
         self.log(f'historgram.features', wandb.Histogram(features))
 
     def training_step(self, batch, batch_idx):
-        x, y = batch[0], batch[1]
+        # x = torch.cat([batch[0][0], batch[1][0]])
+        # y =  torch.cat([batch[0][1], batch[1][1]])
+        x, y = [], []
+        for b in batch:
+            x.append(b[0])
+            y.append(b[1])
+        x = torch.cat(x)
+        y = torch.cat(y)
         y_pred = self.model.forward(x)
         losses = self.criterion(y_pred, y)
         acc, = acc_topk(y_pred, y)
@@ -191,7 +199,8 @@ class ExperimentMulti(pl.LightningModule):
 
         trainer = pl.Trainer(
             num_sanity_val_steps=-1,  #Sanity check runs n validation batches before starting the training
-            accelerator="ddp",  # if torch.cuda.is_available() else 'ddp_cpu',
+            # accelerator="ddp",  # if torch.cuda.is_available() else 'ddp_cpu',
+            # gradient_clip_val=1,
             callbacks=callbacks,
             logger=wandb_logger,
             checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
@@ -217,15 +226,8 @@ class ExperimentMulti(pl.LightningModule):
             sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
             return sigs
 
-        sigs_train = get_sigs(self.dataset.train_loader)
+        sigs_train = get_sigs(self.dataset.train_loader[0])
         sigs_grid = get_sigs(self.dataset.sigs_loader)
-
-        # sigs_grid = []
-        # for feature, in self.sigs_feature_loader:
-        #     _, sig, _ = get_signatures(feature.to(self.device), self.model.fcs)
-        #     sigs_grid.append(sig)
-        # sigs_grid = torch.cat(sigs_grid, dim=0)
-        # sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
 
         self.model.train()
 

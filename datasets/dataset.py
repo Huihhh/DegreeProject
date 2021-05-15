@@ -106,59 +106,27 @@ class Dataset(Data.TensorDataset):
             idx_val = np.concatenate((idx_val, idx), axis=None)
         idx_val = list(idx_val.astype(int))
         idx_train = np.setdiff1d(idx_train, np.array(idx_val))
-
-        # *** stack augmented data ***
-        # mean = TRANSFORM['mean']
-        # std = TRANSFORM['std']
-        # transform = T.Compose([
-        #     T.RandomHorizontalFlip(),
-        #     T.RandomCrop(size=64, padding=int(64 * 0.125), padding_mode='reflect'),
-        #     T.ToTensor(),
-        #     T.Normalize(mean=mean, std=std)
-        # ])
-        # data_aug = torch.cat([transform(Image.fromarray(img))[None,...] for img in dataset.data[idx_train]])
-        # targets_aug = torch.tensor([t for t in np.array(dataset.targets)[idx_train]])
-        # dataset_aug = Data.TensorDataset(data_aug, targets_aug)
-        # dataloader_aug = Data.DataLoader(dataset_aug, batch_size=64, num_workers=4, pin_memory=True, drop_last=False)
-        # features_aug = []
-        # for x, _ in dataloader_aug:
-        #     feature = resnet(x.to(device)).squeeze().cpu()
-        #     features_aug.append(feature)
-        # features_aug = torch.cat(features_aug)
-        # dataset_aug = Data.TensorDataset(features_aug, targets_aug)
-
+        
         self.trainset = TransformedDataset(dataset, idx_train)
+        # *** stack augmented data ***
+        if 'use_aug' in kwargs.keys() and kwargs['use_aug']:
+            logger.info('********* apply data augmentation ***********')
+            mean = TRANSFORM['mean']
+            std = TRANSFORM['std']
+            transform = T.Compose([
+                T.RandomHorizontalFlip(p=kwargs['flip_p']),
+                T.RandomCrop(size=64, padding=int(64 * 0.125), padding_mode='reflect'),
+                T.ToTensor(),
+                T.Normalize(mean=mean, std=std)
+            ])
+            trainset_aug = TransformedDataset(dataset, idx_train, transform=transform)
+            self.trainset = [self.trainset, trainset_aug]
+
+
         # self.trainset = Data.ConcatDataset([self.trainset, dataset_aug])
         self.valset = TransformedDataset(dataset, idx_val)
         self.testset = TransformedDataset(dataset, idx_test)
 
-        # device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        # resnet = resnet.to(device)
-
-        # def get_feature_dataset(dataset, shuffle=False, train=False):
-        #     dataloader = Data.DataLoader(dataset,
-        #                                  batch_size=self.batch_size,
-        #                                  num_workers=self.num_workers,
-        #                                  shuffle=shuffle,
-        #                                  pin_memory=True,
-        #                                  drop_last=False)
-        #     if not train:
-        #         resnet.eval()
-        #     else: resnet.train()
-        #     features = []
-        #     targets = []
-        #     for i, (batch_x, batch_y) in enumerate(dataloader):
-        #         feature = resnet(batch_x.to(device)).squeeze()
-        #         features.append(feature)
-        #         targets.append(batch_y)
-        #     features = torch.cat(features, dim=0).cpu()
-        #     targets = torch.cat(targets, dim=0)
-        #     dataset = Data.TensorDataset(features, targets)
-        #     return dataset
-
-        # self.trainset = get_feature_dataset(self.trainset, shuffle=True, train=True)
-        # self.valset = get_feature_dataset(self.valset)
-        # self.testset = get_feature_dataset(self.testset)
         noise_dataset = dataset.sampling_to_plot_LR(
             mean=0,
             var=1,
@@ -170,20 +138,13 @@ class Dataset(Data.TensorDataset):
                                            num_workers=self.num_workers,
                                            pin_memory=True,
                                            drop_last=False)
-        #    batch_size=self.batch_size,
-        #    num_workers=self.num_workers,
-        #    **kwargs)
-        # noise_dataset = get_feature_dataset(noise_dataset)
-        # sigs_dataset = Data.ConcatDataset([self.testset, noise_dataset])
-        # self.sigs_loader = Data.DataLoader(sigs_dataset,
-        #                                    batch_size=self.batch_size,
-        #                                    num_workers=self.num_workers,
-        #                                    pin_memory=True,
-        #                                    drop_last=False)
 
     def gen_dataloader(self):
         kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
-        self.train_loader = Data.DataLoader(self.trainset, shuffle=True, **kwargs)
+        if isinstance(self.trainset, list):
+            self.train_loader = [Data.DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
+        else:
+            self.train_loader = [Data.DataLoader(self.trainset, shuffle=True, **kwargs)]
         self.val_loader = Data.DataLoader(self.valset, **kwargs)
         self.test_loader = Data.DataLoader(self.testset, **kwargs)
 
@@ -202,6 +163,8 @@ class TransformedDataset(Dataset):
         # to return a PIL Image
 
         if self.transform is not None:
+            img, target = self.dataset.data[self.index[i]], self.dataset.targets[self.index[i]]
+            img = Image.fromarray(img)
             img = self.transform(img)
 
         if self.target_transform is not None:

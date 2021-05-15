@@ -4,6 +4,8 @@ DATASET:
     data_dir: '/data/EuroSAT_RGB/2750'
     seed: 0
     shuffle: False
+    use_aug: True
+    flip_p: 0.2
 
 # plot linear regions
 EXPERIMENT:
