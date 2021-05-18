@@ -40,8 +40,9 @@ EXPERIMENT:
   warmup: 0
   used_nesterov: True
   # scheduler
+  scheduler: cosin
   step_size: 30
-  steplr_gamma: 0.5
+  steplr_gamma: 0.4
   
   early_stop: False
   use_gpu: True
@@ -62,7 +63,7 @@ EXPERIMENT:
   resumed_epochs: [0,1023]
 
   log_weights: True
-  plot_dim:
+  plot_dim: [0,1]
 
 
 hydra:

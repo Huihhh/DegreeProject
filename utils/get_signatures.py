@@ -40,13 +40,12 @@ def get_signatures(data, net):
         return data, torch.cat(signatures, dim=1), sizes
     elif (type(net) is nn.Linear) or (type(net) is nn.BatchNorm1d):
         # Linear: no non-linearities occur
-        return net(data), torch.zeros(data.shape[0],
-                                      0,
-                                      device=device,
-                                      dtype=torch.int8), 0
+        return net(data), torch.zeros(data.shape[0], 0, device=device, dtype=torch.int8), 0
     elif type(net) is nn.ReLU or type(net) is nn.LeakyReLU:
         # ReLu: each neuron creates a non-linearity
         signatures = (data > 0).type(torch.int8)
         return net(data), signatures, signatures.shape[1]
+    elif type(net) is nn.Dropout: #TODO: currently use net.eval() when plot linear regions
+        return data, torch.zeros(data.shape[0], 0, device=device, dtype=torch.int8), 0
     else:
         raise Exception('Unknown operation: ' + str(net))

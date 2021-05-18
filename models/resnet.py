@@ -13,6 +13,7 @@ class ResNet(Module):
                  out_dim,
                  activation,
                  use_bn,
+                 dropout,
                  fc_winit,
                  fc_binit,
                  bn_winit,
@@ -29,22 +30,27 @@ class ResNet(Module):
         self.n_neurons = sum(h_nodes) + out_dim
         self.layers = []
         for i in range(len(h_nodes) - 1):
+            s = nn.Sequential()
             torch.random.manual_seed(i + seed)
-            fc = nn.Linear(h_nodes[i], h_nodes[i + 1])
+            s.add_module('fc', nn.Linear(h_nodes[i], h_nodes[i + 1]))
             if fc_winit.name != 'default':  # TODO: more elegant way
-                eval(fc_winit.func)(fc.weight, **fc_winit.params)
+                eval(fc_winit.func)(s[0].weight, **fc_winit.params)
             if fc_binit.name != 'default':
-                eval(fc_binit.func)(fc.bias, **fc_binit.params)
-            ac = ACT_METHOD[activation]
+                eval(fc_binit.func)(s[0].bias, **fc_binit.params)
+
+            s.add_module('ac', ACT_METHOD[activation])
             if use_bn:
                 bn = nn.BatchNorm1d(h_nodes[i + 1])
                 if bn_winit.name != 'default':
                     eval(bn_winit.func)(bn.weight, **bn_winit.params)
                 if bn_binit.name != 'default':
                     eval(bn_binit.func)(bn.bias, **bn_binit.params)
-                self.layers.append(nn.Sequential(fc, bn, ac))
-            else:
-                self.layers.append(nn.Sequential(fc, ac))
+                s.add_module('bn', bn)
+            if dropout:
+                dp = nn.Dropout(p=dropout)
+                s.add_module('dropout', dp)
+            self.layers.append(s)
+
 
         predict = nn.Linear(h_nodes[-1], out_dim)
         if fc_winit.name != 'default':

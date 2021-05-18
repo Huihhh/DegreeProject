@@ -50,9 +50,6 @@ class ExperimentMulti(pl.LightningModule):
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
 
-        # init pca for visualizing linear regions
-        self.pca = PCA(n_components=2)
-
     def init_criterion(self):
         self.criterion = lambda y_pred, y: {'total_loss': F.cross_entropy(y_pred, y)}
 
@@ -60,10 +57,21 @@ class ExperimentMulti(pl.LightningModule):
         # optimizer
         optimizer = optim.Adam(self.model.parameters(), lr=self.CFG.optim_lr, weight_decay=self.CFG.wdecay)
         #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
-        scheduler = {
-            'scheduler': StepLR(optimizer, step_size=self.CFG.step_size, gamma=self.CFG.steplr_gamma),
-            'interval': 'epoch',
-        }
+        if self.CFG.scheduler == 'steplr':
+            scheduler = {
+                'scheduler': StepLR(optimizer, step_size=self.CFG.step_size, gamma=self.CFG.steplr_gamma),
+                'interval': 'epoch',
+            }
+        else:
+            steps_per_epoch = np.ceil(len(self.dataset.trainset[0]) /
+                                      self.config.batch_size)  # eval(self.CFG.steps_per_epoch)
+            total_training_steps = self.CFG.n_epoch * steps_per_epoch
+            warmup_steps = self.CFG.warmup * steps_per_epoch
+            scheduler = {
+                'scheduler': get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_training_steps),
+                'interval': 'step',
+            }
+
         return [optimizer], [scheduler]
 
     def forward(self, x):
@@ -79,15 +87,9 @@ class ExperimentMulti(pl.LightningModule):
 
         features = []
         for i, (batch_x, _) in enumerate(self.dataset.sigs_loader):
-            feature = self.model.resnet18(batch_x.to(self.device))
+            feature = self.model.resnet18(batch_x.to(self.device))  #TODO: self.model.resnet18.eval()?
             features.append(feature.squeeze())
         features = torch.cat(features, dim=0)
-
-        if self.CFG.plot_dim is not None:
-            self.xy_grid = features[:, self.CFG.plot_dim]
-        else:
-            self.pca.fit_transform(features.cpu().T)
-            self.xy_grid = self.pca.components_.T
 
     def on_train_epoch_start(self) -> None:
         logger.info(f'======== Training epoch {self.current_epoch} ========')
@@ -119,7 +121,7 @@ class ExperimentMulti(pl.LightningModule):
         losses = self.criterion(y_pred, y)
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
-            self.log(f'tain.{name}', metric.item(), on_step=False, on_epoch=True)
+            self.log(f'train.{name}', metric.item(), on_step=False, on_epoch=True)
         self.log('train.acc', acc, on_step=False, on_epoch=True)
         return losses['total_loss']
 
@@ -133,8 +135,7 @@ class ExperimentMulti(pl.LightningModule):
             if param.requires_grad:
                 self.log(f'parameters/norm_{name}', LA.norm(param))
                 if self.CFG.log_weights:
-                    self.log(
-                        f'historgram/{name}', wandb.Histogram(param.detach().cpu().view(-1)))
+                    self.log(f'historgram/{name}', wandb.Histogram(param.detach().cpu().view(-1)))
                     self.log('epoch', self.current_epoch)
         if self.CFG.ema_used:
             logger.info(f'======== Validating on EMA model: epoch {self.current_epoch} ========')
@@ -190,7 +191,7 @@ class ExperimentMulti(pl.LightningModule):
         lr_monitor = LearningRateMonitor(logging_interval='step')
         callbacks = [lr_monitor]
         if self.CFG.early_stop:
-            callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
+            callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=20, mode='min', strict=True))
 
         trainer = pl.Trainer(
             num_sanity_val_steps=-1,  #Sanity check runs n validation batches before starting the training
@@ -213,26 +214,38 @@ class ExperimentMulti(pl.LightningModule):
         self.model.eval()
         def get_sigs(dataloader):
             sigs = []
+            features = []
             for batch_x, _ in dataloader:
                 feature = self.model.resnet18(batch_x.to(self.device)).squeeze()
                 _, sig, _ = get_signatures(feature, self.model.fcs)
                 sigs.append(sig)
+                features.append(feature)
             sigs = torch.cat(sigs, dim=0)
+            features = torch.cat(features, dim=0)
             sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
-            return sigs
+            return sigs, features
 
-        sigs_train = get_sigs(self.dataset.train_loader[0])
-        sigs_grid = get_sigs(self.dataset.sigs_loader)
+        sigs_train, _ = get_sigs(self.dataset.train_loader[0])
+        sigs_grid, features = get_sigs(self.dataset.sigs_loader, )
+        if self.CFG.plot_dim is not None:
+            self.xy_grid = features[:, self.CFG.plot_dim].cpu()
+        else:
+            self.pca.fit_transform(features.cpu().T)
+            self.xy_grid = self.pca.components_.T
 
         self.model.train()
 
         # get the unique signature of each region
-        region_sigs = list(np.unique(sigs_grid))
+        sigs_grid_unique = list(np.unique(sigs_grid))
         total_regions = defaultdict(int)
-        total_regions['density'] = len(region_sigs)
+        total_regions['density'] = len(sigs_grid_unique)
+
         # get the mapping of region signature and region index
         region_ids = np.random.permutation(total_regions['density'])
-        sigs_grid_dict = dict(zip(region_sigs, region_ids))
+        sigs_grid_dict = dict(zip(sigs_grid_unique, region_ids))
+
+        self.model.train()
+
         # get the number of training points in regions identified by training samples
         sigs_train = Counter(sigs_train)
 

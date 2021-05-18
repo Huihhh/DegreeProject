@@ -5,3 +5,4 @@ MODEL:
   out_dim: 10
   activation: 'relu' # or leakyRelU
   use_bn: False
+  dropout: 0.2

@@ -4,6 +4,7 @@ import torch
 import torch.utils.data as Data
 from torchvision import transforms as T
 import numpy as np
+from torchvision.transforms.transforms import GaussianBlur
 from .synthetic_data.circles import Circles
 from .synthetic_data.moons import Moons
 from .synthetic_data.sphere import Sphere
@@ -107,7 +108,7 @@ class Dataset(Data.TensorDataset):
         idx_val = list(idx_val.astype(int))
         idx_train = np.setdiff1d(idx_train, np.array(idx_val))
         
-        self.trainset = TransformedDataset(dataset, idx_train)
+        self.trainset = [TransformedDataset(dataset, idx_train)]
         # *** stack augmented data ***
         if 'use_aug' in kwargs.keys() and kwargs['use_aug']:
             logger.info('********* apply data augmentation ***********')
@@ -120,7 +121,7 @@ class Dataset(Data.TensorDataset):
                 T.Normalize(mean=mean, std=std)
             ])
             trainset_aug = TransformedDataset(dataset, idx_train, transform=transform)
-            self.trainset = [self.trainset, trainset_aug]
+            self.trainset = [*self.trainset, trainset_aug]
 
 
         # self.trainset = Data.ConcatDataset([self.trainset, dataset_aug])
