@@ -1,13 +1,6 @@
 import torch
 import torch.nn as nn
-import numpy as np
-from typing import Counter
-from collections import defaultdict
-
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 import logging
-import wandb
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +37,7 @@ def get_signatures(data, net):
     elif type(net) is nn.ReLU or type(net) is nn.LeakyReLU:
         # ReLu: each neuron creates a non-linearity
         signatures = (data > 0).type(torch.int8)
+        # print(signatures.shape)
         return net(data), signatures, signatures.shape[1]
     elif type(net) is nn.Dropout: #TODO: currently use net.eval() when plot linear regions
         return data, torch.zeros(data.shape[0], 0, device=device, dtype=torch.int8), 0

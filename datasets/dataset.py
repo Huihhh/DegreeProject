@@ -107,7 +107,7 @@ class Dataset(Data.TensorDataset):
             idx_val = np.concatenate((idx_val, idx), axis=None)
         idx_val = list(idx_val.astype(int))
         idx_train = np.setdiff1d(idx_train, np.array(idx_val))
-        
+
         self.trainset = [TransformedDataset(dataset, idx_train)]
         # *** stack augmented data ***
         if 'use_aug' in kwargs.keys() and kwargs['use_aug']:
@@ -123,22 +123,15 @@ class Dataset(Data.TensorDataset):
             trainset_aug = TransformedDataset(dataset, idx_train, transform=transform)
             self.trainset = [*self.trainset, trainset_aug]
 
-
         # self.trainset = Data.ConcatDataset([self.trainset, dataset_aug])
         self.valset = TransformedDataset(dataset, idx_val)
         self.testset = TransformedDataset(dataset, idx_test)
 
-        noise_dataset = dataset.sampling_to_plot_LR(
-            mean=0,
-            var=1,
-            noise_size=3000,
-        )
-        noise_dataset = Data.ConcatDataset([self.valset, self.testset, noise_dataset])
-        self.sigs_loader = Data.DataLoader(noise_dataset,
-                                           batch_size=self.batch_size,
-                                           num_workers=self.num_workers,
-                                           pin_memory=True,
-                                           drop_last=False)
+        self.noise_loader = dataset.sampling_to_plot_LR(noise_size=len(self.trainset[0]),
+                                                        batch_size=self.batch_size,
+                                                        num_workers=self.num_workers,
+                                                        pin_memory=True,
+                                                        drop_last=False)
 
     def gen_dataloader(self):
         kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)

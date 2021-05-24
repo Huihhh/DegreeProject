@@ -7,6 +7,7 @@ from collections import Counter
 import os
 import zipfile
 import urllib.request as Request
+from numpy.core.fromnumeric import transpose
 
 import torch
 import torch.utils.data as Data
@@ -15,8 +16,8 @@ from torchvision import transforms as T
 from typing import Any, Callable, Optional, Tuple
 
 TRANSFORM = {
-    'mean': (0.5, 0.5, 0.5),  #(0.4914, 0.4822, 0.4465),  #
-    'std': (0.25, 0.25, 0.25)  #}, # (0.2471, 0.2435, 0.2616),  # 
+    'mean': (0.3444, 0.3803, 0.4078),  #(0.4914, 0.4822, 0.4465),  #
+    'std': (0.2037, 0.1366, 0.1148)  #}, # (0.2471, 0.2435, 0.2616),  # 
 }
 
 
@@ -101,11 +102,15 @@ class EuroSat(VisionDataset):
 
         return img, target
 
-    def sampling_to_plot_LR(self, mean, var, noise_size, **kwargs):
+    def sampling_to_plot_LR(self, noise_size, **kwargs):
         # idx = np.random.permutation(len(self.data))
         # subset = Data.Subset(self, idx[:noise_size])
-        noise = np.random.normal(mean, var**0.5, [noise_size, 3, 64, 64])
-        noise_label = np.zeros(len(noise)) * -1 #np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
+        noise = []
+        for i in range(3):
+            noise.append(np.random.normal(TRANSFORM['mean'][i], TRANSFORM['std'][i], [noise_size, i, 64, 64]))
+        noise = np.concatenate(noise, axis=1)
+
+        noise_label = np.zeros(len(noise)) * -1  #np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
         noise = torch.from_numpy(noise).float()
         noise_label = torch.from_numpy(noise_label).long()
         dataset = Data.TensorDataset(noise, noise_label)
@@ -113,3 +118,53 @@ class EuroSat(VisionDataset):
         # loader = Data.DataLoader(dataset, **kwargs)
 
         return dataset
+
+
+if __name__ == '__main__':
+    from omegaconf import DictConfig, OmegaConf
+    import os
+    import sys
+    sys.path.append(os.getcwd())
+    import matplotlib.pyplot as plt
+    def restore_stats(img): 
+        mean = TRANSFORM['mean']
+        mean = torch.tensor(mean).unsqueeze(dim=1).unsqueeze(dim=1)
+        std = TRANSFORM['std']
+        std = torch.tensor(std).unsqueeze(dim=1).unsqueeze(dim=1)
+        img = img * std + mean
+        return T.ToPILImage()(img).convert('RGB')
+
+    def array_to_image(arr):
+        arr = np.array(arr.transpose(0, 2))
+        if arr.min() < 0:
+            low_clip = -1.
+        else:
+            low_clip = 0.
+        arr = np.clip(arr, low_clip, 1.0)
+        arr = np.uint8(arr * 255)
+        return Image.fromarray(arr)
+
+    @hydra.main(config_name='config', config_path='../config')
+    def main(CFG: DictConfig):
+        print('==> CONFIG is \n', OmegaConf.to_yaml(CFG), '\n')
+        dataset = EuroSat(data_dir = '/data/EuroSAT_RGB/2750')
+        noise = dataset.sampling_to_plot_LR(2)[0][0]
+        img = dataset[1][0]
+        img_noise = noise + img
+        noise = restore_stats(noise)
+        img_noise = restore_stats(img_noise)
+        img = restore_stats(img)
+        plt.subplot(131)
+        plt.gca().set_title('raw image')
+        plt.imshow(img)
+        plt.subplot(132)
+        plt.gca().set_title('image + Gaussian noise')
+        plt.imshow(img_noise)        
+        plt.subplot(133)
+        plt.gca().set_title('Gaussian noise')
+        plt.imshow(noise)
+        print(os.getcwd())
+        plt.savefig('../img_with_noise1.png')
+        print('ok')
+
+    main()

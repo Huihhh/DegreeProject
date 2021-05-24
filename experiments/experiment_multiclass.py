@@ -22,7 +22,7 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import acc_topk
+from utils.utils import acc_topk, hammingDistance
 from utils.lr_schedulers import get_cosine_schedule_with_warmup
 from utils.compute_distance import compute_distance
 from utils.get_signatures import get_signatures
@@ -86,17 +86,6 @@ class ExperimentMulti(pl.LightningModule):
             logger.info("[EMA] initial ")
 
         features = []
-        for i, (batch_x, _) in enumerate(self.dataset.sigs_loader):
-            feature = self.model.resnet18(batch_x.to(self.device))  #TODO: self.model.resnet18.eval()?
-            features.append(feature.squeeze())
-        features = torch.cat(features, dim=0)
-
-    def on_train_epoch_start(self) -> None:
-        logger.info(f'======== Training epoch {self.current_epoch} ========')
-        if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
-            self.plot_signatures()
-
-        features = []
         features_norm = []
         for i, (batch_x, _) in enumerate(self.dataset.train_loader[0]):
             feature = self.model.resnet18(batch_x.to(self.device)).squeeze().cpu()
@@ -107,6 +96,11 @@ class ExperimentMulti(pl.LightningModule):
                 break
         self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
         self.log(f'historgram.features', wandb.Histogram(features))
+
+    def on_train_epoch_start(self) -> None:
+        logger.info(f'======== Training epoch {self.current_epoch} ========')
+        if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
+            self.plot_signatures()
 
     def training_step(self, batch, batch_idx):
         # x = torch.cat([batch[0][0], batch[1][0]])
@@ -136,7 +130,6 @@ class ExperimentMulti(pl.LightningModule):
                 self.log(f'parameters/norm_{name}', LA.norm(param))
                 if self.CFG.log_weights:
                     self.log(f'historgram/{name}', wandb.Histogram(param.detach().cpu().view(-1)))
-                    self.log('epoch', self.current_epoch)
         if self.CFG.ema_used:
             logger.info(f'======== Validating on EMA model: epoch {self.current_epoch} ========')
             self.ema_model.update_buffer()
@@ -214,28 +207,26 @@ class ExperimentMulti(pl.LightningModule):
         self.model.eval()
         def get_sigs(dataloader):
             sigs = []
-            features = []
             for batch_x, _ in dataloader:
                 feature = self.model.resnet18(batch_x.to(self.device)).squeeze()
                 _, sig, _ = get_signatures(feature, self.model.fcs)
                 sigs.append(sig)
-                features.append(feature)
             sigs = torch.cat(sigs, dim=0)
-            features = torch.cat(features, dim=0)
-            sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
-            return sigs, features
+            return sigs
 
-        sigs_train, _ = get_sigs(self.dataset.train_loader[0])
-        sigs_grid, features = get_sigs(self.dataset.sigs_loader, )
-        if self.CFG.plot_dim is not None:
-            self.xy_grid = features[:, self.CFG.plot_dim].cpu()
-        else:
-            self.pca.fit_transform(features.cpu().T)
-            self.xy_grid = self.pca.components_.T
-
+        sigs_train = get_sigs(self.dataset.train_loader[0])
+        sigs_noise = get_sigs(self.dataset.noise_loader)
         self.model.train()
 
+        h_distance_train = hammingDistance(sigs_train.float(), device=self.device)
+        h_distance_noise = hammingDistance(sigs_noise.float(), device=self.device)
+        self.log(f'hamming_distance.train', wandb.Histogram(h_distance_train))
+        self.log(f'hamming_distance.noise', wandb.Histogram(h_distance_noise))
+
+
         # get the unique signature of each region
+        sigs_grid = torch.cat([sigs_train, sigs_noise])
+        sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
         sigs_grid_unique = list(np.unique(sigs_grid))
         total_regions = defaultdict(int)
         total_regions['density'] = len(sigs_grid_unique)
@@ -244,31 +235,14 @@ class ExperimentMulti(pl.LightningModule):
         region_ids = np.random.permutation(total_regions['density'])
         sigs_grid_dict = dict(zip(sigs_grid_unique, region_ids))
 
-        self.model.train()
-
-        # get the number of training points in regions identified by training samples
-        sigs_train = Counter(sigs_train)
 
         for i, key in enumerate(sigs_grid_dict):
             idx = np.where(sigs_grid == key)
-            total_regions['non_empty_regions'] += int(sigs_train[key] > 0)
             total_regions['density_region_size_over1'] += 1 if len(idx[0]) > 1 else 0
 
         logger.info(f"[Linear regions] \n   #total regions: {total_regions['density']} ")
         self.log('epoch', self.current_epoch)
         self.log('total_regions', total_regions)
-
-        # visualize linear regions
-        if self.current_epoch in range(10) or (self.current_epoch + 1) % 10 == 0:
-
-            base_color_labels = np.array([sigs_grid_dict[sig] for sig in sigs_grid])
-            plt.scatter(self.xy_grid[:, 0],
-                        self.xy_grid[:, 1],
-                        c=base_color_labels,
-                        s=0.2,
-                        cmap=plt.get_cmap('Pastel2'))
-            self.log(f'LinearRegions/epoch{self.current_epoch}', wandb.Image(plt))
-            plt.close()
 
     def resume_model(self, train_loader, val_loader, test_loader):
         if self.CFG.resume:

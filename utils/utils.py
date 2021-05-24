@@ -1,7 +1,7 @@
 import torch
 import torch.utils.data as Data
 from torch.utils.data.dataloader import DataLoader
-import math
+import numpy as np
 
 
 def accuracy(output, target):
@@ -72,3 +72,16 @@ def get_feature_loader(dataloader, net, device):
                                         pin_memory=True
                                         )
     return feature_dataloader
+
+def hammingDistance(arr, device):
+  '''
+  arr: 0,1 2d array
+  '''
+  n, m = arr.shape
+  arr_not = torch.ones((n, m), device=device) - arr
+  arr_ones = arr.mm(arr.T) # count the positions of both ones of each two rows
+  arr_zeros = torch.mm(arr_not, arr_not.T) # count the positions of both zeros of each two rows
+  h_distance = m * torch.ones((n, n), device=device) - arr_zeros - arr_ones
+  h_distance = np.array(h_distance.cpu())
+  h_distance = h_distance[np.triu_indices(n, k=1)]
+  return h_distance
