@@ -1,5 +1,4 @@
-from typing import Counter
-from collections import defaultdict
+from collections import defaultdict, Counter
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
@@ -205,44 +204,53 @@ class ExperimentMulti(pl.LightningModule):
 
     def plot_signatures(self):
         self.model.eval()
-        def get_sigs(dataloader):
+        self.log('epoch', self.current_epoch)
+        dataloader = [self.dataset.train_loader[0], self.dataset.noise_loader]
+        for i, name in enumerate(['train', 'noise']):
             sigs = []
-            for batch_x, _ in dataloader:
+            labels = []
+            for batch_x, batch_y in dataloader[i]:
                 feature = self.model.resnet18(batch_x.to(self.device)).squeeze()
                 _, sig, _ = get_signatures(feature, self.model.fcs)
                 sigs.append(sig)
+                labels.append(batch_y)
             sigs = torch.cat(sigs, dim=0)
-            return sigs
+            if name == 'train':
+                labels = torch.cat(labels, dim=0)
+                labels = np.array(labels)
+                num_classes = labels.max() + 1
+                for c in range(num_classes):
+                    h_distance = hammingDistance(sigs[np.where(labels == c)].float(), device=self.device)
+                    self.log(f'hamming_distance/train_class{c}', wandb.Histogram(h_distance))
+                    self.log(f'hamming_distance/avg_train_class{c}', h_distance.mean())
 
-        sigs_train = get_sigs(self.dataset.train_loader[0])
-        sigs_noise = get_sigs(self.dataset.noise_loader)
+            h_distance = hammingDistance(sigs.float(), device=self.device)
+            self.log(f'hamming_distance/{name}', wandb.Histogram(h_distance))
+            self.log(f'hamming_distance/avg_{name}', h_distance.mean())
+
+            # get the unique signature of each region
+            sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
+            sigs_unique = list(np.unique(sigs))
+            total_regions = defaultdict(int)
+            total_regions['density'] = len(sigs_unique)
+
+            # get the mapping of region signature and region index
+            region_ids = np.random.permutation(total_regions['density'])
+            sigs_to_idx = dict(zip(sigs_unique, region_ids))
+            region_counts = Counter(sigs)
+            size_counts = Counter(region_counts.values())
+            np_histogram = (list(size_counts.values()), [0] + sorted(list(size_counts.keys())))
+            self.log(f'LR_count_distrib.{name}',
+                     wandb.Histogram(np_histogram=np_histogram))
+
+            for key in sigs_to_idx:
+                idx = np.where(sigs == key)
+                total_regions['density_region_size_over1'] += 1 if len(idx[0]) > 1 else 0
+
+            logger.info(f"[Linear regions] {name} \n   #total regions: {total_regions['density']} ")
+            self.log(f'total_regions_{name}', total_regions)
+
         self.model.train()
-
-        h_distance_train = hammingDistance(sigs_train.float(), device=self.device)
-        h_distance_noise = hammingDistance(sigs_noise.float(), device=self.device)
-        self.log(f'hamming_distance.train', wandb.Histogram(h_distance_train))
-        self.log(f'hamming_distance.noise', wandb.Histogram(h_distance_noise))
-
-
-        # get the unique signature of each region
-        sigs_grid = torch.cat([sigs_train, sigs_noise])
-        sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
-        sigs_grid_unique = list(np.unique(sigs_grid))
-        total_regions = defaultdict(int)
-        total_regions['density'] = len(sigs_grid_unique)
-
-        # get the mapping of region signature and region index
-        region_ids = np.random.permutation(total_regions['density'])
-        sigs_grid_dict = dict(zip(sigs_grid_unique, region_ids))
-
-
-        for i, key in enumerate(sigs_grid_dict):
-            idx = np.where(sigs_grid == key)
-            total_regions['density_region_size_over1'] += 1 if len(idx[0]) > 1 else 0
-
-        logger.info(f"[Linear regions] \n   #total regions: {total_regions['density']} ")
-        self.log('epoch', self.current_epoch)
-        self.log('total_regions', total_regions)
 
     def resume_model(self, train_loader, val_loader, test_loader):
         if self.CFG.resume:

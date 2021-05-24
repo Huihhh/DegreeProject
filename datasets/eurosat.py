@@ -115,9 +115,8 @@ class EuroSat(VisionDataset):
         noise_label = torch.from_numpy(noise_label).long()
         dataset = Data.TensorDataset(noise, noise_label)
         # concatDataset = Data.ConcatDataset([self, dataset])
-        # loader = Data.DataLoader(dataset, **kwargs)
-
-        return dataset
+        loader = Data.DataLoader(dataset, **kwargs)
+        return loader
 
 
 if __name__ == '__main__':
@@ -148,7 +147,8 @@ if __name__ == '__main__':
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG), '\n')
         dataset = EuroSat(data_dir = '/data/EuroSAT_RGB/2750')
-        noise = dataset.sampling_to_plot_LR(2)[0][0]
+        dataloader = iter(dataset.sampling_to_plot_LR(2))
+        noise = dataloader.next()[0].squeeze()
         img = dataset[1][0]
         img_noise = noise + img
         noise = restore_stats(noise)
