@@ -205,11 +205,17 @@ class ExperimentMulti(pl.LightningModule):
     def plot_signatures(self):
         self.model.eval()
         self.log('epoch', self.current_epoch)
-        dataloader = [self.dataset.train_loader[0], self.dataset.noise_loader]
+        dataloader = [self.dataset.train_loader[0]]
+        noisy_dataloader = [self.dataset.train_loader[0], self.dataset.noise_loader]
+        loaders = [dataloader, noisy_dataloader]
         for i, name in enumerate(['train', 'noise']):
             sigs = []
             labels = []
-            for batch_x, batch_y in dataloader[i]:
+            for batch in zip(*loaders[i]):
+                batch_x = torch.zeros_like(batch[0][0])
+                for b in batch:
+                    batch_x += b[0]
+                batch_y = batch[0][1]
                 feature = self.model.resnet18(batch_x.to(self.device)).squeeze()
                 _, sig, _ = get_signatures(feature, self.model.fcs)
                 sigs.append(sig)
