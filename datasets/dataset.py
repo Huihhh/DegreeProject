@@ -4,11 +4,13 @@ import torch
 import torch.utils.data as Data
 from torchvision import transforms as T
 import numpy as np
-from torchvision.transforms.transforms import GaussianBlur
+from collections import defaultdict
 from .synthetic_data.circles import Circles
 from .synthetic_data.moons import Moons
 from .synthetic_data.sphere import Sphere
 from .synthetic_data.spiral import Spiral
+from torch.utils.data.sampler import Sampler
+from torch._six import int_classes as _int_classes
 # from .iris import Iris
 from .eurosat import *
 
@@ -63,6 +65,7 @@ class Dataset(Data.TensorDataset):
             n_test = n_test = n_samples - n_train - n_val
 
         dataset = DATA[self.name]()
+        self.num_classes = 2
         #TODO: sampling_to_plot_LR
         self.sigs_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=5000, **kwargs)
         self.trainset = get_torch_dataset(dataset.make_data(n_train, **kwargs), self.name)
@@ -71,6 +74,7 @@ class Dataset(Data.TensorDataset):
 
     def gen_image_dataset(self, resnet, data_dir, **kwargs):
         dataset = DATA[self.name](data_dir)
+        self.num_classes = dataset.num_classes
         N = len(dataset.targets)
         if isinstance(self.n_test, int):
             n_test = self.n_test
@@ -108,7 +112,7 @@ class Dataset(Data.TensorDataset):
         idx_val = list(idx_val.astype(int))
         idx_train = np.setdiff1d(idx_train, np.array(idx_val))
 
-        self.trainset = [TransformedDataset(dataset, idx_train)]
+        self.trainset = TransformedDataset(dataset, idx_train)
         # *** stack augmented data ***
         if 'use_aug' in kwargs.keys() and kwargs['use_aug']:
             logger.info('********* apply data augmentation ***********')
@@ -121,43 +125,43 @@ class Dataset(Data.TensorDataset):
                 T.Normalize(mean=mean, std=std)
             ])
             trainset_aug = TransformedDataset(dataset, idx_train, transform=transform)
-            self.trainset = [*self.trainset, trainset_aug]
+            self.trainset = [self.trainset, trainset_aug]
 
         # self.trainset = Data.ConcatDataset([self.trainset, dataset_aug])
         self.valset = TransformedDataset(dataset, idx_val)
         self.testset = TransformedDataset(dataset, idx_test)
 
-        self.noise_loader = dataset.sampling_to_plot_LR(noise_size=len(self.trainset[0]),
+        self.noise_loader = dataset.sampling_to_plot_LR(noise_size=len(idx_train),
                                                         batch_size=self.batch_size,
                                                         num_workers=self.num_workers,
                                                         pin_memory=True,
                                                         drop_last=False)
 
     def gen_dataloader(self):
-        kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
+        kwargs = dict(num_workers=self.num_workers, pin_memory=True)
         if isinstance(self.trainset, list):
             self.train_loader = [Data.DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
         else:
-            self.train_loader = [Data.DataLoader(self.trainset, shuffle=True, **kwargs)]
-        self.val_loader = Data.DataLoader(self.valset, **kwargs)
-        self.test_loader = Data.DataLoader(self.testset, **kwargs)
+            self.train_loader = [Data.DataLoader(self.trainset, batch_sampler= BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size), **kwargs)]
+        self.val_loader = Data.DataLoader(self.valset, batch_sampler= BatchWeightedRandomSampler(self.valset, batch_size=self.batch_size), **kwargs)
+        self.test_loader = Data.DataLoader(self.testset,batch_sampler= BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size), **kwargs)
 
 
 class TransformedDataset(Dataset):
-    def __init__(self, dataset, index, transform=None, target_transform=None):
+    def __init__(self, dataset, indexs, transform=None, target_transform=None):
         self.dataset = dataset
-        self.data = dataset.data[index]
-        self.targets = np.array(dataset.targets)[index]
+        # self.data = dataset.data[indexs]
+        # self.targets = np.array(dataset.targets)[indexs]
         self.transform = transform
         self.target_transform = target_transform
-        self.index = index
+        self.indexs = indexs
 
     def __getitem__(self, i):
-        img, target = self.dataset[self.index[i]]
+        img, target = self.dataset[self.indexs[i]]
         # to return a PIL Image
 
         if self.transform is not None:
-            img, target = self.dataset.data[self.index[i]], self.dataset.targets[self.index[i]]
+            img, target = self.dataset.data[self.indexs[i]], self.dataset.targets[self.indexs[i]]
             img = Image.fromarray(img)
             img = self.transform(img)
 
@@ -167,4 +171,58 @@ class TransformedDataset(Dataset):
         return img, target
 
     def __len__(self):
-        return len(self.index)
+        return len(self.indexs)
+
+
+class BatchWeightedRandomSampler(Sampler):
+    '''Samples elements for a batch with given probabilites of each element'''
+    def __init__(self,  data_source, batch_size, drop_last=False):
+        if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or \
+                batch_size <= 0:
+            raise ValueError("batch_size should be a positive integer value, "
+                             "but got batch_size={}".format(batch_size))
+        if not isinstance(drop_last, bool):
+            raise ValueError("drop_last should be a boolean value, but got "
+                             "drop_last={}".format(drop_last))
+        self.targets = np.array(data_source.dataset.targets)[data_source.indexs]
+        self.batch_size = batch_size
+        self.drop_last = drop_last
+
+    def __iter__(self):
+        nclass = max(self.targets) + 1
+        sample_distrib = np.array([len(np.where(self.targets==i)[0]) for i in range(nclass)])
+        sample_distrib = sample_distrib/sample_distrib.max()
+
+        class_id = defaultdict(list)
+        for idx, c in enumerate(self.targets):
+            class_id[c].append(idx)
+
+        assert min(class_id.keys()) == 0 and max(class_id.keys()) == (nclass - 1)
+        class_id = [np.array(class_id[i], dtype=np.int64) for i in range(nclass)]
+
+        for i in range(nclass):
+            np.random.shuffle(class_id[i])
+
+        # rerange indexs following the rule so that labels are ranged like: 0,1,....9,0,....9,...
+        # adopted from https://github.com/google-research/fixmatch/blob/79f9fd3e6267035d685864beaec40dd45408ecb0/scripts/create_split.py#L87
+        npos = np.zeros(nclass, np.int64)
+        label = []
+        for i in range(len(self.targets)):
+            c = np.argmax(sample_distrib - npos / max(npos.max(), 1))
+            label.append(class_id[c][npos[c]]) # the indexs of examples
+            npos[c] += 1
+
+        batch = []
+        for idx in label:
+            batch.append(idx)
+            if len(batch) == self.batch_size:
+                yield batch
+                batch = []
+        if len(batch) > 0 and not self.drop_last:
+            yield batch
+
+    def __len__(self):
+        if self.drop_last:
+            return len(self.targets) // self.batch_size
+        else:
+            return (len(self.targets) + self.batch_size - 1) // self.batch_size

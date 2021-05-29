@@ -18,10 +18,11 @@ from easydict import EasyDict as edict
 from pylab import *
 import os
 import sys
+import itertools
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import acc_topk, hammingDistance
+from utils.utils import acc_topk, hammingDistance, hammingDistance_classwise
 from utils.lr_schedulers import get_cosine_schedule_with_warmup
 from utils.compute_distance import compute_distance
 from utils.get_signatures import get_signatures
@@ -50,7 +51,17 @@ class ExperimentMulti(pl.LightningModule):
             logger.info("[EMA] initial ")
 
     def init_criterion(self):
-        self.criterion = lambda y_pred, y: {'total_loss': F.cross_entropy(y_pred, y)}
+        def compute_loss(feature, y_pred, y):
+            ce_loss = F.cross_entropy(y_pred, y)
+            _, sigs, _ = get_signatures(feature, self.model.fcs)
+            hreg_same_class, hreg_diff_class = hammingDistance_classwise(sigs.float(), y, self.device)
+            h_reg = hreg_same_class / (hreg_diff_class + 1e-6)
+            total_loss = ce_loss + self.CFG.lambda_hreg * h_reg
+            return {'total_loss': total_loss, 'ce_loss': ce_loss, 'hreg': h_reg }
+        if self.CFG.lambda_hreg > 0:
+            self.criterion = compute_loss
+        else:
+            self.criterion = lambda _, y_pred, y: {'total_loss': F.cross_entropy(y_pred, y)}
 
     def configure_optimizers(self):
         # optimizer
@@ -102,16 +113,16 @@ class ExperimentMulti(pl.LightningModule):
             self.plot_signatures()
 
     def training_step(self, batch, batch_idx):
-        # x = torch.cat([batch[0][0], batch[1][0]])
-        # y =  torch.cat([batch[0][1], batch[1][1]])
-        x, y = [], []
-        for b in batch:
-            x.append(b[0])
-            y.append(b[1])
-        x = torch.cat(x)
-        y = torch.cat(y)
-        y_pred = self.model.forward(x)
-        losses = self.criterion(y_pred, y)
+        # x, y = [], []
+        # for b in batch:
+        #     x.append(b[0])
+        #     y.append(b[1])
+        # x = torch.cat(x)
+        # y = torch.cat(y)
+        x, y = batch
+        features = self.model.resnet18(x).squeeze()
+        y_pred = self.model.fcs(features)
+        losses = self.criterion(features, y_pred, y) 
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
             self.log(f'train.{name}', metric.item(), on_step=False, on_epoch=True)
@@ -138,9 +149,9 @@ class ExperimentMulti(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        x = self.model.resnet18(x).squeeze()
-        y_pred = self.model.fcs(x)
-        losses = self.criterion(y_pred, y)
+        features = self.model.resnet18(x).squeeze()
+        y_pred = self.model.fcs(features)
+        losses = self.criterion(features, y_pred, y) 
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
             self.log(f'val.{name}', metric.item(), on_step=False, on_epoch=True)
@@ -148,7 +159,7 @@ class ExperimentMulti(pl.LightningModule):
 
         if self.CFG.plot_avg_distance and (self.current_epoch in range(10) or
                                            (self.current_epoch + 1) % self.CFG.plot_every == 0):
-            _, dis = compute_distance(x, self.model.fcs)
+            _, dis = compute_distance(features, self.model.fcs)
             dis_x_neurons = torch.mean(dis) * self.model.n_neurons
             self.log('dis_x_neurons', dis_x_neurons, on_step=False, on_epoch=True)
         return acc
@@ -159,8 +170,9 @@ class ExperimentMulti(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        y_pred = self.model.forward(x)
-        losses = self.criterion(y_pred, y)
+        features = self.model.resnet18(x).squeeze()
+        y_pred = self.model.fcs(features)
+        losses = self.criterion(features, y_pred, y) 
         acc, = acc_topk(y_pred, y)
         self.log('test', {**losses, 'acc': acc})
         return acc
@@ -196,7 +208,7 @@ class ExperimentMulti(pl.LightningModule):
             max_epochs=self.CFG.n_epoch,
             # gradient_clip_val=1,
             progress_bar_refresh_rate=0)
-        trainer.fit(self, self.dataset.train_loader, self.dataset.val_loader)
+        trainer.fit(self, self.dataset.train_loader[0], self.dataset.val_loader)
         if self.CFG.debug:
             trainer.test(self, test_dataloaders=self.dataset.test_loader)
         else:
@@ -205,10 +217,10 @@ class ExperimentMulti(pl.LightningModule):
     def plot_signatures(self):
         self.model.eval()
         self.log('epoch', self.current_epoch)
-        dataloader = [self.dataset.train_loader[0]]
-        noisy_dataloader = [self.dataset.train_loader[0], self.dataset.noise_loader]
-        loaders = [dataloader, noisy_dataloader]
-        for i, name in enumerate(['train', 'noise']):
+        # dataloader = [self.dataset.train_loader[0]]
+        noisy_dataloader = [self.dataset.noise_loader]
+        loaders = [[self.dataset.train_loader[0]], noisy_dataloader, [self.dataset.val_loader], [self.dataset.test_loader]]
+        for i, name in enumerate(['train', 'noise', 'val', 'test']):
             sigs = []
             labels = []
             for batch in zip(*loaders[i]):
@@ -221,18 +233,29 @@ class ExperimentMulti(pl.LightningModule):
                 sigs.append(sig)
                 labels.append(batch_y)
             sigs = torch.cat(sigs, dim=0)
-            if name == 'train':
-                labels = torch.cat(labels, dim=0)
-                labels = np.array(labels)
-                num_classes = labels.max() + 1
-                for c in range(num_classes):
-                    h_distance = hammingDistance(sigs[np.where(labels == c)].float(), device=self.device)
-                    self.log(f'hamming_distance/train_class{c}', wandb.Histogram(h_distance))
-                    self.log(f'hamming_distance/avg_train_class{c}', h_distance.mean())
-
+        
             h_distance = hammingDistance(sigs.float(), device=self.device)
-            self.log(f'hamming_distance/{name}', wandb.Histogram(h_distance))
-            self.log(f'hamming_distance/avg_{name}', h_distance.mean())
+            self.log(f'hamming_distance/{name}', h_distance.mean())
+
+            if name in ['train', 'val', 'test']:
+                labels = torch.cat(labels, dim=0)
+                hdis_same, hdis_diff = hammingDistance_classwise(sigs, labels, self.device)
+                # comb = list(itertools.combinations(range(num_class), 2))
+                # for i in range(num_class):
+                #     comb.append((i, i))
+                # same_class = diff_class =  0
+                # for class1, class2 in comb:
+                #     arr1 = sigs[np.where(labels == class1)].float()
+                #     arr2 = sigs[np.where(labels == class2)].float()
+                #     h_distance = hammingDistance([arr1, arr2], self.device)
+                #     if class1 == class2:
+                #         same_class += h_distance
+                #     else:
+                #         diff_class += h_distance
+                    # self.log(f'hamming_distance/class{class1}_class{class2}', h_distance)
+            self.log(f'hamming_distance/same_class_{name}', hdis_same)
+            self.log(f'hamming_distance/diff_class_{name}', hdis_diff)
+            
 
             # get the unique signature of each region
             sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
