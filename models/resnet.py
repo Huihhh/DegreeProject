@@ -46,7 +46,7 @@ class ResNet(Module):
                 if bn_binit.name != 'default':
                     eval(bn_binit.func)(bn.bias, **bn_binit.params)
                 s.add_module('bn', bn)
-            if dropout:
+            if dropout != 0:
                 dp = nn.Dropout(p=dropout)
                 s.add_module('dropout', dp)
             self.layers.append(s)
@@ -63,14 +63,24 @@ class ResNet(Module):
         # *** ResNet ***
         self.resnet18 = torch.nn.Sequential(*(list(resnet18.children())[:-1]))
         # freeze the pretrained model
-        for params in self.resnet18.parameters():
+        for params in self.resnet18[:kwargs['freeze_layers']].parameters():
             params.requires_grad = False
+        
 
     def forward(self, x):
-        x = self.resnet18(x)
-        x = self.fcs(x.squeeze())
+        x = self.resnet18(x).squeeze()
+        x = self.fcs(x)
         return x
-
+    
+    def feature_forward(self, x):
+        pre_ac = []
+        for net in self.fcs[:-1]:
+            x = net.fc(x)
+            pre_ac.append(x)
+            x = net.ac(x) #TODO: if use bn
+        x = self.fcs[-1](x)
+        pre_ac = torch.cat(pre_ac, dim=1)
+        return x, pre_ac
 
 if __name__ == "__main__":
     import hydra

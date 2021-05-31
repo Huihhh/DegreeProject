@@ -176,7 +176,7 @@ class TransformedDataset(Dataset):
 
 class BatchWeightedRandomSampler(Sampler):
     '''Samples elements for a batch with given probabilites of each element'''
-    def __init__(self,  data_source, batch_size, drop_last=False):
+    def __init__(self,  data_source, batch_size, drop_last=True):
         if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or \
                 batch_size <= 0:
             raise ValueError("batch_size should be a positive integer value, "

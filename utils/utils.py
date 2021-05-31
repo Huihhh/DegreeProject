@@ -2,6 +2,8 @@ import torch
 import torch.utils.data as Data
 from torch.utils.data.dataloader import DataLoader
 import numpy as np
+import torch.nn.functional as F
+import torch.nn as nn
 
 
 def accuracy(output, target):
@@ -65,44 +67,54 @@ def get_feature_loader(dataloader, net, device):
         features.append(feature.cpu())
     features = torch.cat(features)
     feature_dataset = Data.TensorDataset(features)
-    feature_dataloader = DataLoader(feature_dataset,
-                                        batch_size=64,
-                                        num_workers=4,
-                                        drop_last=False,
-                                        pin_memory=True
-                                        )
+    feature_dataloader = DataLoader(feature_dataset, batch_size=64, num_workers=4, drop_last=False, pin_memory=True)
     return feature_dataloader
 
+
 def hammingDistance(arr, device):
-  '''
+    '''
   arr: 0,1 2d array or a list of 0,1 2d array
   '''
-  if isinstance(arr, list):
-      arr1, arr2 = arr
-  else:
-      arr1 = arr2 = arr
-  n1, m = arr1.shape ## n1 is the sample size of arr1, m is the feature size
-  n2, _ = arr2.shape
-  arr_not1 = torch.ones((n1, m), device=device) - arr1
-  arr_not2 = torch.ones((n2, m), device=device) - arr2
-  arr_ones = arr1.mm(arr2.T) # count the positions of both ones of each two rows
-  arr_zeros = arr_not1.mm(arr_not2.T) # count the positions of both zeros of each two rows
-  h_distance = m * torch.ones((n1, n2), device=device) - arr_zeros - arr_ones
+    if isinstance(arr, list):
+        arr1, arr2 = arr
+    else:
+        arr1 = arr2 = arr
+    n1, m = arr1.shape  ## n1 is the sample size of arr1, m is the feature size
+    n2, _ = arr2.shape
+    arr_not1 = torch.ones((n1, m), device=device) - arr1
+    arr_not2 = torch.ones((n2, m), device=device) - arr2
+    arr_ones = arr1.mm(arr2.T)  # count the positions of both ones of each two rows
+    arr_zeros = arr_not1.mm(arr_not2.T)  # count the positions of both zeros of each two rows
+    h_distance = m * torch.ones((n1, n2), device=device) - arr_zeros - arr_ones
 
-  if isinstance(arr, list):
-      return h_distance.mean()
-  else: 
-      return h_distance.sum()/((n1*n2 - len(h_distance.diagonal())) + 1e-6)
+    if isinstance(arr, list):
+        return h_distance.mean()
+    else:
+        return h_distance.sum() / ((n1 * n2 - len(h_distance.diagonal())) + 1e-6)
     #   return h_distance[np.triu_indices(n1, k=1)]
 
-def hammingDistance_classwise(sigs, labels, device):
-    if labels.device.type == 'cuda':
-        labels = labels.cpu()
-    num_classes = labels.max() + 1
-    hreg_same_class = hreg_diff_class = 0
-    for i in range(num_classes-1):
-        class1 = sigs[np.where(labels == i)].float()
-        class_rest = sigs[np.where(labels > i)].float()
-        hreg_diff_class += hammingDistance([class1, class_rest], device)
-        hreg_same_class += hammingDistance(class1, device)
-    return hreg_same_class, hreg_diff_class
+
+def get_hammingdis(p=1, m=1):
+    if p == 1:
+        ac = lambda x: 1 / (1 + torch.exp(-m * x))
+        norm = lambda x: x**2
+    else:
+        ac = norm = lambda x: x
+
+    def hammingDistance_classwise(sigs, labels):
+        if labels.device.type == 'cuda':
+            labels = labels.cpu()
+        sigs = ac(sigs)
+        num_classes = labels.max() + 1
+        hreg_same_class = hreg_diff_class = 0
+        for i in range(num_classes - 1):
+            class1 = norm(sigs[np.where(labels == i)].float())
+            class_rest = norm(sigs[np.where(labels > i)].float())
+            if len(class1) > 1:
+                hreg_same_class += F.pdist(class1, p=p).mean()
+            if len(class1) > 0 and len(class_rest) > 0:
+                hreg_diff_class += torch.cdist(class1, class_rest, p=p).mean()
+
+        return hreg_same_class, hreg_diff_class
+
+    return hammingDistance_classwise

@@ -22,7 +22,7 @@ import itertools
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import acc_topk, hammingDistance, hammingDistance_classwise
+from utils.utils import acc_topk, hammingDistance, get_hammingdis
 from utils.lr_schedulers import get_cosine_schedule_with_warmup
 from utils.compute_distance import compute_distance
 from utils.get_signatures import get_signatures
@@ -49,19 +49,22 @@ class ExperimentMulti(pl.LightningModule):
         if self.ema:
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
+        self.lambda_hreg = lambda epoch: (epoch > 2) * self.CFG.lambda_hreg
 
     def init_criterion(self):
-        def compute_loss(feature, y_pred, y):
+        self.hammingDistance_classwise = get_hammingdis(p=0)
+        hammingLoss_func= get_hammingdis(p=1)
+        def compute_loss(post_ac, y_pred, y, epoch):
             ce_loss = F.cross_entropy(y_pred, y)
-            _, sigs, _ = get_signatures(feature, self.model.fcs)
-            hreg_same_class, hreg_diff_class = hammingDistance_classwise(sigs.float(), y, self.device)
-            h_reg = hreg_same_class / (hreg_diff_class + 1e-6)
-            total_loss = ce_loss + self.CFG.lambda_hreg * h_reg
+            # _, post_ac, _ = get_signatures(feature, self.model.fcs)
+            hreg_same_class, hreg_diff_class = hammingLoss_func(post_ac, y)
+            # print(hreg_diff_class, hreg_same_class)
+            h_reg = hreg_same_class /(hreg_diff_class + 1e-6)
+            total_loss = ce_loss + self.lambda_hreg(epoch) * h_reg
             return {'total_loss': total_loss, 'ce_loss': ce_loss, 'hreg': h_reg }
-        if self.CFG.lambda_hreg > 0:
-            self.criterion = compute_loss
-        else:
-            self.criterion = lambda _, y_pred, y: {'total_loss': F.cross_entropy(y_pred, y)}
+
+        self.criterion = compute_loss
+
 
     def configure_optimizers(self):
         # optimizer
@@ -73,7 +76,7 @@ class ExperimentMulti(pl.LightningModule):
                 'interval': 'epoch',
             }
         else:
-            steps_per_epoch = np.ceil(len(self.dataset.trainset[0]) /
+            steps_per_epoch = np.ceil(len(self.dataset.trainset) /
                                       self.config.batch_size)  # eval(self.CFG.steps_per_epoch)
             total_training_steps = self.CFG.n_epoch * steps_per_epoch
             warmup_steps = self.CFG.warmup * steps_per_epoch
@@ -87,25 +90,25 @@ class ExperimentMulti(pl.LightningModule):
     def forward(self, x):
         return self.model.forward(x)
 
-    def on_post_move_to_device(self):
-        super().on_post_move_to_device()
-        # used EWA or not
-        # init ema model after model moved to device
-        if self.CFG.ema_used:
-            self.ema_model = EMA(self.model, self.CFG.ema_decay)
-            logger.info("[EMA] initial ")
+    # def on_post_move_to_device(self):
+    #     super().on_post_move_to_device()
+    #     # used EWA or not
+    #     # init ema model after model moved to device
+    #     if self.CFG.ema_used:
+    #         self.ema_model = EMA(self.model, self.CFG.ema_decay)
+    #         logger.info("[EMA] initial ")
 
-        features = []
-        features_norm = []
-        for i, (batch_x, _) in enumerate(self.dataset.train_loader[0]):
-            feature = self.model.resnet18(batch_x.to(self.device)).squeeze().cpu()
-            feature_norm = torch.norm(feature, dim=1)
-            features_norm.extend(list(feature_norm))
-            features.extend(feature.view(-1))
-            if i > 19:
-                break
-        self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
-        self.log(f'historgram.features', wandb.Histogram(features))
+    #     features = []
+    #     features_norm = []
+    #     for i, (batch_x, _) in enumerate(self.dataset.train_loader[0]):
+    #         feature = self.model.resnet18(batch_x.to(self.device)).squeeze().cpu()
+    #         feature_norm = torch.norm(feature, dim=1)
+    #         features_norm.extend(list(feature_norm))
+    #         features.extend(feature.view(-1))
+    #         if i > 19:
+    #             break
+    #     self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
+    #     self.log(f'historgram.features', wandb.Histogram(features))
 
     def on_train_epoch_start(self) -> None:
         logger.info(f'======== Training epoch {self.current_epoch} ========')
@@ -121,13 +124,17 @@ class ExperimentMulti(pl.LightningModule):
         # y = torch.cat(y)
         x, y = batch
         features = self.model.resnet18(x).squeeze()
-        y_pred = self.model.fcs(features)
-        losses = self.criterion(features, y_pred, y) 
+        y_pred, pre_ac = self.model.feature_forward(features)
+        losses = self.criterion(pre_ac, y_pred, y, self.current_epoch) 
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
             self.log(f'train.{name}', metric.item(), on_step=False, on_epoch=True)
         self.log('train.acc', acc, on_step=False, on_epoch=True)
         return losses['total_loss']
+
+    # def on_after_backward(self) -> None:
+    #     for name, param in self.model.fcs.named_parameters():
+    #         print(param.grad)
 
     def training_step_end(self, loss, *args, **kwargs):
         if self.CFG.ema_used:
@@ -150,8 +157,8 @@ class ExperimentMulti(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
         features = self.model.resnet18(x).squeeze()
-        y_pred = self.model.fcs(features)
-        losses = self.criterion(features, y_pred, y) 
+        y_pred, pre_ac = self.model.feature_forward(features)
+        losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
             self.log(f'val.{name}', metric.item(), on_step=False, on_epoch=True)
@@ -171,8 +178,8 @@ class ExperimentMulti(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
         features = self.model.resnet18(x).squeeze()
-        y_pred = self.model.fcs(features)
-        losses = self.criterion(features, y_pred, y) 
+        y_pred, pre_ac = self.model.feature_forward(features)
+        losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
         acc, = acc_topk(y_pred, y)
         self.log('test', {**losses, 'acc': acc})
         return acc
@@ -198,7 +205,7 @@ class ExperimentMulti(pl.LightningModule):
             callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=20, mode='min', strict=True))
 
         trainer = pl.Trainer(
-            num_sanity_val_steps=-1,  #Sanity check runs n validation batches before starting the training
+            num_sanity_val_steps=0,  #Sanity check runs n validation batches before starting the training
             # accelerator="ddp",  # if torch.cuda.is_available() else 'ddp_cpu',
             # gradient_clip_val=1,
             callbacks=callbacks,
@@ -239,7 +246,7 @@ class ExperimentMulti(pl.LightningModule):
 
             if name in ['train', 'val', 'test']:
                 labels = torch.cat(labels, dim=0)
-                hdis_same, hdis_diff = hammingDistance_classwise(sigs, labels, self.device)
+                hdis_same, hdis_diff = self.hammingDistance_classwise(sigs, labels)
                 # comb = list(itertools.combinations(range(num_class), 2))
                 # for i in range(num_class):
                 #     comb.append((i, i))
