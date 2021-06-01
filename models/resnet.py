@@ -69,9 +69,10 @@ class ResNet(Module):
             for params in self.resnet18[:kwargs['freeze_layers']].parameters():
                 params.requires_grad = False
         else:
-            for name, params in self.resnet18.named_parameters():
-                if len(params.shape) > 1:
-                    eval(fc_winit.func)(params)
+            if fc_winit.name != 'default':
+                for name, params in self.resnet18.named_parameters():
+                    if len(params.shape) > 1:
+                        eval(fc_winit.func)(params)
 
     def forward(self, x):
         x = self.resnet18(x).squeeze()

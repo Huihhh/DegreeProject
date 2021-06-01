@@ -29,12 +29,17 @@ EXPERIMENT:
   dryrun: False
   wandb_project: degree-project-lit
 
+  TH: 0.5
+  n_epoch: 1024
+  debug: False # if debug, don't save checkpoints
+  plot_avg_distance: True
+
   # regularization
   wdecay: 0.001
   dis_reg: 0.00 # coefficient of distance reg term 
   reg_filter: composite_relu # or abs_relu, or sqrt_relu
-  lambda_hreg: 0.3
-  hreg_start: 60
+  lambda_hreg: 0
+  hreg_start: ${EXPERIMENT.n_epoch}
 
   # optimizer
   optim_lr: 0.001
@@ -50,11 +55,6 @@ EXPERIMENT:
   use_gpu: True
   ema_used: False
   ema_decay: 0.999
-
-  TH: 0.5
-  n_epoch: 1024
-  debug: False # if debug, don't save checkpoints
-  plot_avg_distance: True
 
   save_model: True
   save_every: 64
