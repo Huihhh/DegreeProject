@@ -32,7 +32,7 @@ def main(CFG: DictConfig) -> None:
 
     if CFG.DATASET.name == 'eurosat':
         model = ResNet(**CFG.MODEL)
-        dataset = Dataset(model.resnet18, **CFG.DATASET)
+        dataset = Dataset(resnet=model.resnet18, **CFG.DATASET)
         input_dim = 512
     else:
         # get datasets

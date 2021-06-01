@@ -10,7 +10,7 @@ def range_uniform(x, a=0.8, b=1.2):
 
 
 def tanh(w, a=-np.pi, b=np.pi):
-    n, m = w.shape
+    n, m = w.shape[:2]
     ww = np.zeros((n, m))
     for i in range(m):
         wn = np.tanh(np.linspace(a, b, n))
@@ -22,7 +22,7 @@ def tanh(w, a=-np.pi, b=np.pi):
 
 
 def cos(w, a=-np.pi, b=np.pi):
-    n, = w.shape
+    n, = w.shape[:2]
     wn = np.cos(np.linspace(a, b, n))
     w = torch.tensor(wn,
                      requires_grad=True,
@@ -36,16 +36,16 @@ def _no_grad_normal_(tensor, mean, std):
 
 
 def normal_custom(w):
-    fan_out, fan_in = w.shape
+    fan_out, fan_in = w.shape[:2]
     std = float(fan_in + fan_out) / float(fan_in * fan_out)
     return _no_grad_normal_(w, 0., std)
 
 def normal_custom1(w):
-    fan_out, fan_in = w.shape
+    fan_out, fan_in = w.shape[:2]
     std = np.sqrt(float(fan_in + fan_out) / float(fan_in * fan_out))
     return _no_grad_normal_(w, 0., std)
 
 def normal_custom2(w):
-    fan_out, fan_in = w.shape
+    fan_out, fan_in = w.shape[:2]
     std = np.sqrt(1 / np.abs(fan_in - fan_out))
     return _no_grad_normal_(w, 0., std)

@@ -19,10 +19,12 @@ class ResNet(Module):
                  bn_winit,
                  bn_binit,
                  seed=0,
+                 pretrained=False,
                  *args,
                  **kwargs) -> None:
         super().__init__()
-        resnet18 = models.resnet18(pretrained=True)
+        self.pretrained = pretrained
+        resnet18 = models.resnet18(pretrained=pretrained)
 
         # *** FC layers ***
         h_nodes = [resnet18.fc.in_features] + list(h_nodes)
@@ -63,9 +65,13 @@ class ResNet(Module):
         # *** ResNet ***
         self.resnet18 = torch.nn.Sequential(*(list(resnet18.children())[:-1]))
         # freeze the pretrained model
-        for params in self.resnet18[:kwargs['freeze_layers']].parameters():
-            params.requires_grad = False
-        
+        if pretrained:
+            for params in self.resnet18[:kwargs['freeze_layers']].parameters():
+                params.requires_grad = False
+        else:
+            for name, params in self.resnet18.named_parameters():
+                if len(params.shape) > 1:
+                    eval(fc_winit.func)(params)
 
     def forward(self, x):
         x = self.resnet18(x).squeeze()
