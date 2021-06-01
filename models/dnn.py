@@ -18,7 +18,7 @@ class SimpleNet(nn.Sequential):
                  bn_winit,
                  bn_binit,
                  use_bn=False,
-                 seed=0) -> None:
+                 seed=0, **kwargs) -> None:
         self.use_bn = use_bn
         h_nodes = [input_dim] + list(h_nodes)
         self.n_neurons = sum(h_nodes) + 1

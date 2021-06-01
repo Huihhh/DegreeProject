@@ -36,7 +36,7 @@ def get_torch_dataset(ndarray, name):
 
 
 class Dataset(Data.TensorDataset):
-    def __init__(self, resnet, name, n_train, n_val, n_test, batch_size=32, num_workers=4, **kwargs) -> None:
+    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, resnet=None, **kwargs) -> None:
         self.name = name
         self.n_train = n_train
         self.n_val = n_val
@@ -67,7 +67,7 @@ class Dataset(Data.TensorDataset):
         dataset = DATA[self.name]()
         self.num_classes = 2
         #TODO: sampling_to_plot_LR
-        self.sigs_loader = dataset.sampling_to_plot_LR(mean=0, var=1, noise_size=5000, **kwargs)
+        self.sampling_to_plot_LR = dataset.sampling_to_plot_LR
         self.trainset = get_torch_dataset(dataset.make_data(n_train, **kwargs), self.name)
         self.valset = get_torch_dataset(dataset.make_data(n_val, **kwargs), self.name)
         self.testset = get_torch_dataset(dataset.make_data(n_test, **kwargs), self.name)
@@ -138,13 +138,20 @@ class Dataset(Data.TensorDataset):
                                                         drop_last=False)
 
     def gen_dataloader(self):
-        kwargs = dict(num_workers=self.num_workers, pin_memory=True)
-        if isinstance(self.trainset, list):
-            self.train_loader = [Data.DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
+        if self.name == 'eurosat':
+            kwargs = dict(num_workers=self.num_workers, pin_memory=True)
+            if isinstance(self.trainset, list):
+                self.train_loader = [Data.DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
+            else:
+                self.train_loader = [Data.DataLoader(self.trainset, batch_sampler= BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size), **kwargs)]
+            self.val_loader = Data.DataLoader(self.valset, batch_sampler= BatchWeightedRandomSampler(self.valset, batch_size=self.batch_size), **kwargs)
+            self.test_loader = Data.DataLoader(self.testset,batch_sampler= BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size), **kwargs)
         else:
-            self.train_loader = [Data.DataLoader(self.trainset, batch_sampler= BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size), **kwargs)]
-        self.val_loader = Data.DataLoader(self.valset, batch_sampler= BatchWeightedRandomSampler(self.valset, batch_size=self.batch_size), **kwargs)
-        self.test_loader = Data.DataLoader(self.testset,batch_sampler= BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size), **kwargs)
+            kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
+            self.train_loader = Data.DataLoader(self.trainset, shuffle=True, **kwargs)
+            self.val_loader = Data.DataLoader(self.valset, **kwargs)
+            self.test_loader = Data.DataLoader(self.testset, **kwargs)
+
 
 
 class TransformedDataset(Dataset):

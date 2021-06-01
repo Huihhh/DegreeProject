@@ -2,6 +2,6 @@ from .dnn import SimpleNet
 from .resnet import ResNet
 
 MODEL = {
-    'shallow_dnn': SimpleNet,
+    'shallow_nn': SimpleNet,
     'resnet': ResNet
 }
