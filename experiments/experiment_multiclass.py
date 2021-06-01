@@ -18,7 +18,6 @@ from easydict import EasyDict as edict
 from pylab import *
 import os
 import sys
-import itertools
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
@@ -49,7 +48,7 @@ class ExperimentMulti(pl.LightningModule):
         if self.ema:
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
-        self.lambda_hreg = lambda epoch: (epoch > 2) * self.CFG.lambda_hreg
+        self.lambda_hreg = lambda epoch: (epoch > self.CFG.hreg_start) * self.CFG.lambda_hreg
 
     def init_criterion(self):
         self.hammingDistance_classwise = get_hammingdis(p=0)
@@ -247,19 +246,6 @@ class ExperimentMulti(pl.LightningModule):
             if name in ['train', 'val', 'test']:
                 labels = torch.cat(labels, dim=0)
                 hdis_same, hdis_diff = self.hammingDistance_classwise(sigs, labels)
-                # comb = list(itertools.combinations(range(num_class), 2))
-                # for i in range(num_class):
-                #     comb.append((i, i))
-                # same_class = diff_class =  0
-                # for class1, class2 in comb:
-                #     arr1 = sigs[np.where(labels == class1)].float()
-                #     arr2 = sigs[np.where(labels == class2)].float()
-                #     h_distance = hammingDistance([arr1, arr2], self.device)
-                #     if class1 == class2:
-                #         same_class += h_distance
-                #     else:
-                #         diff_class += h_distance
-                    # self.log(f'hamming_distance/class{class1}_class{class2}', h_distance)
             self.log(f'hamming_distance/same_class_{name}', hdis_same)
             self.log(f'hamming_distance/diff_class_{name}', hdis_diff)
             

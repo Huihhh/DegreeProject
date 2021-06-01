@@ -34,6 +34,7 @@ EXPERIMENT:
   dis_reg: 0.00 # coefficient of distance reg term 
   reg_filter: composite_relu # or abs_relu, or sqrt_relu
   lambda_hreg: 0.3
+  hreg_start: 60
 
   # optimizer
   optim_lr: 0.001
