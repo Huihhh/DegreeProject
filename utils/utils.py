@@ -96,7 +96,7 @@ def hammingDistance(arr, device):
 
 def get_hammingdis(p=1, m=1):
     if p == 1:
-        ac = lambda x: 1 / (1 + torch.exp(-m * x))
+        ac = torch.tanh
         norm = lambda x: x**2
     else:
         ac = norm = lambda x: x
