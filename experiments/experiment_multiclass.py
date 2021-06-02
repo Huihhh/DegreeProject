@@ -3,6 +3,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.trainer.supporters import CombinedLoader
 
 import torch
 from torch import optim
@@ -55,15 +56,13 @@ class ExperimentMulti(pl.LightningModule):
         hammingLoss_func= get_hammingdis(p=1)
         def compute_loss(post_ac, y_pred, y, epoch):
             ce_loss = F.cross_entropy(y_pred, y)
-            # _, post_ac, _ = get_signatures(feature, self.model.fcs)
             hreg_same_class, hreg_diff_class = hammingLoss_func(post_ac, y)
             # print(hreg_diff_class, hreg_same_class)
             h_reg = hreg_same_class /(hreg_diff_class + 1e-6)
             total_loss = ce_loss + self.lambda_hreg(epoch) * h_reg
-            return {'total_loss': total_loss, 'ce_loss': ce_loss, 'hreg': h_reg }
+            return {'total_loss': total_loss, 'ce_loss': ce_loss, 'hreg': h_reg}
 
         self.criterion = compute_loss
-
 
     def configure_optimizers(self):
         # optimizer
@@ -124,7 +123,7 @@ class ExperimentMulti(pl.LightningModule):
         x, y = batch
         features = self.model.resnet18(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
-        losses = self.criterion(pre_ac, y_pred, y, self.current_epoch) 
+        losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
         acc, = acc_topk(y_pred, y)
         for name, metric in losses.items():
             self.log(f'train.{name}', metric.item(), on_step=False, on_epoch=True)
@@ -175,7 +174,7 @@ class ExperimentMulti(pl.LightningModule):
             self.ema_model.restore()
 
     def test_step(self, batch, batch_idx):
-        x, y = batch[0], batch[1]
+        x, y = batch
         features = self.model.resnet18(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
         losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
@@ -212,7 +211,7 @@ class ExperimentMulti(pl.LightningModule):
             checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
             gpus=-1 if torch.cuda.is_available() else 0,
             max_epochs=self.CFG.n_epoch,
-            # gradient_clip_val=1,
+            gradient_clip_val=10,
             progress_bar_refresh_rate=0)
         trainer.fit(self, self.dataset.train_loader[0], self.dataset.val_loader)
         if self.CFG.debug:
@@ -224,8 +223,9 @@ class ExperimentMulti(pl.LightningModule):
         self.model.eval()
         self.log('epoch', self.current_epoch)
         # dataloader = [self.dataset.train_loader[0]]
-        noisy_dataloader = [self.dataset.noise_loader]
-        loaders = [[self.dataset.train_loader[0]], noisy_dataloader, [self.dataset.val_loader], [self.dataset.test_loader]]
+        noisy_dataloader = [self.dataset.noise_loader, self.dataset.train_loader[0]]
+        loaders = [[self.dataset.train_loader[0]], noisy_dataloader, [self.dataset.val_loader],
+                   [self.dataset.test_loader]]
         for i, name in enumerate(['train', 'noise', 'val', 'test']):
             sigs = []
             labels = []
@@ -239,7 +239,7 @@ class ExperimentMulti(pl.LightningModule):
                 sigs.append(sig)
                 labels.append(batch_y)
             sigs = torch.cat(sigs, dim=0)
-        
+
             h_distance = hammingDistance(sigs.float(), device=self.device)
             self.log(f'hamming_distance/{name}', h_distance.mean())
 
@@ -248,7 +248,6 @@ class ExperimentMulti(pl.LightningModule):
                 hdis_same, hdis_diff = self.hammingDistance_classwise(sigs, labels)
             self.log(f'hamming_distance/same_class_{name}', hdis_same)
             self.log(f'hamming_distance/diff_class_{name}', hdis_diff)
-            
 
             # get the unique signature of each region
             sigs = np.array([''.join(str(x) for x in s.tolist()) for s in sigs])
@@ -262,8 +261,7 @@ class ExperimentMulti(pl.LightningModule):
             region_counts = Counter(sigs)
             size_counts = Counter(region_counts.values())
             np_histogram = (list(size_counts.values()), [0] + sorted(list(size_counts.keys())))
-            self.log(f'LR_count_distrib.{name}',
-                     wandb.Histogram(np_histogram=np_histogram))
+            self.log(f'LR_count_distrib.{name}', wandb.Histogram(np_histogram=np_histogram))
 
             for key in sigs_to_idx:
                 idx = np.where(sigs == key)
