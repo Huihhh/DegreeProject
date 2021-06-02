@@ -174,10 +174,7 @@ class ExperimentMulti(pl.LightningModule):
             self.ema_model.restore()
 
     def test_step(self, batch, batch_idx):
-        x = torch.zeros_like(batch[0][0], device=self.device)
-        for b in batch:
-            x += b[0]
-        y = batch[0][1]
+        x, y = batch
         features = self.model.resnet18(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
         losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
@@ -217,11 +214,10 @@ class ExperimentMulti(pl.LightningModule):
             gradient_clip_val=10,
             progress_bar_refresh_rate=0)
         trainer.fit(self, self.dataset.train_loader[0], self.dataset.val_loader)
-        test_loaders = CombinedLoader([self.dataset.test_loader, self.dataset.noise_loader])
         if self.CFG.debug:
-            trainer.test(self, test_dataloaders=test_loaders)
+            trainer.test(self, test_dataloaders=self.dataset.test_loader)
         else:
-            trainer.test(test_dataloaders=test_loaders)
+            trainer.test(test_dataloaders=self.dataset.test_loader)
 
     def plot_signatures(self):
         self.model.eval()
