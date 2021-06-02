@@ -111,15 +111,15 @@ class LitExperiment(pl.LightningModule):
         self.init_criterion()
 
         # init grid points to plot linear regions
-        self.grid_points, self.grid_labels = dataset.sampling_to_plot_LR(dataset.make_data(**CFG.DATASET))
+        # self.grid_points, self.grid_labels = dataset.sampling_to_plot_LR(dataset.make_data(**CFG.DATASET))
 
         # init random points to plot average distance
-        if self.CFG.plot_avg_distance:
-            kwargs = {**CFG.MODEL, 'n_samples': CFG.MODEL.n_samples * 5, 'seed': 50}
-            self.random_points, _ = dataset.make_data(**kwargs)
-            self.random_points = torch.tensor(self.random_points,
-                                              device='cuda' if torch.cuda.is_available() else 'cpu',
-                                              dtype=torch.float)
+        # if self.CFG.plot_avg_distance:
+        #     kwargs = {**CFG.MODEL, 'n_samples': CFG.MODEL.n_samples * 5, 'seed': 50}
+        #     self.random_points, _ = dataset.make_data(**kwargs)
+        #     self.random_points = torch.tensor(self.random_points,
+        #                                       device='cuda' if torch.cuda.is_available() else 'cpu',
+        #                                       dtype=torch.float)
 
         # used EWA or not
         self.ema = self.CFG.ema_used
@@ -170,13 +170,13 @@ class LitExperiment(pl.LightningModule):
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
 
-    def on_train_epoch_start(self) -> None:
-        if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
-            self.plot_signatures()
-            if self.CFG.plot_avg_distance:
-                _, min_distances = compute_distance(self.random_points, self.model)
-                self.dis_x_neurons = torch.mean(min_distances) * self.model.n_neurons
-                self.log('dis_x_neurons', self.dis_x_neurons)
+    # def on_train_epoch_start(self) -> None:
+    #     if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
+    #         self.plot_signatures()
+    #         if self.CFG.plot_avg_distance:
+    #             _, min_distances = compute_distance(self.random_points, self.model)
+    #             self.dis_x_neurons = torch.mean(min_distances) * self.model.n_neurons
+    #             self.log('dis_x_neurons', self.dis_x_neurons)
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
