@@ -1,8 +1,10 @@
 import math
 import logging
 import torch
-import torch.utils.data as Data
+from torch.utils.data import DataLoader, TensorDataset
 from torchvision import transforms as T
+import pytorch_lightning as pl
+from pytorch_lightning.trainer.supporters import CombinedLoader
 import numpy as np
 from collections import defaultdict
 from .synthetic_data.circles import Circles
@@ -32,11 +34,12 @@ def get_torch_dataset(ndarray, name):
         Y = torch.from_numpy(ndarray[1]).float()
     else:
         Y = torch.from_numpy(ndarray[1]).long()
-    return Data.TensorDataset(X, Y)
+    return TensorDataset(X, Y)
 
 
-class Dataset(Data.TensorDataset):
+class Dataset(pl.LightningDataModule):
     def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, resnet=None, **kwargs) -> None:
+        super().__init__()
         self.name = name
         self.n_train = n_train
         self.n_val = n_val
@@ -48,7 +51,7 @@ class Dataset(Data.TensorDataset):
             self.gen_image_dataset(resnet, **kwargs)
         else:
             self.gen_point_dataset(**kwargs)
-        self.gen_dataloader()
+
         logger.info(f"Dataset: {self.name}")
         logger.info(f'>>> #trainset = {len(self.trainset)}')
         logger.info(f'>>> #valset = {len(self.valset)}')
@@ -67,7 +70,8 @@ class Dataset(Data.TensorDataset):
         dataset = DATA[self.name]()
         self.num_classes = 2
         #TODO: sampling_to_plot_LR
-        self.sampling_to_plot_LR = dataset.sampling_to_plot_LR
+        self.make_data = dataset.make_data
+        self.grid_data = dataset.sampling_to_plot_LR(*dataset.make_data(n_train, **kwargs))
         self.trainset = get_torch_dataset(dataset.make_data(n_train, **kwargs), self.name)
         self.valset = get_torch_dataset(dataset.make_data(n_val, **kwargs), self.name)
         self.testset = get_torch_dataset(dataset.make_data(n_test, **kwargs), self.name)
@@ -137,21 +141,56 @@ class Dataset(Data.TensorDataset):
                                                         pin_memory=True,
                                                         drop_last=False)
 
-    def gen_dataloader(self):
+    def train_dataloader(self) -> Any:
         if self.name == 'eurosat':
             kwargs = dict(num_workers=self.num_workers, pin_memory=True)
             if isinstance(self.trainset, list):
-                self.train_loader = [Data.DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
+                train_loader = [DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
             else:
-                self.train_loader = [Data.DataLoader(self.trainset, batch_sampler= BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size), **kwargs)]
-            self.val_loader = Data.DataLoader(self.valset, batch_sampler= BatchWeightedRandomSampler(self.valset, batch_size=self.batch_size), **kwargs)
-            self.test_loader = Data.DataLoader(self.testset,batch_sampler= BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size), **kwargs)
+                train_loader = [
+                    DataLoader(self.trainset,
+                               batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),
+                               **kwargs)
+                ]
         else:
             kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
-            self.train_loader = Data.DataLoader(self.trainset, shuffle=True, **kwargs)
-            self.val_loader = Data.DataLoader(self.valset, **kwargs)
-            self.test_loader = Data.DataLoader(self.testset, **kwargs)
+            train_loader = DataLoader(self.trainset, shuffle=True, **kwargs)
+        return train_loader
 
+    def val_dataloader(self):
+        if self.name == 'eurosat':
+            kwargs = dict(num_workers=self.num_workers, pin_memory=True)
+            return DataLoader(self.valset,
+                              batch_sampler=BatchWeightedRandomSampler(self.valset, batch_size=self.batch_size),
+                              **kwargs)
+        else:
+            return DataLoader(self.valset,
+                              batch_size=self.batch_size,
+                              num_workers=self.num_workers,
+                              pin_memory=True,
+                              drop_last=False)
+
+    def test_dataloader(self):
+        if self.name == 'eurosat':
+            kwargs = dict(num_workers=self.num_workers, pin_memory=True)
+            test_loader = DataLoader(self.testset,
+                                     batch_sampler=BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size),
+                                     **kwargs)
+            val_loader = DataLoader(self.trainset,
+                                    batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),
+                                    **kwargs)
+        else:
+            test_loader = DataLoader(self.testset,
+                                     batch_size=self.batch_size,
+                                     num_workers=self.num_workers,
+                                     pin_memory=True,
+                                     drop_last=False)
+            val_loader = DataLoader(self.trainset,
+                                    batch_size=self.batch_size,
+                                    num_workers=self.num_workers,
+                                    pin_memory=True,
+                                    drop_last=False)
+        return CombinedLoader({'test': test_loader, 'val': val_loader})
 
 
 class TransformedDataset(Dataset):
@@ -183,22 +222,21 @@ class TransformedDataset(Dataset):
 
 class BatchWeightedRandomSampler(Sampler):
     '''Samples elements for a batch with given probabilites of each element'''
-    def __init__(self,  data_source, batch_size, drop_last=True):
+    def __init__(self, data_source, batch_size, drop_last=True):
         if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or \
                 batch_size <= 0:
             raise ValueError("batch_size should be a positive integer value, "
                              "but got batch_size={}".format(batch_size))
         if not isinstance(drop_last, bool):
-            raise ValueError("drop_last should be a boolean value, but got "
-                             "drop_last={}".format(drop_last))
+            raise ValueError("drop_last should be a boolean value, but got " "drop_last={}".format(drop_last))
         self.targets = np.array(data_source.dataset.targets)[data_source.indexs]
         self.batch_size = batch_size
         self.drop_last = drop_last
 
     def __iter__(self):
         nclass = max(self.targets) + 1
-        sample_distrib = np.array([len(np.where(self.targets==i)[0]) for i in range(nclass)])
-        sample_distrib = sample_distrib/sample_distrib.max()
+        sample_distrib = np.array([len(np.where(self.targets == i)[0]) for i in range(nclass)])
+        sample_distrib = sample_distrib / sample_distrib.max()
 
         class_id = defaultdict(list)
         for idx, c in enumerate(self.targets):
@@ -216,7 +254,7 @@ class BatchWeightedRandomSampler(Sampler):
         label = []
         for i in range(len(self.targets)):
             c = np.argmax(sample_distrib - npos / max(npos.max(), 1))
-            label.append(class_id[c][npos[c]]) # the indexs of examples
+            label.append(class_id[c][npos[c]])  # the indexs of examples
             npos[c] += 1
 
         batch = []

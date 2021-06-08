@@ -24,7 +24,7 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import accuracy
+from utils.utils import accuracy, hammingDistance, get_hammingdis
 from utils.compute_distance import compute_distance
 from utils.get_signatures import get_signatures
 from utils.ema import EMA
@@ -111,11 +111,11 @@ class LitExperiment(pl.LightningModule):
         self.init_criterion()
 
         # init grid points to plot linear regions
-        self.grid_points, self.grid_labels = dataset.sampling_to_plot_LR(dataset.make_data(**CFG.DATASET))
+        self.grid_points, self.grid_labels = dataset.grid_data
 
         # init random points to plot average distance
         if self.CFG.plot_avg_distance:
-            kwargs = {**CFG.MODEL, 'n_samples': CFG.MODEL.n_samples * 5, 'seed': 50}
+            kwargs = {**CFG.DATASET, 'n_samples': CFG.DATASET.n_samples * 5, 'seed': 50}
             self.random_points, _ = dataset.make_data(**kwargs)
             self.random_points = torch.tensor(self.random_points,
                                               device='cuda' if torch.cuda.is_available() else 'cpu',
@@ -128,22 +128,13 @@ class LitExperiment(pl.LightningModule):
             logger.info("[EMA] initial ")
 
     def init_criterion(self):
-        if 'boundary_w' in self.config.keys():
-            inner_r = self.config.boundary_w - self.config.width * 2
-            outer_r = 1 - self.config.width * 2
-
-            def loss_func(pred, y):
-                bce_loss = torch.nn.BCELoss()(pred, y)
-                dis_reg = disReg(self.model, self.CFG.reg_filter, inner_r, outer_r)
-                total_loss = bce_loss + self.CFG.dis_reg * dis_reg  # + self.CFG.wdecay * l2_reg
-                return {'total_loss': total_loss, 'bce_loss': bce_loss, 'dis_reg': dis_reg}
-        else:
-
-            def loss_func(pred, y):
-                bce_loss = torch.nn.BCELoss()(pred, y)
-                return {'total_loss': bce_loss}
-
-        self.criterion = F.cross_entropy if self.model_name == 'resnet' else loss_func
+        self.hammingDistance_classwise = get_hammingdis(p=0)
+        # hammingLoss_func= get_hammingdis(p=1)
+        def compute_loss(post_ac, y_pred, y):
+            bce_loss = torch.nn.BCELoss()(y_pred, y)
+            total_loss = bce_loss
+            return {'total_loss': total_loss, 'bce_loss': bce_loss,}
+        self.criterion = compute_loss
 
     def configure_optimizers(self):
         # optimizer
@@ -180,8 +171,8 @@ class LitExperiment(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
-        y_pred = self.model.forward(x)
-        losses = self.criterion(y_pred, y)
+        y_pred, pre_ac = self.model.forward(x)
+        losses = self.criterion(pre_ac, y_pred, y)
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         for name, metric in losses.items():
@@ -197,8 +188,7 @@ class LitExperiment(pl.LightningModule):
     def on_train_epoch_end(self, outputs) -> None:
         for name, param in self.model.named_parameters():
             self.log(f'parameters/norm_{name}', LA.norm(param))
-
-    def on_validation_epoch_start(self):
+        
         if self.CFG.ema_used:
             logger.info(f'======== Validating on EMA model: epoch {self.current_epoch} ========')
             self.ema_model.update_buffer()
@@ -208,8 +198,8 @@ class LitExperiment(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        y_pred = self.model.forward(x)
-        losses = self.criterion(y_pred, y)
+        y_pred, pre_ac = self.model.forward(x)
+        losses = self.criterion(pre_ac, y_pred, y)
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         for name, metric in losses.items():
@@ -223,8 +213,8 @@ class LitExperiment(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
-        y_pred = self.model.forward(x)
-        losses = self.criterion(y_pred, y)
+        y_pred, pre_ac = self.model.forward(x)
+        losses = self.criterion(pre_ac, y_pred, y)
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         self.log('test', {**losses, 'acc': acc})
@@ -260,16 +250,22 @@ class LitExperiment(pl.LightningModule):
             # gradient_clip_val=1,
             progress_bar_refresh_rate=0)
         logger.info("======= Training =======")
-        trainer.fit(self, self.dataset.train_loader, self.dataset.val_loader)
+        trainer.fit(self, self.dataset)
         logger.info("======= Testing =======")
         if self.CFG.debug:
-            trainer.test(self, test_dataloaders=self.dataset.test_loader)
+            trainer.test(self, datamodule=self.dataset)
         else:
-            trainer.test(test_dataloaders=self.dataset.test_loader)
+            trainer.test(datamodule=self.dataset)
 
     def plot_signatures(self):
         xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
+
+        #Hamming distance
+        hdis_same_grid, hdis_diff_grid = self.hammingDistance_classwise(sigs_grid, torch.tensor(yy).long())
+        self.log(f'Hamming distance/[grid points] from same class', hdis_same_grid)
+        self.log(f'Hamming distance/[grid points] from different classes', hdis_diff_grid)
+
         net_out = torch.sigmoid(net_out)
         pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, 1.0, 0.0).numpy()
         sigs_grid = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_grid])
@@ -285,6 +281,12 @@ class LitExperiment(pl.LightningModule):
         grid_labels = self.grid_labels.reshape(-1)
         input_points, labels = self.dataset.trainset.tensors
         _, sigs_train, _ = get_signatures(input_points.to(self.device), self.model)
+
+        #Hamming distance
+        hdis_same, hdis_diff = self.hammingDistance_classwise(sigs_train, labels.squeeze().long())
+        self.log(f'Hamming distance/[training points] from same class', hdis_same)
+        self.log(f'Hamming distance/[training points] from different classes', hdis_diff)
+
         sigs_train = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_train])
         sigs_train = Counter(sigs_train)
 

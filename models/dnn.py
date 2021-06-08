@@ -21,26 +21,28 @@ class SimpleNet(nn.Sequential):
                  seed=0, **kwargs) -> None:
         self.use_bn = use_bn
         h_nodes = [input_dim] + list(h_nodes)
-        self.n_neurons = sum(h_nodes) + 1
+        self.n_neurons = sum(h_nodes)
 
         self.layers = []
         for i in range(len(h_nodes) - 1):
+            s = nn.Sequential()
             torch.random.manual_seed(i + seed)
             fc = nn.Linear(h_nodes[i], h_nodes[i + 1])
             if fc_winit.name != 'default':  #TODO: more elegant way
                 eval(fc_winit.func)(fc.weight, **fc_winit.params)
             if fc_binit.name != 'default':
                 eval(fc_binit.func)(fc.bias, **fc_binit.params)
+            s.add_module('fc', fc)
             ac = ACT_METHOD[activation]
+            s.add_module('ac', ac)
             if self.use_bn:
                 bn = nn.BatchNorm1d(h_nodes[i + 1])
                 if bn_winit.name != 'default':
                     eval(bn_winit.func)(bn.weight, **bn_winit.params)
                 if bn_binit.name != 'default':
                     eval(bn_binit.func)(bn.bias, **bn_binit.params)
-                self.layers.append(nn.Sequential(fc, bn, ac))
-            else:
-                self.layers.append(nn.Sequential(fc, ac))
+                s.add_module('bn', bn)            
+            self.layers.append(s)
 
         predict = nn.Linear(h_nodes[-1], out_dim)
         if fc_winit.name != 'default':
@@ -53,9 +55,19 @@ class SimpleNet(nn.Sequential):
     def __str__(self) -> str:
         return super().__str__() + '\ntorch.sigmoid'
 
-    def forward(self, input):
-        x = super().forward(input)
-        return torch.sigmoid(x)
+    # def forward(self, input):
+    #     x = super().forward(input)
+    #     return torch.sigmoid(x)
+       
+    def forward(self, x):
+        pre_ac = []
+        for net in self.layers[:-1]:
+            x = net.fc(x)
+            pre_ac.append(x)
+            x = net.ac(x) #TODO: if use bn
+        x = self.layers[-1](x)
+        pre_ac = torch.cat(pre_ac, dim=1)
+        return torch.sigmoid(x), pre_ac
 
 
 if __name__ == "__main__":

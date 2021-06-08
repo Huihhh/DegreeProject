@@ -88,13 +88,13 @@ class ExperimentMulti(pl.LightningModule):
     def forward(self, x):
         return self.model.forward(x)
 
-    # def on_post_move_to_device(self):
-    #     super().on_post_move_to_device()
-    #     # used EWA or not
-    #     # init ema model after model moved to device
-    #     if self.CFG.ema_used:
-    #         self.ema_model = EMA(self.model, self.CFG.ema_decay)
-    #         logger.info("[EMA] initial ")
+    def on_post_move_to_device(self):
+        super().on_post_move_to_device()
+        # used EWA or not
+        # init ema model after model moved to device
+        if self.CFG.ema_used:
+            self.ema_model = EMA(self.model, self.CFG.ema_decay)
+            logger.info("[EMA] initial ")
 
     #     features = []
     #     features_norm = []
@@ -114,13 +114,13 @@ class ExperimentMulti(pl.LightningModule):
             self.plot_signatures()
 
     def training_step(self, batch, batch_idx):
-        # x, y = [], []
-        # for b in batch:
-        #     x.append(b[0])
-        #     y.append(b[1])
-        # x = torch.cat(x)
-        # y = torch.cat(y)
-        x, y = batch
+        x, y = [], []
+        for b in batch:
+            x.append(b[0])
+            y.append(b[1])
+        x = torch.cat(x)
+        y = torch.cat(y)
+        # x, y = batch
         features = self.model.resnet18(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
         losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
@@ -174,13 +174,19 @@ class ExperimentMulti(pl.LightningModule):
             self.ema_model.restore()
 
     def test_step(self, batch, batch_idx):
-        x, y = batch
+        n_test = batch['test'][0].shape[0]
+        x = torch.cat([batch['test'][0], batch['val'][0]])
+        y = torch.cat([batch['test'][1], batch['val'][1]])
         features = self.model.resnet18(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
-        losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
-        acc, = acc_topk(y_pred, y)
-        self.log('test', {**losses, 'acc': acc})
-        return acc
+        y_pred_test, y_pred_val = y_pred[:n_test], y_pred[n_test:]
+        pre_ac_test, pre_ac_val = pre_ac[:n_test], pre_ac[n_test:]
+        losses_test = self.criterion(pre_ac_test, y_pred_test, batch['test'][1], self.current_epoch)
+        acc_test, = acc_topk(y_pred_test, batch['test'][1])
+        acc_val, = acc_topk(y_pred_val, batch['val'][1])
+        self.log('test', {**losses_test, 'acc': acc_test})
+        self.log('Generalization_Gap', acc_val - acc_test, on_epoch=True, on_step=False)
+        return acc_test
 
     def run(self):
         wandb_logger = WandbLogger(
@@ -213,19 +219,19 @@ class ExperimentMulti(pl.LightningModule):
             max_epochs=self.CFG.n_epoch,
             gradient_clip_val=10,
             progress_bar_refresh_rate=0)
-        trainer.fit(self, self.dataset.train_loader[0], self.dataset.val_loader)
+        trainer.fit(self, self.dataset)
         if self.CFG.debug:
-            trainer.test(self, test_dataloaders=self.dataset.test_loader)
+            trainer.test(self, datamodule=self.dataset)
         else:
-            trainer.test(test_dataloaders=self.dataset.test_loader)
+            trainer.test(datamodule=self.dataset)
 
     def plot_signatures(self):
         self.model.eval()
         self.log('epoch', self.current_epoch)
-        # dataloader = [self.dataset.train_loader[0]]
-        noisy_dataloader = [self.dataset.noise_loader, self.dataset.train_loader[0]]
-        loaders = [[self.dataset.train_loader[0]], noisy_dataloader, [self.dataset.val_loader],
-                   [self.dataset.test_loader]]
+        train_dataloader = self.dataset.train_dataloader()[0]
+        noisy_dataloader = [self.dataset.noise_loader, train_dataloader]
+        loaders = [[train_dataloader], noisy_dataloader, [self.dataset.val_dataloader()],
+                   [self.dataset.test_dataloader().loaders['test']]]
         for i, name in enumerate(['train', 'noise', 'val', 'test']):
             sigs = []
             labels = []

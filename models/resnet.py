@@ -27,7 +27,7 @@ class ResNet(Module):
         # *** FC layers ***
         h_nodes = [resnet18.fc.in_features] + list(h_nodes)
         self.use_bn = use_bn
-        self.n_neurons = sum(h_nodes) + out_dim
+        self.n_neurons = sum(h_nodes)
         self.layers = []
         for i in range(len(h_nodes) - 1):
             s = nn.Sequential()
