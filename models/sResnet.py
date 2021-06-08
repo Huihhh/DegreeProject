@@ -2,12 +2,16 @@ from torch import nn
 from torch.nn.modules import Module
 import torchvision.models as models
 import torch
+import os
+import sys
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
 from utils.init_methods import *
 
 ACT_METHOD = {'relu': nn.ReLU(), 'leaky_relu': nn.LeakyReLU()}
 
 
-class ResNet(Module):
+class SResNet(Module):
     def __init__(self,
                  h_nodes,
                  out_dim,
@@ -22,10 +26,10 @@ class ResNet(Module):
                  *args,
                  **kwargs) -> None:
         super().__init__()
-        resnet = models.resnet18(pretrained=True)
+        resnet18 = models.resnet18(pretrained=True)
 
         # *** FC layers ***
-        h_nodes = [resnet.fc.in_features] + list(h_nodes)
+        h_nodes = [64] + list(h_nodes)
         self.use_bn = use_bn
         self.n_neurons = sum(h_nodes)
         self.layers = []
@@ -61,11 +65,7 @@ class ResNet(Module):
         self.fcs = torch.nn.Sequential(*self.layers)
 
         # *** ResNet ***
-        self.resnet = torch.nn.Sequential(*(list(resnet.children())[:-1]))
-        # freeze the pretrained model
-        for params in self.resnet[:kwargs['freeze_layers']].parameters():
-            params.requires_grad = False
-        
+        self.resnet = torch.nn.Sequential(*(list(resnet18.children())[:5]), nn.AdaptiveAvgPool2d((1, 1)))        
 
     def forward(self, x):
         x = self.resnet(x).squeeze()
@@ -89,15 +89,15 @@ if __name__ == "__main__":
     import sys
     sys.path.append(os.getcwd())
     print(os.getcwd())
-    import os
-    import sys
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    sys.path.append(BASE_DIR)
+
 
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG.MODEL), '\n')
-        net = ResNet(**CFG.MODEL)
+        net = SResNet(**CFG.MODEL)
         print(net)
+        inputs = torch.randn((1, 3, 64, 64))
+        outputs = net(inputs)
+        print(outputs.shape)
 
     main()

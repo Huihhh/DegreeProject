@@ -99,7 +99,7 @@ class ExperimentMulti(pl.LightningModule):
     #     features = []
     #     features_norm = []
     #     for i, (batch_x, _) in enumerate(self.dataset.train_loader[0]):
-    #         feature = self.model.resnet18(batch_x.to(self.device)).squeeze().cpu()
+    #         feature = self.model.resnet(batch_x.to(self.device)).squeeze().cpu()
     #         feature_norm = torch.norm(feature, dim=1)
     #         features_norm.extend(list(feature_norm))
     #         features.extend(feature.view(-1))
@@ -121,7 +121,7 @@ class ExperimentMulti(pl.LightningModule):
         x = torch.cat(x)
         y = torch.cat(y)
         # x, y = batch
-        features = self.model.resnet18(x).squeeze()
+        features = self.model.resnet(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
         losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
         acc, = acc_topk(y_pred, y)
@@ -154,7 +154,7 @@ class ExperimentMulti(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        features = self.model.resnet18(x).squeeze()
+        features = self.model.resnet(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
         losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
         acc, = acc_topk(y_pred, y)
@@ -177,7 +177,7 @@ class ExperimentMulti(pl.LightningModule):
         n_test = batch['test'][0].shape[0]
         x = torch.cat([batch['test'][0], batch['val'][0]])
         y = torch.cat([batch['test'][1], batch['val'][1]])
-        features = self.model.resnet18(x).squeeze()
+        features = self.model.resnet(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
         y_pred_test, y_pred_val = y_pred[:n_test], y_pred[n_test:]
         pre_ac_test, pre_ac_val = pre_ac[:n_test], pre_ac[n_test:]
@@ -240,7 +240,7 @@ class ExperimentMulti(pl.LightningModule):
                 for b in batch:
                     batch_x += b[0]
                 batch_y = batch[0][1]
-                feature = self.model.resnet18(batch_x.to(self.device)).squeeze()
+                feature = self.model.resnet(batch_x.to(self.device)).squeeze()
                 _, sig, _ = get_signatures(feature, self.model.fcs)
                 sigs.append(sig)
                 labels.append(batch_y)

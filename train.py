@@ -31,9 +31,9 @@ def main(CFG: DictConfig) -> None:
     cudnn.benchmark = False
 
     if CFG.DATASET.name == 'eurosat':
-        model = ResNet(**CFG.MODEL)
-        dataset = Dataset(resnet=model.resnet18, **CFG.DATASET)
-        input_dim = 512
+        model = MODEL[CFG.MODEL.name](**CFG.MODEL)
+        dataset = Dataset(resnet=model.resnet, **CFG.DATASET)
+        input_dim = model.fcs[0].fc.in_features
     else:
         # get datasets
         dataset = Dataset(**CFG.DATASET)
@@ -48,7 +48,7 @@ def main(CFG: DictConfig) -> None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device=device)
 
-    if CFG.MODEL.name == 'resnet':
+    if CFG.MODEL.name in ['resnet', 'sResnet']:
         experiment = ExperimentMulti(model, dataset, CFG)
     else:
         experiment = LitExperiment(model, dataset, CFG)
