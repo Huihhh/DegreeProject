@@ -3,11 +3,12 @@ import random
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
+import pytorch_lightning as pl
 
 from omegaconf import DictConfig, OmegaConf
 import hydra
-import ignite
 import logging
+import os
 
 from datasets.dataset import Dataset
 from models import *
@@ -23,10 +24,11 @@ def main(CFG: DictConfig) -> None:
     if CFG.Logging.seed == 'None':
         CFG.Logging.seed = random.randint(1, 10000)
     random.seed(CFG.Logging.seed)
+    os.environ['PYTHONHASHSEED'] = str(CFG.Logging.seed)
     np.random.seed(CFG.Logging.seed)
     torch.manual_seed(CFG.Logging.seed)
     torch.cuda.manual_seed_all(CFG.Logging.seed)
-    ignite.utils.manual_seed(CFG.Logging.seed)
+    pl.seed_everything(CFG.Logging.seed)
     cudnn.deterministic = True
     cudnn.benchmark = False
 
