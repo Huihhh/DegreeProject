@@ -8,6 +8,7 @@ from omegaconf import DictConfig, OmegaConf
 import hydra
 import ignite
 import logging
+import os, sys
 
 from datasets.dataset import Dataset
 from models import *
@@ -28,7 +29,11 @@ def main(CFG: DictConfig) -> None:
     torch.cuda.manual_seed_all(CFG.Logging.seed)
     ignite.utils.manual_seed(CFG.Logging.seed)
     cudnn.deterministic = True
-    cudnn.benchmark = False
+    cudnn.benchmark = False #python hash seed (env variable: disable)
+    hashseed = os.getenv('PYTHONHASHSEED')
+    if not hashseed:
+        os.environ['PYTHONHASHSEED'] = '0'
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     if CFG.DATASET.name == 'eurosat':
         model = MODEL[CFG.MODEL.name](**CFG.MODEL)
