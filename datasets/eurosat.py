@@ -57,7 +57,7 @@ class EuroSat(VisionDataset):
         if not os.path.exists(rootdir + data_dir):
             download_data(rootdir + '/data/EuroSAT_RGB.zip', 'http://madm.dfki.de/files/sentinel/EuroSAT.zip')
             unzip_file(rootdir + '/data/EuroSAT_RGB.zip', rootdir + '/data/EuroSAT_RGB')
-        filepaths = glob.glob(rootdir + data_dir + '/*/*.jpg')
+        filepaths = sorted(glob.glob(rootdir + data_dir + '/*/*.jpg')) ##!!for reproducibility, sort them!
         for filepath in filepaths:
             class_name = filepath.split('/')[-1].split('_')[0]
             class_counter[class_name] += 1
