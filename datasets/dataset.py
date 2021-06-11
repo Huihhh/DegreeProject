@@ -112,7 +112,7 @@ class Dataset(Data.TensorDataset):
 
     def gen_dataloader(self):
         kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
-        self.train_loader = Data.DataLoader(self.trainset, shuffle=True, **kwargs)
+        self.train_loader = Data.DataLoader(self.trainset, shuffle=False, **kwargs)
         self.val_loader = Data.DataLoader(self.valset, **kwargs)
         self.test_loader = Data.DataLoader(self.testset, **kwargs)
 
