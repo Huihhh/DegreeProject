@@ -85,6 +85,7 @@ class ExperimentMulti(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
+        print(y.sum(), x.mean())
         y_pred = self.model.forward(x)
         losses = self.criterion(y_pred, y)
         acc, = acc_topk(y_pred, y)
