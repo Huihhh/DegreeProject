@@ -3,16 +3,19 @@ import logging
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision import transforms as T
+from torch.utils.data.sampler import Sampler
+from torch._six import int_classes as _int_classes
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.supporters import CombinedLoader
 import numpy as np
+import wandb
 from collections import defaultdict
 from .synthetic_data.circles import Circles
 from .synthetic_data.moons import Moons
 from .synthetic_data.sphere import Sphere
 from .synthetic_data.spiral import Spiral
-from torch.utils.data.sampler import Sampler
-from torch._six import int_classes as _int_classes
+from utils.upload_data_artifacts import create_artifacts
+
 # from .iris import Iris
 from .eurosat import *
 
@@ -77,119 +80,106 @@ class Dataset(pl.LightningDataModule):
         self.testset = get_torch_dataset(dataset.make_data(n_test, **kwargs), self.name)
 
     def gen_image_dataset(self, resnet, data_dir, **kwargs):
-        dataset = DATA[self.name](data_dir)
-        self.num_classes = dataset.num_classes
-        N = len(dataset.targets)
-        if isinstance(self.n_test, int):
-            n_test = self.n_test
-        elif isinstance(self.n_test, float):
-            n_test = int(N * self.n_test)
+        TRANSFORM = {
+            'mean': (0.3444, 0.3803, 0.4078),  #(0.4914, 0.4822, 0.4465),  #
+            'std': (0.2037, 0.1366, 0.1148)  #}, # (0.2471, 0.2435, 0.2616),  # 
+        }
+        run = wandb.init(project=self.name, job_type="train")
+        try:
+            data = run.use_artifact('split-0.7-0.1-0.2_27000:latest', type="balanced_data")
+        except:
+            rootdir = hydra.utils.get_original_cwd()
+            create_artifacts(rootdir, data_dir)
+            data = run.use_artifact('split-0.7-0.1-0.2_27000:latest', type="balanced_data")
 
-        # sample labeled
-        categorized_idx = [list(np.where(np.array(dataset.targets) == i)[0])
-                           for i in range(dataset.num_classes)]  #[[], [],]
+        data_dir = data.download()
+        train_dir = os.path.join(data_dir, "train")
+        val_dir = os.path.join(data_dir, "val")
+        test_dir = os.path.join(data_dir, "test")
+        transform = T.Compose([T.ToTensor(), T.Normalize(mean=TRANSFORM['mean'], std=TRANSFORM['std'])])
+        self.trainset = EuroSat(train_dir, transform=transform)
+        self.valset = EuroSat(val_dir, transform=transform)
+        self.testset = EuroSat(test_dir, transform=transform)
 
-        sample_distrib = np.array([len(idx_group) for idx_group in categorized_idx])
-        sample_distrib = sample_distrib / sample_distrib.max()
+        # # *** stack augmented data ***
+        # if 'use_aug' in kwargs.keys() and kwargs['use_aug']:
+        #     logger.info('********* apply data augmentation ***********')
+        #     mean = TRANSFORM['mean']
+        #     std = TRANSFORM['std']
+        #     transform = T.Compose([
+        #         T.RandomHorizontalFlip(p=kwargs['flip_p']),
+        #         T.RandomCrop(size=64, padding=int(64 * 0.125), padding_mode='reflect'),
+        #         T.ToTensor(),
+        #         T.Normalize(mean=mean, std=std)
+        #     ])
+        #     trainset_aug = TransformedDataset(dataset, idx_train, transform=transform)
+        #     self.trainset = [self.trainset, trainset_aug]
 
-        if kwargs['shuffle']:
-            for i in range(dataset.num_classes):
-                np.random.shuffle(categorized_idx[i])
+        noise = []
+        noise_size = len(self.trainset)
+        for i in range(3):
+            noise.append(np.random.normal(TRANSFORM['mean'][i], TRANSFORM['std'][i], [noise_size, i, 64, 64]))
+        noise = np.concatenate(noise, axis=1)
 
-        # rerange indexs following the rule so that labels are ranged like: 0,1,....9,0,....9,...
-        # adopted from https://github.com/google-research/fixmatch/blob/79f9fd3e6267035d685864beaec40dd45408ecb0/scripts/create_split.py#L87
-        npos = np.zeros(dataset.num_classes, np.int64)
-        idx_test = []
-        for i in range(n_test):
-            c = np.argmax(sample_distrib - npos / max(npos.max(), 1))
-            idx_test.append(categorized_idx[c][npos[c]])  # the indexs of examples
-            npos[c] += 1
-
-        idx_train = np.setdiff1d(np.array(np.arange(N)), np.array(idx_test))
-
-        n_val_per_class = int(N * self.n_val // dataset.num_classes)
-        idx_val = []
-        for idxs in categorized_idx:
-            idxs = list(set(idxs) - set(idx_test))
-            idx = np.random.choice(idxs, n_val_per_class, replace=False)
-            idx_val = np.concatenate((idx_val, idx), axis=None)
-        idx_val = list(idx_val.astype(int))
-        idx_train = np.setdiff1d(idx_train, np.array(idx_val))
-
-        self.trainset = TransformedDataset(dataset, idx_train)
-        # *** stack augmented data ***
-        if 'use_aug' in kwargs.keys() and kwargs['use_aug']:
-            logger.info('********* apply data augmentation ***********')
-            mean = TRANSFORM['mean']
-            std = TRANSFORM['std']
-            transform = T.Compose([
-                T.RandomHorizontalFlip(p=kwargs['flip_p']),
-                T.RandomCrop(size=64, padding=int(64 * 0.125), padding_mode='reflect'),
-                T.ToTensor(),
-                T.Normalize(mean=mean, std=std)
-            ])
-            trainset_aug = TransformedDataset(dataset, idx_train, transform=transform)
-            self.trainset = [self.trainset, trainset_aug]
-
-        # self.trainset = Data.ConcatDataset([self.trainset, dataset_aug])
-        self.valset = TransformedDataset(dataset, idx_val)
-        self.testset = TransformedDataset(dataset, idx_test)
-
-        self.noise_loader = dataset.sampling_to_plot_LR(noise_size=len(idx_train),
-                                                        batch_size=self.batch_size,
-                                                        num_workers=self.num_workers,
-                                                        pin_memory=True,
-                                                        drop_last=False)
+        noise_label = np.zeros(
+            len(noise)) * -1  #np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
+        noise = torch.from_numpy(noise).float()
+        noise_label = torch.from_numpy(noise_label).long()
+        dataset = Data.TensorDataset(noise, noise_label)
+        self.noise_loader = Data.DataLoader(dataset,
+                                            batch_size=self.batch_size,
+                                            num_workers=self.num_workers,
+                                            pin_memory=True)
 
     def train_dataloader(self) -> Any:
-        if self.name == 'eurosat':
-            kwargs = dict(num_workers=self.num_workers, pin_memory=True)
-            if isinstance(self.trainset, list):
-                train_loader = [DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
-            else:
-                train_loader = [
-                    DataLoader(self.trainset,
-                               batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),
-                               **kwargs)
-                ]
-        else:
-            kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
-            train_loader = DataLoader(self.trainset, shuffle=True, **kwargs)
-        return train_loader
+        # if self.name == 'eurosat':
+        #     kwargs = dict(num_workers=self.num_workers, pin_memory=True)
+        #     if isinstance(self.trainset, list):
+        #         train_loader = [DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
+        #     else:
+        #         train_loader = [
+        #             DataLoader(self.trainset,
+        #                        batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),
+        #                        **kwargs)
+        #         ]
+        # else:
+        kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
+        train_loader = DataLoader(self.trainset, shuffle=True, **kwargs)
+        return [train_loader]
 
     def val_dataloader(self):
-        if self.name == 'eurosat':
-            kwargs = dict(num_workers=self.num_workers, pin_memory=True)
-            return DataLoader(self.valset,
-                              batch_sampler=BatchWeightedRandomSampler(self.valset, batch_size=self.batch_size),
-                              **kwargs)
-        else:
-            return DataLoader(self.valset,
-                              batch_size=self.batch_size,
-                              num_workers=self.num_workers,
-                              pin_memory=True,
-                              drop_last=False)
+        # if self.name == 'eurosat':
+        #     kwargs = dict(num_workers=self.num_workers, pin_memory=True)
+        #     return DataLoader(self.valset,
+        #                       batch_sampler=BatchWeightedRandomSampler(self.valset, batch_size=self.batch_size),
+        #                       **kwargs)
+        # else:
+        return DataLoader(self.valset,
+                          batch_size=self.batch_size,
+                          num_workers=self.num_workers,
+                          pin_memory=True,
+                          drop_last=False)
 
     def test_dataloader(self):
-        if self.name == 'eurosat':
-            kwargs = dict(num_workers=self.num_workers, pin_memory=True)
-            test_loader = DataLoader(self.testset,
-                                     batch_sampler=BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size),
-                                     **kwargs)
-            val_loader = DataLoader(self.trainset,
-                                    batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),
-                                    **kwargs)
-        else:
-            test_loader = DataLoader(self.testset,
-                                     batch_size=self.batch_size,
-                                     num_workers=self.num_workers,
-                                     pin_memory=True,
-                                     drop_last=False)
-            val_loader = DataLoader(self.trainset,
+        # if self.name == 'eurosat':
+        #     kwargs = dict(num_workers=self.num_workers, pin_memory=True)
+        #     test_loader = DataLoader(self.testset,
+        #                              batch_sampler=BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size),
+        #                              **kwargs)
+        #     val_loader = DataLoader(self.trainset,
+        #                             batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),
+        #                             **kwargs)
+        # else:
+        test_loader = DataLoader(self.testset,
                                     batch_size=self.batch_size,
                                     num_workers=self.num_workers,
                                     pin_memory=True,
                                     drop_last=False)
+        val_loader = DataLoader(self.trainset,
+                                batch_size=self.batch_size,
+                                num_workers=self.num_workers,
+                                pin_memory=True,
+                                drop_last=False)
         return CombinedLoader({'test': test_loader, 'val': val_loader})
 
 
@@ -229,7 +219,7 @@ class BatchWeightedRandomSampler(Sampler):
                              "but got batch_size={}".format(batch_size))
         if not isinstance(drop_last, bool):
             raise ValueError("drop_last should be a boolean value, but got " "drop_last={}".format(drop_last))
-        self.targets = np.array(data_source.dataset.targets)[data_source.indexs]
+        self.targets = np.array(data_source.targets)
         self.batch_size = batch_size
         self.drop_last = drop_last
 

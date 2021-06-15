@@ -23,17 +23,17 @@ MODEL:
   seed: ${DATASET.seed}
 
 EXPERIMENT:
-  name: 'ToyExperiment'
+  name: 'EuroSat'
 
   # wandb setting
   dryrun: False
-  wandb_project: degree-project-lit
+  wandb_project: EuroSat
 
   # regularization
   wdecay: 0.001
   dis_reg: 0.00 # coefficient of distance reg term 
   reg_filter: composite_relu # or abs_relu, or sqrt_relu
-  lambda_hreg: 0.3
+  lambda_hreg: 0
   hreg_start: 0
 
   # optimizer

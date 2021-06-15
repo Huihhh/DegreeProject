@@ -107,7 +107,7 @@ def get_hammingdis(p=1, m=1):
         sigs = ac(sigs)
         num_classes = labels.max()
         hreg_same_class = hreg_diff_class = 0
-        if num_classes == 1:
+        if num_classes == 0:
             hreg_same_class = F.pdist(sigs.float(), p=p).mean()
         else:
             for i in range(num_classes.item()):

@@ -38,9 +38,7 @@ class ExperimentMulti(pl.LightningModule):
         self.model_name = CFG.MODEL.name
         self.dataset = dataset
         self.CFG = CFG.EXPERIMENT
-        self.config = edict()
-        for value in CFG.values():
-            self.config.update(value)
+        self.config = CFG
 
         self.init_criterion()
 
@@ -59,7 +57,7 @@ class ExperimentMulti(pl.LightningModule):
             hreg_same_class, hreg_diff_class = hammingLoss_func(post_ac, y)
             # print(hreg_diff_class, hreg_same_class)
             h_reg = hreg_same_class /(hreg_diff_class + 1e-6)
-            total_loss = ce_loss + self.lambda_hreg(epoch) * h_reg
+            total_loss = ce_loss# + self.lambda_hreg(epoch) * h_reg
             return {'total_loss': total_loss, 'ce_loss': ce_loss, 'hreg': h_reg}
 
         self.criterion = compute_loss
@@ -75,7 +73,7 @@ class ExperimentMulti(pl.LightningModule):
             }
         else:
             steps_per_epoch = np.ceil(len(self.dataset.trainset) /
-                                      self.config.batch_size)  # eval(self.CFG.steps_per_epoch)
+                                      wandb.config.batch_size)  # eval(self.CFG.steps_per_epoch)
             total_training_steps = self.CFG.n_epoch * steps_per_epoch
             warmup_steps = self.CFG.warmup * steps_per_epoch
             scheduler = {
@@ -108,10 +106,10 @@ class ExperimentMulti(pl.LightningModule):
     #     self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
     #     self.log(f'historgram.features', wandb.Histogram(features))
 
-    def on_train_epoch_start(self) -> None:
-        logger.info(f'======== Training epoch {self.current_epoch} ========')
-        if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
-            self.plot_signatures()
+    # def on_train_epoch_start(self) -> None:
+    #     logger.info(f'======== Training epoch {self.current_epoch} ========')
+    #     if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
+    #         self.plot_signatures()
 
     def training_step(self, batch, batch_idx):
         x, y = [], []
@@ -120,11 +118,13 @@ class ExperimentMulti(pl.LightningModule):
             y.append(b[1])
         x = torch.cat(x)
         y = torch.cat(y)
-        # x, y = batch
         features = self.model.resnet(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
         losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
+        if batch_idx < 5:
+            print(losses['total_loss'].item(), y_pred.sum().item(), x.sum().item(), y.sum().item())
         acc, = acc_topk(y_pred, y)
+        # log metrics
         for name, metric in losses.items():
             self.log(f'train.{name}', metric.item(), on_step=False, on_epoch=True)
         self.log('train.acc', acc, on_step=False, on_epoch=True)
@@ -151,15 +151,19 @@ class ExperimentMulti(pl.LightningModule):
             self.ema_model.apply_shadow()
         else:
             logger.info(f'======== Validating on Raw model: epoch {self.current_epoch} ========')
+        
+        # # save validation predictions as an artifact
+        # val_res_at = wandb.Artifact("val_pred_" + wandb.run.id, "val_epoch_preds")
+        # columns=["id", "image", "guess", "truth"]
+        # for a in self.flat_class_names:
+        #     columns.append("score_" + a)
+        # val_dt = wandb.Table(columns = columns)        
 
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
         features = self.model.resnet(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
-        losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
         acc, = acc_topk(y_pred, y)
-        for name, metric in losses.items():
-            self.log(f'val.{name}', metric.item(), on_step=False, on_epoch=True)
         self.log('val.acc', acc, on_step=False, on_epoch=True)
 
         if self.CFG.plot_avg_distance and (self.current_epoch in range(10) or
@@ -167,9 +171,29 @@ class ExperimentMulti(pl.LightningModule):
             _, dis = compute_distance(features, self.model.fcs)
             dis_x_neurons = torch.mean(dis) * self.model.n_neurons
             self.log('dis_x_neurons', dis_x_neurons, on_step=False, on_epoch=True)
-        return acc
+        return pre_ac, y_pred, y_pred.argmax(1)
 
     def validation_epoch_end(self, *args, **kwargs):
+        pre_ac, scores, y_pred = list(map(torch.cat, np.array(args[0]).T.tolist()))
+        y = torch.tensor(self.dataset.valset.targets, device=self.device)
+        losses = self.criterion(pre_ac, scores, y, self.current_epoch)
+        for name, metric in losses.items():
+            self.log(f'val.{name}', metric.item())
+        # if self.current_epoch % self.CFG.save_every == 0:
+        #     # save validation predictions as an artifact
+        #     val_res_at = wandb.Artifact("val_pred_" + wandb.run.id, "val_epoch_preds")
+        #     columns=["id", "image", "guess", "truth"]
+        #     for a in self.dataset.valset.classes:
+        #         columns.append("score_" + a)
+        #     val_dt = wandb.Table(columns = columns)
+        #     for filepath, top_guess, score, truth in zip(self.dataset.valset.imgs, y_pred, scores, y):
+        #         img_id = filepath[0].split('/')[-1].split('.')[0]
+        #         row = [img_id, wandb.Image(filepath[0]), self.dataset.valset.classes[top_guess], self.dataset.valset.classes[truth]]
+        #         for s in score.tolist():
+        #             row.append(np.round(s, 4))
+        #         val_dt.add_data(*row)
+        #     val_res_at.add(val_dt, "val_epoch_res")
+        #     wandb.run.log_artifact(val_res_at)
         if self.CFG.ema_used:
             self.ema_model.restore()
 
@@ -180,27 +204,38 @@ class ExperimentMulti(pl.LightningModule):
         features = self.model.resnet(x).squeeze()
         y_pred, pre_ac = self.model.feature_forward(features)
         y_pred_test, y_pred_val = y_pred[:n_test], y_pred[n_test:]
-        pre_ac_test, pre_ac_val = pre_ac[:n_test], pre_ac[n_test:]
-        losses_test = self.criterion(pre_ac_test, y_pred_test, batch['test'][1], self.current_epoch)
+        # pre_ac_test, pre_ac_val = pre_ac[:n_test], pre_ac[n_test:]
+        # losses_test = self.criterion(pre_ac_test, y_pred_test, batch['test'][1], self.current_epoch)
         acc_test, = acc_topk(y_pred_test, batch['test'][1])
         acc_val, = acc_topk(y_pred_val, batch['val'][1])
-        self.log('test', {**losses_test, 'acc': acc_test})
+        # self.log('test', {**losses_test, 'acc': acc_test})
         self.log('Generalization_Gap', acc_val - acc_test, on_epoch=True, on_step=False)
         return acc_test
+
+    def on_fit_end(self) -> None:
+        config = wandb.config
+        model_artifact = wandb.Artifact(
+            self.model_name, type='model',
+            description='model artifact',
+            metadata=dict(config)
+        )
+        with model_artifact.new_file(self.model_name + '.pt', mode='wb') as file:
+            torch.save(self.model, file)
+        self.logger.experiment.log_artifact(model_artifact)
+
 
     def run(self):
         wandb_logger = WandbLogger(
             project=self.CFG.wandb_project,
             name=self.CFG.name,
-            config=self.config,
         )
         # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
         checkpoint_callback = ModelCheckpoint(
-            monitor='val.total_loss',
+            monitor='val.acc',
             dirpath='checkpoints/',
             filename='degree-project-{epoch:02d}-{val_loss:.2f}',
             save_top_k=3,
-            mode='min',
+            mode='max',
         )
 
         lr_monitor = LearningRateMonitor(logging_interval='step')
@@ -246,8 +281,9 @@ class ExperimentMulti(pl.LightningModule):
                 labels.append(batch_y)
             sigs = torch.cat(sigs, dim=0)
 
-            h_distance = hammingDistance(sigs.float(), device=self.device)
-            self.log(f'hamming_distance/{name}', h_distance.mean())
+            # h_distance = hammingDistance(sigs.float(), device=self.device)
+            h_distance = F.pdist(sigs.float(), p=0).mean()
+            self.log(f'hamming_distance/{name}', h_distance)
 
             if name in ['train', 'val', 'test']:
                 labels = torch.cat(labels, dim=0)

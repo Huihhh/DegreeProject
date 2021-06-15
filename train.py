@@ -9,6 +9,8 @@ from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
 import os
+import wandb
+from easydict import EasyDict as edict
 
 from datasets.dataset import Dataset
 from models import *
@@ -32,6 +34,10 @@ def main(CFG: DictConfig) -> None:
     cudnn.deterministic = True
     cudnn.benchmark = False
 
+    config = edict()
+    for value in CFG.values():
+        config.update(value)
+    wandb.init(project=CFG.EXPERIMENT.wandb_project, job_type="init", config=config, name=CFG.EXPERIMENT.name)
     if CFG.DATASET.name == 'eurosat':
         model = MODEL[CFG.MODEL.name](**CFG.MODEL)
         dataset = Dataset(resnet=model.resnet, **CFG.DATASET)

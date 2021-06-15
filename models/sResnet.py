@@ -65,7 +65,8 @@ class SResNet(Module):
         self.fcs = torch.nn.Sequential(*self.layers)
 
         # *** ResNet ***
-        self.resnet = torch.nn.Sequential(*(list(resnet18.children())[:5]), nn.AdaptiveAvgPool2d((1, 1)))        
+        self.resnet = torch.nn.Sequential(*(list(resnet18.children())[:5]), nn.AdaptiveAvgPool2d((1, 1)))   
+        print(self.resnet)     
 
     def forward(self, x):
         x = self.resnet(x).squeeze()
