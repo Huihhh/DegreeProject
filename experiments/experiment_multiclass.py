@@ -3,7 +3,6 @@ import pytorch_lightning as pl
 from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.trainer.supporters import CombinedLoader
 
 import torch
 from torch import optim
@@ -15,8 +14,7 @@ from sklearn.decomposition import PCA
 
 import numpy as np
 import logging
-from easydict import EasyDict as edict
-from pylab import *
+
 import os
 import sys
 

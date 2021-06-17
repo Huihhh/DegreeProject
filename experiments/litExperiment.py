@@ -228,11 +228,11 @@ class LitExperiment(pl.LightningModule):
         )
         # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
         checkpoint_callback = ModelCheckpoint(
-            monitor='val.total_loss',
+            monitor='val.acc',
             dirpath='checkpoints/',
             filename='degree-project-{epoch:02d}-{val_loss:.2f}',
             save_top_k=3,
-            mode='min',
+            mode='max',
         )
 
         lr_monitor = LearningRateMonitor(logging_interval='step')
