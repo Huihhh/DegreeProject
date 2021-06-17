@@ -97,9 +97,9 @@ class Dataset(pl.LightningDataModule):
         val_dir = os.path.join(data_dir, "val")
         test_dir = os.path.join(data_dir, "test")
         transform = T.Compose([T.ToTensor(), T.Normalize(mean=TRANSFORM['mean'], std=TRANSFORM['std'])])
-        self.trainset = ImageFolder(train_dir, transform=transform)
-        self.valset = ImageFolder(val_dir, transform=transform)
-        self.testset = ImageFolder(test_dir, transform=transform)
+        self.trainset = EuroSat(train_dir, transform=transform)
+        self.valset = EuroSat(val_dir, transform=transform)
+        self.testset = EuroSat(test_dir, transform=transform)
 
         # # *** stack augmented data ***
         # if 'use_aug' in kwargs.keys() and kwargs['use_aug']:
