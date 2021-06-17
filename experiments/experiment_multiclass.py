@@ -164,21 +164,21 @@ class ExperimentMulti(pl.LightningModule):
         losses = self.criterion(pre_ac, scores, y, self.current_epoch)
         for name, metric in losses.items():
             self.log(f'val.{name}', metric.item())
-        if self.current_epoch == self.CFG.n_epoch - 1:
-            # save validation predictions as an artifact
-            val_res_at = wandb.Artifact("val_pred_" + wandb.run.id, "val_epoch_preds")
-            columns=["id", "image", "guess", "truth"]
-            for a in self.dataset.valset.classes:
-                columns.append("score_" + a)
-            val_dt = wandb.Table(columns = columns)
-            for filepath, top_guess, score, truth in zip(self.dataset.valset.imgs, y_pred, scores, y):
-                img_id = filepath[0].split('/')[-1].split('.')[0]
-                row = [img_id, wandb.Image(filepath[0]), self.dataset.valset.classes[top_guess], self.dataset.valset.classes[truth]]
-                for s in score.tolist():
-                    row.append(np.round(s, 4))
-                val_dt.add_data(*row)
-            val_res_at.add(val_dt, "val_epoch_res")
-            wandb.run.log_artifact(val_res_at)
+        # if self.current_epoch == self.CFG.n_epoch - 1:
+        #     # save validation predictions as an artifact
+        #     val_res_at = wandb.Artifact("val_pred_" + wandb.run.id, "val_epoch_preds")
+        #     columns=["id", "image", "guess", "truth"]
+        #     for a in self.dataset.classes:
+        #         columns.append("score_" + a)
+        #     val_dt = wandb.Table(columns = columns)
+        #     for filepath, top_guess, score, truth in zip(self.dataset.valset.imgs, y_pred, scores, y):
+        #         img_id = filepath[0].split('/')[-1].split('.')[0]
+        #         row = [img_id, wandb.Image(filepath[0]), self.dataset.valset.classes[top_guess], self.dataset.valset.classes[truth]]
+        #         for s in score.tolist():
+        #             row.append(np.round(s, 4))
+        #         val_dt.add_data(*row)
+        #     val_res_at.add(val_dt, "val_epoch_res")
+        #     wandb.run.log_artifact(val_res_at)
         if self.CFG.ema_used:
             self.ema_model.restore()
 

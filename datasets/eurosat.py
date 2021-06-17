@@ -69,6 +69,7 @@ class EuroSat(VisionDataset):
 
         self.data = np.concatenate(self.data)
         self.class_to_idx = {_class: i for i, _class in enumerate(class_counter.keys())}
+        self.classes = list(self.class_to_idx.keys())
         self.targets = [self.class_to_idx[x] for x in self.targets]
         self.num_classes = len(class_counter.keys())
 

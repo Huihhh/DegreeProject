@@ -62,6 +62,6 @@ class Sphere:
         return X, y
 
     @classmethod
-    def make_grid_with_labels(self, X, y, h=0.01):
+    def make_grid_with_labels(self, X, y, h=0.001):
         #TODO: make points to plot linear regions
         return X, y

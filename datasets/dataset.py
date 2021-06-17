@@ -85,6 +85,7 @@ class Dataset(pl.LightningDataModule):
             'std': (0.2037, 0.1366, 0.1148)  #}, # (0.2471, 0.2435, 0.2616),  # 
         }
         dataset = DATA[self.name](data_dir)
+        self.classes = dataset
         self.num_classes = dataset.num_classes
         N = len(dataset.targets)
         if isinstance(self.n_test, int):
