@@ -211,13 +211,13 @@ class ExperimentMulti(pl.LightningModule):
             name=self.CFG.name,
         )
         # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
-        checkpoint_callback = ModelCheckpoint(
-            monitor='val.acc',
-            dirpath='checkpoints/',
-            filename='degree-project-{epoch:02d}-{val_loss:.2f}',
-            save_top_k=3,
-            mode='max',
-        )
+        # checkpoint_callback = ModelCheckpoint(
+        #     monitor='val.acc',
+        #     dirpath='checkpoints/',
+        #     filename='degree-project-{epoch:02d}-{val_loss:.2f}',
+        #     save_top_k=3,
+        #     mode='max',
+        # )
 
         lr_monitor = LearningRateMonitor(logging_interval='step')
         callbacks = [lr_monitor]
@@ -230,16 +230,17 @@ class ExperimentMulti(pl.LightningModule):
             # gradient_clip_val=5,
             callbacks=callbacks,
             logger=wandb_logger,
-            checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
+            checkpoint_callback=False,# if self.CFG.debug else checkpoint_callback,
             gpus=-1 if torch.cuda.is_available() else 0,
             max_epochs=self.CFG.n_epoch,
             gradient_clip_val=10,
             progress_bar_refresh_rate=0)
         trainer.fit(self, self.dataset)
-        if self.CFG.debug:
-            trainer.test(self, datamodule=self.dataset)
-        else:
-            trainer.test(datamodule=self.dataset)
+        trainer.test(self, datamodule=self.dataset)
+        # if self.CFG.debug:
+        #     trainer.test(self, datamodule=self.dataset)
+        # else:
+        #     trainer.test(datamodule=self.dataset)
 
     def plot_signatures(self):
         self.model.eval()
