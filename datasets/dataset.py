@@ -183,8 +183,8 @@ class Dataset(pl.LightningDataModule):
 class TransformedDataset(Dataset):
     def __init__(self, dataset, indexs, transform=None, target_transform=None):
         self.dataset = dataset
-        # self.data = dataset.data[indexs]
-        # self.targets = np.array(dataset.targets)[indexs]
+        self.data = dataset.data[indexs]
+        self.targets = np.array(dataset.targets)[indexs]
         self.transform = transform
         self.target_transform = target_transform
         self.indexs = indexs
