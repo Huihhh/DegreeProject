@@ -105,21 +105,19 @@ def get_hammingdis(p=1, m=1):
         if labels.device.type == 'cuda':
             labels = labels.cpu()
         sigs = ac(sigs)
-        num_classes = labels.max()
+        uniq_labels = labels.unique()
+        num_classes = len(uniq_labels)
         hreg_same_class = hreg_diff_class = 0
-        if num_classes == 0:
+        if num_classes == 1:
             hreg_same_class = F.pdist(sigs.float(), p=p).mean()
         else:
-            for i in range(num_classes.item()):
-                class1 = norm(sigs[np.where(labels == i)].float())
+            for i, label in enumerate(sorted(uniq_labels)):
+                class1 = norm(sigs[np.where(labels == label)].float())
                 class_rest = norm(sigs[np.where(labels > i)].float())
                 if len(class1) > 1:
                     hreg_same_class += F.pdist(class1, p=p).mean()
                 if len(class1) > 0 and len(class_rest) > 0:
                     hreg_diff_class += torch.cdist(class1, class_rest, p=p).mean()
-            class_last = norm(sigs[np.where(labels == num_classes)].float())
-            hreg_same_class += F.pdist(class_last, p=p).mean()
-
         return hreg_same_class, hreg_diff_class
 
     return hammingDistance_classwise

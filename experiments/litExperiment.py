@@ -262,7 +262,8 @@ class LitExperiment(pl.LightningModule):
         net_out, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
 
         #Hamming distance
-        hdis_same_grid, hdis_diff_grid = self.hammingDistance_classwise(sigs_grid, torch.tensor(yy).long())
+        grid_labels = self.grid_labels.reshape(-1)
+        hdis_same_grid, hdis_diff_grid = self.hammingDistance_classwise(sigs_grid, torch.tensor(grid_labels).long())
         self.log(f'Hamming distance/[grid points] from same class', hdis_same_grid)
         self.log(f'Hamming distance/[grid points] from different classes', hdis_diff_grid)
 
@@ -278,7 +279,7 @@ class LitExperiment(pl.LightningModule):
         base_color_labels = np.array([sigs_grid_dict[sig] for sig in sigs_grid])
         base_color_labels = base_color_labels.reshape(self.grid_labels.shape).T
 
-        grid_labels = self.grid_labels.reshape(-1)
+        
         input_points, labels = self.dataset.trainset.tensors
         _, sigs_train, _ = get_signatures(input_points.to(self.device), self.model)
 
