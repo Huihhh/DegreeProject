@@ -54,12 +54,12 @@ class EuroSat(VisionDataset):
         class_counter = Counter()
 
         # # load images
-        # rootdir = hydra.utils.get_original_cwd()
-        # if not os.path.exists(rootdir + data_dir):
-        #     download_data(rootdir + '/data/EuroSAT_RGB.zip', 'http://madm.dfki.de/files/sentinel/EuroSAT.zip')
-        #     unzip_file(rootdir + '/data/EuroSAT_RGB.zip', rootdir + '/data/EuroSAT_RGB')
-        # filepaths = sorted(glob.glob(rootdir + data_dir + '/*/*.jpg')) ##!!for reproducibility, sort them!
-        filepaths = sorted(glob.glob(data_dir + '/*/*.jpg')) ##!!for reproducibility, sort them!
+        rootdir = hydra.utils.get_original_cwd()
+        if not os.path.exists(rootdir + data_dir):
+            download_data(rootdir + '/data/EuroSAT_RGB.zip', 'http://madm.dfki.de/files/sentinel/EuroSAT.zip')
+            unzip_file(rootdir + '/data/EuroSAT_RGB.zip', rootdir + '/data/EuroSAT_RGB')
+
+        filepaths = sorted(glob.glob(rootdir+data_dir + '/*/*.jpg')) ##!!for reproducibility, sort them!
         for filepath in filepaths:
             class_name = filepath.split('/')[-1].split('_')[0]
             class_counter[class_name] += 1
