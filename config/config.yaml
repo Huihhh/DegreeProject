@@ -30,7 +30,7 @@ EXPERIMENT:
   wandb_project: EuroSat
 
   # regularization
-  wdecay: 0.001
+  wdecay: 0.002
   dis_reg: 0.00 # coefficient of distance reg term 
   reg_filter: composite_relu # or abs_relu, or sqrt_relu
   lambda_hreg: 0
@@ -42,7 +42,7 @@ EXPERIMENT:
   warmup: 0
   used_nesterov: True
   # scheduler
-  scheduler: cosin
+  scheduler: steplr
   step_size: 30
   steplr_gamma: 0.4
   

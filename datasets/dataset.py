@@ -97,9 +97,9 @@ class Dataset(pl.LightningDataModule):
         val_dir = os.path.join(data_dir, "val")
         test_dir = os.path.join(data_dir, "test")
         transform = T.Compose([T.ToTensor(), T.Normalize(mean=TRANSFORM['mean'], std=TRANSFORM['std'])])
-        self.trainset = EuroSat(train_dir, transform=transform)
-        self.valset = EuroSat(val_dir, transform=transform)
-        self.testset = EuroSat(test_dir, transform=transform)
+        self.trainset = ImageFolder(train_dir, transform=transform)
+        self.valset = ImageFolder(val_dir, transform=transform)
+        self.testset = ImageFolder(test_dir, transform=transform)
 
         # # *** stack augmented data ***
         # if 'use_aug' in kwargs.keys() and kwargs['use_aug']:
@@ -132,28 +132,22 @@ class Dataset(pl.LightningDataModule):
                                             pin_memory=True)
 
     def train_dataloader(self) -> Any:
-        # if self.name == 'eurosat':
-        #     kwargs = dict(num_workers=self.num_workers, pin_memory=True)
-        #     if isinstance(self.trainset, list):
-        #         train_loader = [DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
-        #     else:
-        #         train_loader = [
-        #             DataLoader(self.trainset,
-        #                        batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),
-        #                        **kwargs)
-        #         ]
-        # else:
-        kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
-        train_loader = DataLoader(self.trainset, shuffle=True, **kwargs)
-        return [train_loader]
+        if self.name == 'eurosat':
+            kwargs = dict(num_workers=self.num_workers, pin_memory=True)
+            if isinstance(self.trainset, list):
+                train_loader = [DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
+            else:
+                train_loader = DataLoader(self.trainset,
+                                          batch_sampler=BatchWeightedRandomSampler(self.trainset,
+                                                                                   batch_size=self.batch_size),
+                                          **kwargs)
+
+        else:
+            kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
+            train_loader = DataLoader(self.trainset, shuffle=True, **kwargs)
+        return train_loader
 
     def val_dataloader(self):
-        # if self.name == 'eurosat':
-        #     kwargs = dict(num_workers=self.num_workers, pin_memory=True)
-        #     return DataLoader(self.valset,
-        #                       batch_sampler=BatchWeightedRandomSampler(self.valset, batch_size=self.batch_size),
-        #                       **kwargs)
-        # else:
         return DataLoader(self.valset,
                           batch_size=self.batch_size,
                           num_workers=self.num_workers,
@@ -161,26 +155,11 @@ class Dataset(pl.LightningDataModule):
                           drop_last=False)
 
     def test_dataloader(self):
-        # if self.name == 'eurosat':
-        #     kwargs = dict(num_workers=self.num_workers, pin_memory=True)
-        #     test_loader = DataLoader(self.testset,
-        #                              batch_sampler=BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size),
-        #                              **kwargs)
-        #     val_loader = DataLoader(self.trainset,
-        #                             batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),
-        #                             **kwargs)
-        # else:
-        test_loader = DataLoader(self.testset,
-                                    batch_size=self.batch_size,
-                                    num_workers=self.num_workers,
-                                    pin_memory=True,
-                                    drop_last=False)
-        val_loader = DataLoader(self.trainset,
-                                batch_size=self.batch_size,
-                                num_workers=self.num_workers,
-                                pin_memory=True,
-                                drop_last=False)
-        return CombinedLoader({'test': test_loader, 'val': val_loader})
+        return DataLoader(self.testset,
+                          batch_size=self.batch_size,
+                          num_workers=self.num_workers,
+                          pin_memory=True,
+                          drop_last=False)
 
 
 class TransformedDataset(Dataset):

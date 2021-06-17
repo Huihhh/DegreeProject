@@ -106,23 +106,16 @@ class ExperimentMulti(pl.LightningModule):
     #     self.log(f'historgram.features_norm', wandb.Histogram(features_norm))
     #     self.log(f'historgram.features', wandb.Histogram(features))
 
-    # def on_train_epoch_start(self) -> None:
-    #     logger.info(f'======== Training epoch {self.current_epoch} ========')
-    #     if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
-    #         self.plot_signatures()
+    def on_train_epoch_start(self) -> None:
+        logger.info(f'======== Training epoch {self.current_epoch} ========')
+        if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
+            self.plot_signatures()
 
     def training_step(self, batch, batch_idx):
-        x, y = [], []
-        for b in batch:
-            x.append(b[0])
-            y.append(b[1])
-        x = torch.cat(x)
-        y = torch.cat(y)
-        features = self.model.resnet(x).squeeze()
+        x, y = batch
+        features = self.model.resnet(x)
         y_pred, pre_ac = self.model.feature_forward(features)
         losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
-        if batch_idx < 5:
-            print(losses['total_loss'].item(), y_pred.sum().item(), x.sum().item(), y.sum().item())
         acc, = acc_topk(y_pred, y)
         # log metrics
         for name, metric in losses.items():
@@ -151,24 +144,18 @@ class ExperimentMulti(pl.LightningModule):
             self.ema_model.apply_shadow()
         else:
             logger.info(f'======== Validating on Raw model: epoch {self.current_epoch} ========')
-        
-        # # save validation predictions as an artifact
-        # val_res_at = wandb.Artifact("val_pred_" + wandb.run.id, "val_epoch_preds")
-        # columns=["id", "image", "guess", "truth"]
-        # for a in self.flat_class_names:
-        #     columns.append("score_" + a)
-        # val_dt = wandb.Table(columns = columns)        
+           
 
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        features = self.model.resnet(x).squeeze()
+        features = self.model.resnet(x)
         y_pred, pre_ac = self.model.feature_forward(features)
         acc, = acc_topk(y_pred, y)
         self.log('val.acc', acc, on_step=False, on_epoch=True)
 
         if self.CFG.plot_avg_distance and (self.current_epoch in range(10) or
                                            (self.current_epoch + 1) % self.CFG.plot_every == 0):
-            _, dis = compute_distance(features, self.model.fcs)
+            _, dis = compute_distance(features.reshape(features.shape[0], -1), self.model.fcs)
             dis_x_neurons = torch.mean(dis) * self.model.n_neurons
             self.log('dis_x_neurons', dis_x_neurons, on_step=False, on_epoch=True)
         return pre_ac, y_pred, y_pred.argmax(1)
@@ -179,37 +166,33 @@ class ExperimentMulti(pl.LightningModule):
         losses = self.criterion(pre_ac, scores, y, self.current_epoch)
         for name, metric in losses.items():
             self.log(f'val.{name}', metric.item())
-        # if self.current_epoch % self.CFG.save_every == 0:
-        #     # save validation predictions as an artifact
-        #     val_res_at = wandb.Artifact("val_pred_" + wandb.run.id, "val_epoch_preds")
-        #     columns=["id", "image", "guess", "truth"]
-        #     for a in self.dataset.valset.classes:
-        #         columns.append("score_" + a)
-        #     val_dt = wandb.Table(columns = columns)
-        #     for filepath, top_guess, score, truth in zip(self.dataset.valset.imgs, y_pred, scores, y):
-        #         img_id = filepath[0].split('/')[-1].split('.')[0]
-        #         row = [img_id, wandb.Image(filepath[0]), self.dataset.valset.classes[top_guess], self.dataset.valset.classes[truth]]
-        #         for s in score.tolist():
-        #             row.append(np.round(s, 4))
-        #         val_dt.add_data(*row)
-        #     val_res_at.add(val_dt, "val_epoch_res")
-        #     wandb.run.log_artifact(val_res_at)
+        if self.current_epoch == self.CFG.n_epoch - 1:
+            # save validation predictions as an artifact
+            val_res_at = wandb.Artifact("val_pred_" + wandb.run.id, "val_epoch_preds")
+            columns=["id", "image", "guess", "truth"]
+            for a in self.dataset.valset.classes:
+                columns.append("score_" + a)
+            val_dt = wandb.Table(columns = columns)
+            for filepath, top_guess, score, truth in zip(self.dataset.valset.imgs, y_pred, scores, y):
+                img_id = filepath[0].split('/')[-1].split('.')[0]
+                row = [img_id, wandb.Image(filepath[0]), self.dataset.valset.classes[top_guess], self.dataset.valset.classes[truth]]
+                for s in score.tolist():
+                    row.append(np.round(s, 4))
+                val_dt.add_data(*row)
+            val_res_at.add(val_dt, "val_epoch_res")
+            wandb.run.log_artifact(val_res_at)
         if self.CFG.ema_used:
             self.ema_model.restore()
 
     def test_step(self, batch, batch_idx):
-        n_test = batch['test'][0].shape[0]
-        x = torch.cat([batch['test'][0], batch['val'][0]])
-        y = torch.cat([batch['test'][1], batch['val'][1]])
-        features = self.model.resnet(x).squeeze()
+        x, y = batch
+        features = self.model.resnet(x)
         y_pred, pre_ac = self.model.feature_forward(features)
-        y_pred_test, y_pred_val = y_pred[:n_test], y_pred[n_test:]
         # pre_ac_test, pre_ac_val = pre_ac[:n_test], pre_ac[n_test:]
         # losses_test = self.criterion(pre_ac_test, y_pred_test, batch['test'][1], self.current_epoch)
-        acc_test, = acc_topk(y_pred_test, batch['test'][1])
-        acc_val, = acc_topk(y_pred_val, batch['val'][1])
+        acc_test, = acc_topk(y_pred, y)
         # self.log('test', {**losses_test, 'acc': acc_test})
-        self.log('Generalization_Gap', acc_val - acc_test, on_epoch=True, on_step=False)
+        self.log('acc_test', acc_test, on_epoch=True, on_step=False)
         return acc_test
 
     def on_fit_end(self) -> None:
@@ -244,9 +227,9 @@ class ExperimentMulti(pl.LightningModule):
             callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=20, mode='min', strict=True))
 
         trainer = pl.Trainer(
-            num_sanity_val_steps=0,  #Sanity check runs n validation batches before starting the training
+            num_sanity_val_steps=-1,  #Sanity check runs n validation batches before starting the training
             # accelerator="ddp",  # if torch.cuda.is_available() else 'ddp_cpu',
-            # gradient_clip_val=1,
+            # gradient_clip_val=5,
             callbacks=callbacks,
             logger=wandb_logger,
             checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
@@ -263,10 +246,10 @@ class ExperimentMulti(pl.LightningModule):
     def plot_signatures(self):
         self.model.eval()
         self.log('epoch', self.current_epoch)
-        train_dataloader = self.dataset.train_dataloader()[0]
+        train_dataloader = self.dataset.train_dataloader()
         noisy_dataloader = [self.dataset.noise_loader, train_dataloader]
         loaders = [[train_dataloader], noisy_dataloader, [self.dataset.val_dataloader()],
-                   [self.dataset.test_dataloader().loaders['test']]]
+                   [self.dataset.test_dataloader()]]
         for i, name in enumerate(['train', 'noise', 'val', 'test']):
             sigs = []
             labels = []
@@ -275,8 +258,8 @@ class ExperimentMulti(pl.LightningModule):
                 for b in batch:
                     batch_x += b[0]
                 batch_y = batch[0][1]
-                feature = self.model.resnet(batch_x.to(self.device)).squeeze()
-                _, sig, _ = get_signatures(feature, self.model.fcs)
+                feature = self.model.resnet(batch_x.to(self.device))
+                _, sig, _ = get_signatures(feature.reshape(feature.shape[0], -1), self.model.fcs)
                 sigs.append(sig)
                 labels.append(batch_y)
             sigs = torch.cat(sigs, dim=0)
@@ -304,10 +287,6 @@ class ExperimentMulti(pl.LightningModule):
             size_counts = Counter(region_counts.values())
             np_histogram = (list(size_counts.values()), [0] + sorted(list(size_counts.keys())))
             self.log(f'LR_count_distrib.{name}', wandb.Histogram(np_histogram=np_histogram))
-
-            for key in sigs_to_idx:
-                idx = np.where(sigs == key)
-                total_regions['density_region_size_over1'] += 1 if len(idx[0]) > 1 else 0
 
             logger.info(f"[Linear regions] {name} \n   #total regions: {total_regions['density']} ")
             self.log(f'total_regions_{name}', total_regions)
