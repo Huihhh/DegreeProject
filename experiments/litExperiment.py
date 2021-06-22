@@ -401,7 +401,7 @@ class LitExperiment(pl.LightningModule):
     def compute_transitions(self):
         # transitions
         for traj_type in ['same_class', 'diff_class']:
-            n_samples = 10 if (traj_type == 'same_class') and (self.dataset.name=='eurosat') else 970
+            n_samples = 10 if (traj_type == 'same_class') and (self.dataset.name=='spiral') else 970
             trajectory, traj_len = self.dataset.make_trajectory(n_samples, type=traj_type)
             _, sigs, _ = get_signatures(torch.tensor(trajectory).float().to(self.device), self.model)
             h_distance = hammingDistance(sigs.float(), device=self.device)
