@@ -73,5 +73,6 @@ class Moons(Base):
             len_list = [np.sqrt((xy[i, 0] - xy[i - 1, 0])**2 + (xy[i, 1] - xy[i - 1, 1])**2) for i in range(1, len(xy))]
             return xy, sum(len_list)
         else:
-            x = np.arange(0, 1, 1 / n_samples)
-            return np.array([x, x]).T, np.sqrt(2 * x[-1]**2)
+            x = np.arange(-1, 2, 3 / n_samples)
+            y = np.arange(1, -1, 1 / n_samples)
+            return np.array([x, y]).T, np.sqrt((x[0] - x[-1])**2 + (y[0] - y[-1])**2)
