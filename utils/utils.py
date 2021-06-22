@@ -86,12 +86,13 @@ def hammingDistance(arr, device):
     arr_ones = arr1.mm(arr2.T)  # count the positions of both ones of each two rows
     arr_zeros = arr_not1.mm(arr_not2.T)  # count the positions of both zeros of each two rows
     h_distance = m * torch.ones((n1, n2), device=device) - arr_zeros - arr_ones
+    return h_distance
 
-    if isinstance(arr, list):
-        return h_distance.mean()
-    else:
-        return h_distance.sum() / ((n1 * n2 - len(h_distance.diagonal())) + 1e-6)
-    #   return h_distance[np.triu_indices(n1, k=1)]
+    # if isinstance(arr, list):
+    #     return h_distance.mean()
+    # else:
+    #     return h_distance.sum() / ((n1 * n2 - len(h_distance.diagonal())) + 1e-6)
+    # #   return h_distance[np.triu_indices(n1, k=1)]
 
 
 def get_hammingdis(p=1, m=1):

@@ -1,4 +1,3 @@
-from experiments.experiment_multiclass import ExperimentMulti
 import random
 import numpy as np
 import torch
@@ -15,7 +14,9 @@ from easydict import EasyDict as edict
 from datasets.dataset import Dataset
 from models import *
 from experiments.litExperiment import LitExperiment
- 
+from experiments.experiment_multiclass import ExperimentMulti
+
+
 @hydra.main(config_path='./config', config_name='config')
 def main(CFG: DictConfig) -> None:
     # initial logging file
@@ -34,23 +35,36 @@ def main(CFG: DictConfig) -> None:
     cudnn.deterministic = True
     cudnn.benchmark = False
 
+    # W&B INIT
     config = edict()
     for value in CFG.values():
         config.update(value)
-    wandb.init(project=CFG.EXPERIMENT.wandb_project, job_type="init", config=config, name=CFG.EXPERIMENT.name)
-    if CFG.DATASET.name == 'eurosat':
+    wandb.init(project=CFG.EXPERIMENT.wandb_project,
+               job_type="init",
+               config=config,
+               name=CFG.EXPERIMENT.name,
+               resume=CFG.EXPERIMENT.resume)
+
+    # GET DATA
+    dataset = Dataset(**CFG.DATASET)
+
+    # BUILD MODEL
+    if CFG.EXPERIMENT.resume: #TODO: resume learning rate
+        api = wandb.Api()
+        artifact = api.artifact(
+            f'{CFG.EXPERIMENT.wandb_project}/{CFG.MODEL.name}-{CFG.EXPERIMENT.name}:seed{CFG.Logging.seed}')
+        model_dir = artifact.checkout()
+        model = torch.load(f'{model_dir}/{CFG.MODEL.name}-{CFG.EXPERIMENT.name}.pt')
+        logger.info(f'resume from: {model_dir}/{CFG.MODEL.name}-{CFG.EXPERIMENT.name}.pt ...')
+    elif CFG.DATASET.name == 'eurosat':
         model = MODEL[CFG.MODEL.name](**CFG.MODEL)
-        dataset = Dataset(resnet=model.resnet, **CFG.DATASET)
         input_dim = model.fcs[0].fc.in_features
     else:
-        # get datasets
-        dataset = Dataset(**CFG.DATASET)
         input_dim = dataset.trainset[0][0].shape[0]
-
         # build model
         model = MODEL[CFG.MODEL.name](input_dim=input_dim, **CFG.MODEL)
-    logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"
-                                .format(input_dim, CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
+    logger.info("[Model] Building model -- {}, hidden nodes: {}, out dim: {}".format(
+        CFG.MODEL.name, CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 
     if CFG.EXPERIMENT.use_gpu:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

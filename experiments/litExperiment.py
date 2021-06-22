@@ -1,4 +1,6 @@
+from datasets.synthetic_data.spiral import Spiral
 from typing import Counter
+from antlr4.atn.Transition import Transition
 import wandb
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.trainer import Trainer
@@ -24,7 +26,7 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.utils import accuracy, hammingDistance, get_hammingdis
+from utils.utils import AverageMeter, accuracy, hammingDistance, get_hammingdis
 from utils.compute_distance import compute_distance
 from utils.get_signatures import get_signatures
 from utils.ema import EMA
@@ -164,6 +166,7 @@ class LitExperiment(pl.LightningModule):
     def on_train_epoch_start(self) -> None:
         if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
             self.plot_signatures()
+            self.compute_transitions()
             if self.CFG.plot_avg_distance:
                 _, min_distances = compute_distance(self.random_points, self.model)
                 self.dis_x_neurons = torch.mean(min_distances) * self.model.n_neurons
@@ -219,6 +222,17 @@ class LitExperiment(pl.LightningModule):
         acc = accuracy(y_pred, y)
         self.log('test', {**losses, 'acc': acc})
         return acc
+    
+    def on_fit_end(self) -> None:
+        config = wandb.config
+        model_artifact = wandb.Artifact(
+            f'{self.model_name}-{self.CFG.name}', type='model',
+            description='model artifact',
+            metadata=dict(config)
+        )
+        with model_artifact.new_file(f'{self.model_name}-{self.CFG.name}.pt', mode='wb') as file:
+            torch.save(self.model, file)
+        self.logger.experiment.log_artifact(model_artifact, aliases=[f'seed{wandb.config.seed}'])
 
     def run(self):
         wandb_logger = WandbLogger(
@@ -286,7 +300,7 @@ class LitExperiment(pl.LightningModule):
         #Hamming distance
         hdis_same, hdis_diff = self.hammingDistance_classwise(sigs_train, labels.squeeze().long())
         self.log(f'Hamming distance/[training points] from same class', hdis_same)
-        self.log(f'Hamming distance/[training points] from different classes', hdis_diff)
+        self.log(f'Hamming distance/[training points] from different classes', hdis_diff)    
 
         sigs_train = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_train])
         sigs_train = Counter(sigs_train)
@@ -384,11 +398,21 @@ class LitExperiment(pl.LightningModule):
                 self.log(f'LinearRegions/epoch{self.current_epoch}', wandb.Image(fig))
                 plt.close(fig)
 
+    def compute_transitions(self):
+        # transitions
+        for traj_type in ['same_class', 'diff_class']:
+            n_samples = 10 if (traj_type == 'same_class') and (self.dataset.name=='eurosat') else 970
+            trajectory, traj_len = self.dataset.make_trajectory(n_samples, type=traj_type)
+            _, sigs, _ = get_signatures(torch.tensor(trajectory).float().to(self.device), self.model)
+            h_distance = hammingDistance(sigs.float(), device=self.device)
+            avg_trans = torch.diag(h_distance[:, 1:]).sum() / traj_len
+            self.log(f'transition-{traj_type}', avg_trans)
+
     def resume_model(self, train_loader, val_loader, test_loader):
         if self.CFG.resume:
             if os.path.isfile(self.CFG.resume_checkpoints):
-                logger.info(f"=> loading checkpoint '${self.CFG.resume_checkpoints}'")
-                trainer = Trainer(resume_from_checkpoint=self.CFG.resume_checkpoints)
+                logger.info(f"=> loading checkpoint '${self.CFG.resume_checkpointsts}'")
+                trainer = Trainer(resume_from_checkpoint=self.CFG.resume_checkpoin)
                 trainer.fit(self, train_loader, val_loader)
                 result = trainer.test(test_dataloaders=test_loader)
                 logger.info("test", result)

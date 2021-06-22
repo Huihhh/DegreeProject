@@ -41,7 +41,7 @@ def get_torch_dataset(ndarray, name):
 
 
 class Dataset(pl.LightningDataModule):
-    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, resnet=None, **kwargs) -> None:
+    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, **kwargs) -> None:
         super().__init__()
         self.name = name
         self.n_train = n_train
@@ -51,7 +51,7 @@ class Dataset(pl.LightningDataModule):
         self.num_workers = num_workers
         self.kwargs = kwargs
         if name == 'eurosat':
-            self.gen_image_dataset(resnet, **kwargs)
+            self.gen_image_dataset(**kwargs)
         else:
             self.gen_point_dataset(**kwargs)
 
@@ -74,12 +74,13 @@ class Dataset(pl.LightningDataModule):
         self.num_classes = 2
         #TODO: sampling_to_plot_LR
         self.make_data = dataset.make_data
+        self.make_trajectory = dataset.make_trajectory
         self.grid_data = dataset.sampling_to_plot_LR(*dataset.make_data(n_train, **kwargs))
         self.trainset = get_torch_dataset(dataset.make_data(n_train, **kwargs), self.name)
         self.valset = get_torch_dataset(dataset.make_data(n_val, **kwargs), self.name)
         self.testset = get_torch_dataset(dataset.make_data(n_test, **kwargs), self.name)
 
-    def gen_image_dataset(self, resnet, data_dir, **kwargs):
+    def gen_image_dataset(self, data_dir, **kwargs):
         TRANSFORM = {
             'mean': (0.3444, 0.3803, 0.4078),  #(0.4914, 0.4822, 0.4465),  #
             'std': (0.2037, 0.1366, 0.1148)  #}, # (0.2471, 0.2435, 0.2616),  # 

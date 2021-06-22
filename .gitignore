@@ -17,3 +17,4 @@ data/
 !data/titanic.dat
 debug/
 artifacts/
+debug.py

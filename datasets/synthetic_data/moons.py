@@ -60,3 +60,18 @@ class Moons(Base):
         if noise_ratio:
             X = cls.add_noise(X, noise_ratio, noise_level, seed)
         return X, y[:, None]
+
+    @classmethod
+    def make_trajectory(cls, n_samples, type='same_class'):
+        '''
+        return the trajectory and its length
+        '''
+        if type == 'same_class':
+            outer_circ_x = np.cos(np.linspace(0, np.pi, n_samples))
+            outer_circ_y = np.sin(np.linspace(0, np.pi, n_samples))
+            xy = np.vstack([outer_circ_x, outer_circ_y]).T
+            len_list = [np.sqrt((xy[i, 0] - xy[i - 1, 0])**2 + (xy[i, 1] - xy[i - 1, 1])**2) for i in range(1, len(xy))]
+            return xy, sum(len_list)
+        else:
+            x = np.arange(0, 1, 1 / n_samples)
+            return np.array([x, x]).T, np.sqrt(2 * x[-1]**2)

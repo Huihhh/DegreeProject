@@ -29,7 +29,7 @@ from utils.ema import EMA
 logger = logging.getLogger(__name__)
 
 
-class ExperimentMulti(pl.LightningModule):
+class ExperimentMulti(pl.LightningModule): #TODO: make a base class
     def __init__(self, model, dataset, CFG, plot_sig=False) -> None:
         super().__init__()
         self.model = model
@@ -196,11 +196,11 @@ class ExperimentMulti(pl.LightningModule):
     def on_fit_end(self) -> None:
         config = wandb.config
         model_artifact = wandb.Artifact(
-            self.model_name, type='model',
+            f'{self.model_name}-{self.CFG.name}', type='model',
             description='model artifact',
             metadata=dict(config)
         )
-        with model_artifact.new_file(self.model_name + '.pt', mode='wb') as file:
+        with model_artifact.new_file(f'{self.model_name}-{self.CFG.name}' + '.pt', mode='wb') as file:
             torch.save(self.model, file)
         self.logger.experiment.log_artifact(model_artifact)
 
