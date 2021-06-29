@@ -164,15 +164,15 @@ class LitExperiment(pl.LightningModule):
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
 
-    # def on_train_epoch_start(self) -> None:
-    #     if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
-    #         if self.CFG.plot_LR:
-    #             self.plot_signatures()
-    #         self.compute_transitions()
-    #         if self.CFG.plot_avg_distance:
-    #             _, min_distances = compute_distance(self.random_points, self.model)
-    #             self.dis_x_neurons = torch.mean(min_distances) * self.model.n_neurons
-    #             self.log('dis_x_neurons', self.dis_x_neurons)
+    def on_train_epoch_start(self) -> None:
+        if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
+            if self.CFG.plot_LR:
+                self.plot_signatures()
+            self.compute_transitions()
+            if self.CFG.plot_avg_distance:
+                _, min_distances = compute_distance(self.random_points, self.model)
+                self.dis_x_neurons = torch.mean(min_distances) * self.model.n_neurons
+                self.log('dis_x_neurons', self.dis_x_neurons)
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
@@ -181,7 +181,7 @@ class LitExperiment(pl.LightningModule):
         y_pred = torch.where(y_pred > self.CFG.TH, 1.0, 0.0)
         acc = accuracy(y_pred, y)
         for name, metric in losses.items():
-            self.log(f'tain.{name}', metric.item(), on_step=False, on_epoch=True)
+            self.log(f'train.{name}', metric.item(), on_step=False, on_epoch=True)
         self.log('train.acc', acc, on_step=False, on_epoch=True)
         return losses['total_loss']
 
@@ -280,8 +280,8 @@ class LitExperiment(pl.LightningModule):
         #Hamming distance
         grid_labels = self.grid_labels.reshape(-1)
         hdis_same_grid, hdis_diff_grid = self.hammingDistance_classwise(sigs_grid, torch.tensor(grid_labels).long())
-        self.log(f'Hamming distance/[grid points] from same class', hdis_same_grid)
-        self.log(f'Hamming distance/[grid points] from different classes', hdis_diff_grid)
+        self.log(f'Avg Hamming distance/[grid points] from same class', hdis_same_grid)
+        self.log(f'Avg Hamming distance/[grid points] from different classes', hdis_diff_grid)
 
         net_out = torch.sigmoid(net_out)
         pseudo_label = torch.where(net_out.cpu() > self.CFG.TH, 1.0, 0.0).numpy()
@@ -301,8 +301,8 @@ class LitExperiment(pl.LightningModule):
 
         #Hamming distance
         hdis_same, hdis_diff = self.hammingDistance_classwise(sigs_train, labels.squeeze().long())
-        self.log(f'Hamming distance/[training points] from same class', hdis_same)
-        self.log(f'Hamming distance/[training points] from different classes', hdis_diff)    
+        self.log(f'Avg Hamming distance/[training points] from same class', hdis_same)
+        self.log(f'Avg Hamming distance/[training points] from different classes', hdis_diff)    
 
         sigs_train = np.array([''.join(str(x) for x in s.tolist()) for s in sigs_train])
         sigs_train = Counter(sigs_train)
@@ -341,10 +341,10 @@ class LitExperiment(pl.LightningModule):
                                                     #blue region:         {blue_regions['density'] } \n \
                                                     #total regions:       {total_regions['density']} ")
         self.log('epoch', self.current_epoch)
-        self.log('total_regions', total_regions)
-        self.log('red_regions', red_regions)
-        self.log('blue_regions', blue_regions)
-        self.log('boundary_regions', boundary_regions)
+        self.log('Linear Regions/total_regions', total_regions)
+        self.log('Linear Regions/red_regions', red_regions)
+        self.log('Linear Regions/blue_regions', blue_regions)
+        self.log('Linear Regions/boundary_regions', boundary_regions)
 
         if self.CFG.plot_LR:
             if (self.current_epoch == 0) or (self.current_epoch + 1) % (self.CFG.plot_every * 10) == 0:
@@ -397,7 +397,7 @@ class LitExperiment(pl.LightningModule):
                     ax[-1].set_title('confidence map')
                     fig.colorbar(ax0, ax=ax.ravel().tolist())
 
-                self.log(f'LinearRegions/epoch{self.current_epoch}', wandb.Image(fig))
+                self.log(f'Linear Regions[Image]/epoch{self.current_epoch}', wandb.Image(fig))
                 plt.close(fig)
 
     def compute_transitions(self):
@@ -407,8 +407,8 @@ class LitExperiment(pl.LightningModule):
             _, sigs, _ = get_signatures(torch.tensor(trajectory).float().to(self.device), self.model)
             h_distance = hammingDistance(sigs.float(), device=self.device)
             avg_trans = torch.diag(h_distance[:, 1:]).sum() / traj_len
-            self.log(f'transition-{traj_type}', avg_trans)
-            self.log(f'HDistance-cross-regions-{traj_type}', h_distance[0, -1])
+            self.log(f'Transitions/{traj_type}', avg_trans)
+            self.log(f'Hamming Distance/cross-regions-{traj_type}', h_distance[0, -1])
 
     def resume_model(self, train_loader, val_loader, test_loader):
         if self.CFG.resume:
