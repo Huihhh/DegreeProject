@@ -2,6 +2,7 @@ import math
 import numpy as np
 from sklearn.utils import check_random_state
 from scipy.ndimage import gaussian_filter
+from scipy.interpolate import interp1d
 
 
 class Spiral:
@@ -92,14 +93,22 @@ class Spiral:
         return xy, np.rot90(matrix, k=-1)
     
     @classmethod
-    def make_trajectory(cls, n_samples, type='same_class'):
+    def make_trajectory(cls, type='same_class', interval=0.001):
         '''
         return the trajectory and its length
         '''
         if type == 'same_class':
-            xy = np.array(Spiral.spiral(1, n_samples))
-            len_list = [np.sqrt((xy[i, 0] - xy[i-1, 0])**2 + (xy[i, 1]- xy[i-1, 1])**2) for i in range(1, len(xy))]
-            return xy, sum(len_list)
+            xy = np.array(Spiral.spiral(1, 100))
+            x = xy[:, 0]
+            y = xy[:, 1]
+            distance = np.cumsum(np.sqrt( np.ediff1d(x, to_begin=0)**2 + np.ediff1d(y, to_begin=0)**2 )) # euclidean distance of each pair of neighboring points
+            traj_len = distance[-1]
+            distance = distance/distance[-1]
+            fx, fy = interp1d( distance, x ), interp1d( distance, y )
+
+            alpha = np.linspace(0, 1, 5114) # ! 5114 is chosen according to the interval 0.001
+            x_regular, y_regular = fx(alpha), fy(alpha)
+            return np.concatenate([x_regular[:, None], y_regular[:, None]], axis=1), traj_len
         else:
-            x = np.arange(0,1, 1/n_samples)
+            x = np.arange(0,1, interval)
             return np.array([x, x]).T, np.sqrt(2*x[-1]**2)

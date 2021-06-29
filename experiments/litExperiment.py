@@ -113,7 +113,8 @@ class LitExperiment(pl.LightningModule):
         self.init_criterion()
 
         # init grid points to plot linear regions
-        self.grid_points, self.grid_labels = dataset.grid_data
+        if self.CFG.plot_LR:
+            self.grid_points, self.grid_labels = dataset.grid_data
 
         # init random points to plot average distance
         if self.CFG.plot_avg_distance:
@@ -163,14 +164,15 @@ class LitExperiment(pl.LightningModule):
             self.ema_model = EMA(self.model, self.CFG.ema_decay)
             logger.info("[EMA] initial ")
 
-    def on_train_epoch_start(self) -> None:
-        if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
-            self.plot_signatures()
-            self.compute_transitions()
-            if self.CFG.plot_avg_distance:
-                _, min_distances = compute_distance(self.random_points, self.model)
-                self.dis_x_neurons = torch.mean(min_distances) * self.model.n_neurons
-                self.log('dis_x_neurons', self.dis_x_neurons)
+    # def on_train_epoch_start(self) -> None:
+    #     if self.current_epoch in range(10) or (self.current_epoch + 1) % self.CFG.plot_every == 0:
+    #         if self.CFG.plot_LR:
+    #             self.plot_signatures()
+    #         self.compute_transitions()
+    #         if self.CFG.plot_avg_distance:
+    #             _, min_distances = compute_distance(self.random_points, self.model)
+    #             self.dis_x_neurons = torch.mean(min_distances) * self.model.n_neurons
+    #             self.log('dis_x_neurons', self.dis_x_neurons)
 
     def training_step(self, batch, batch_idx):
         x, y = batch[0], batch[1].float()
@@ -401,12 +403,12 @@ class LitExperiment(pl.LightningModule):
     def compute_transitions(self):
         # transitions
         for traj_type in ['same_class', 'diff_class']:
-            n_samples = 10 if (traj_type == 'same_class') and (self.dataset.name=='spiral') else 970
-            trajectory, traj_len = self.dataset.make_trajectory(n_samples, type=traj_type)
+            trajectory, traj_len = self.dataset.make_trajectory(type=traj_type)
             _, sigs, _ = get_signatures(torch.tensor(trajectory).float().to(self.device), self.model)
             h_distance = hammingDistance(sigs.float(), device=self.device)
             avg_trans = torch.diag(h_distance[:, 1:]).sum() / traj_len
             self.log(f'transition-{traj_type}', avg_trans)
+            self.log(f'HDistance-cross-regions-{traj_type}', h_distance[0, -1])
 
     def resume_model(self, train_loader, val_loader, test_loader):
         if self.CFG.resume:

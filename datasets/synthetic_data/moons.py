@@ -62,17 +62,19 @@ class Moons(Base):
         return X, y[:, None]
 
     @classmethod
-    def make_trajectory(cls, n_samples, type='same_class'):
+    def make_trajectory(cls, type='same_class', interval=0.001):
         '''
         return the trajectory and its length
         '''
         if type == 'same_class':
-            outer_circ_x = np.cos(np.linspace(0, np.pi, n_samples))
-            outer_circ_y = np.sin(np.linspace(0, np.pi, n_samples))
+            # outer_circ_x = np.cos(np.linspace(0, np.pi, n_samples))
+            # outer_circ_y = np.sin(np.linspace(0, np.pi, n_samples))
+            outer_circ_x = np.cos(np.arange(0, np.pi, interval))
+            outer_circ_y = np.sin(np.arange(0, np.pi, interval))
             xy = np.vstack([outer_circ_x, outer_circ_y]).T
-            len_list = [np.sqrt((xy[i, 0] - xy[i - 1, 0])**2 + (xy[i, 1] - xy[i - 1, 1])**2) for i in range(1, len(xy))]
-            return xy, sum(len_list)
+            traj_len = np.sqrt( np.ediff1d(xy[:, 0], to_begin=0)**2 + np.ediff1d(xy[:, 1], to_begin=0)**2).sum()
+            return xy, traj_len
         else:
-            x = np.arange(-1, 2, 3 / n_samples)
-            y = np.arange(-1, 1, 2 / n_samples)[::-1]
+            x = np.arange(-1, 2, 3*interval/np.sqrt(13))
+            y = np.arange(-1, 1, 2*interval/np.sqrt(13))[::-1]
             return np.array([x, y]).T, np.sqrt((x[0] - x[-1])**2 + (y[0] - y[-1])**2)

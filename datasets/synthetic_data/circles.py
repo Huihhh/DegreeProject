@@ -81,17 +81,18 @@ class Circles(Base):
         return X, y[:, None]
 
     @classmethod
-    def make_trajectory(cls, n_samples, type='same_class'):
+    def make_trajectory(cls, type='same_class', interval=0.001):
         '''
         return the trajectory and its length
         '''
         if type == 'same_class':
-            linspace_out = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
+            # linspace_out = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
+            linspace_out = np.arange(0, 2 * np.pi, interval)
             outer_circ_x = np.cos(linspace_out)
             outer_circ_y = np.sin(linspace_out)
             xy = np.vstack([outer_circ_x, outer_circ_y]).T
-            len_list = [np.sqrt((xy[i, 0] - xy[i - 1, 0])**2 + (xy[i, 1] - xy[i - 1, 1])**2) for i in range(1, len(xy))]
-            return xy, sum(len_list)
+            traj_len = np.sqrt( np.ediff1d(xy[:, 0], to_begin=0)**2 + np.ediff1d(xy[:, 1], to_begin=0)**2).sum()
+            return xy, traj_len
         else:
-            x = np.arange(-1, 1, 2 / n_samples)
+            x = np.arange(-1, 1, interval)
             return np.array([x, x]).T, np.sqrt(2 * (x[0] - x[-1])**2)

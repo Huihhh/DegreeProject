@@ -29,7 +29,7 @@ from utils.ema import EMA
 logger = logging.getLogger(__name__)
 
 
-class ExperimentMulti(pl.LightningModule): #TODO: make a base class
+class ExperimentMnist(pl.LightningModule): #TODO: make a base class
     def __init__(self, model, dataset, CFG, plot_sig=False) -> None:
         super().__init__()
         self.model = model
@@ -111,7 +111,7 @@ class ExperimentMulti(pl.LightningModule): #TODO: make a base class
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        y_pred, pre_ac, _ = self.model.feature_forward(x)
+        y_pred, pre_ac = self.model.forward(x)
         losses = self.criterion(pre_ac, y_pred, y, self.current_epoch)
         acc, = acc_topk(y_pred, y)
         # log metrics
@@ -145,15 +145,14 @@ class ExperimentMulti(pl.LightningModule): #TODO: make a base class
 
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]
-        y_pred, pre_ac, features = self.model.feature_forward(x)
+        y_pred, pre_ac = self.model.forward(x)
         acc, = acc_topk(y_pred, y)
         self.log('val.acc', acc, on_step=False, on_epoch=True)
-
-        if self.CFG.plot_avg_distance and (self.current_epoch in range(10) or
-                                           (self.current_epoch + 1) % self.CFG.plot_every == 0):
-            _, dis = compute_distance(features.reshape(features.shape[0], -1), self.model.fcs)
-            dis_x_neurons = torch.mean(dis) * self.model.n_neurons
-            self.log('dis_x_neurons', dis_x_neurons, on_step=False, on_epoch=True)
+        # init random points to plot average distance
+        # if self.CFG.plot_avg_distance:
+        #     _, min_distances = compute_distance(self.random_points, self.model)
+        #     self.dis_x_neurons = torch.mean(min_distances) * self.model.n_neurons
+        #     self.log('dis_x_neurons', self.dis_x_neurons)
         return pre_ac, y_pred, y_pred.argmax(1)
 
     def validation_epoch_end(self, *args, **kwargs):
@@ -182,7 +181,7 @@ class ExperimentMulti(pl.LightningModule): #TODO: make a base class
 
     def test_step(self, batch, batch_idx):
         x, y = batch
-        y_pred, _, _ = self.model.feature_forward(x)
+        y_pred, _, _ = self.model.forward(x)
         # pre_ac_test, pre_ac_val = pre_ac[:n_test], pre_ac[n_test:]
         # losses_test = self.criterion(pre_ac_test, y_pred_test, batch['test'][1], self.current_epoch)
         acc_test, = acc_topk(y_pred, y)
@@ -297,23 +296,3 @@ class ExperimentMulti(pl.LightningModule): #TODO: make a base class
                 trainer.fit(self, train_loader, val_loader)
                 result = trainer.test(test_dataloaders=test_loader)
                 logger.info("test", result)
-
-
-if __name__ == '__main__':
-    import hydra
-    from omegaconf import DictConfig, OmegaConf
-    import os
-    import sys
-    sys.path.append(os.getcwd())
-    from models.dnn import SimpleNet
-    from datasets.dataset import Dataset
-
-    @hydra.main(config_name='config', config_path='../config')
-    def main(CFG: DictConfig):
-        print('==> CONFIG is \n', OmegaConf.to_yaml(CFG), '\n')
-        model = SimpleNet(**CFG.MODEL)
-        dataset = Dataset(**CFG.DATASET)
-        experiment = ExperimentMulti(model, dataset, CFG)
-        experiment.run()
-
-    main()

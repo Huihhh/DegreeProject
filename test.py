@@ -66,16 +66,17 @@ def main(CFG: DictConfig) -> None:
     model.eval()
 
     # GET DATA
-    trajectory, traj_len = Spiral.make_trajectory(n_samples=10, type='spiral')
+    for traj_type in ['same_class', 'diff_class']:
+        trajectory, traj_len = Spiral.make_trajectory(type=traj_type)
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    _, sigs, _ = get_signatures(torch.tensor(trajectory).float().to(device), model)
-    h_distance = hammingDistance(sigs.float(), device=device)
-    avg_trans = torch.diag(h_distance[:, 1:])
-    data = [[i, t] for i, t in enumerate(avg_trans)]
-    table = wandb.Table(data=data, columns=['x', 'y'])
-    wandb.log({"transitions-spiral" : wandb.plot.line(table, "x", "y",
-        title="Custom Y vs X Line Plot")})
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        _, sigs, _ = get_signatures(torch.tensor(trajectory).float().to(device), model)
+        h_distance = hammingDistance(sigs.float(), device=device)
+        avg_trans = torch.diag(h_distance[:, 1:])
+        data = [[i, t] for i, t in enumerate(avg_trans)]
+        table = wandb.Table(data=data, columns=['x', 'y'])
+        wandb.log({f"transitions-{traj_type}" : wandb.plot.line(table, "x", "y",
+            title="Custom Y vs X Line Plot")})
 
     # # get datasets
     # dataset = Dataset(CFG.DATASET)

@@ -1,10 +1,11 @@
+from datasets.real_data.mnist import Mnist
 import math
 import logging
 import torch
+from PIL import Image
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision import transforms as T
 from torch.utils.data.sampler import Sampler
-from torch._six import int_classes as _int_classes
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.supporters import CombinedLoader
 import numpy as np
@@ -12,20 +13,20 @@ import wandb
 from collections import defaultdict
 from .synthetic_data.circles import Circles
 from .synthetic_data.moons import Moons
-from .synthetic_data.sphere import Sphere
 from .synthetic_data.spiral import Spiral
 from utils.upload_data_artifacts import create_artifacts
+from typing import Any, Callable, Optional, Tuple
 
 # from .iris import Iris
-from .eurosat import *
+from datasets.real_data.eurosat import *
 
 DATA = {
     'circles': Circles,
     'moons': Moons,
     'spiral': Spiral,
-    'sphere': Sphere,
     # 'iris': Iris,
-    'eurosat': EuroSat
+    'eurosat': EuroSat,
+    'mnist': Mnist
 }
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,8 @@ class Dataset(pl.LightningDataModule):
         self.kwargs = kwargs
         if name == 'eurosat':
             self.gen_image_dataset(**kwargs)
+        elif name == 'mnist':
+            self.gen_mnist_dataset(**kwargs)
         else:
             self.gen_point_dataset(**kwargs)
 
@@ -145,10 +148,87 @@ class Dataset(pl.LightningDataModule):
         self.testset = TransformedDataset(dataset, idx_test)
 
         self.noise_loader = dataset.sampling_to_plot_LR(noise_size=len(idx_train),
+                                                        # h=64, w=64, stats=TRANSFORM,
                                                         batch_size=self.batch_size,
                                                         num_workers=self.num_workers,
                                                         pin_memory=True,
                                                         drop_last=False)
+
+    def gen_mnist_dataset(self, data_dir, **kwargs):
+        TRANSFORM = {
+            'mean': (0.1307, 0.1307, 0.1307),  #(0.4914, 0.4822, 0.4465),  #
+            'std': (0.3081, 0.3081, 0.3081)  #}, # (0.2471, 0.2435, 0.2616),  # 
+        }
+        dataset = DATA[self.name](data_dir)
+        self.classes = dataset
+        self.num_classes = dataset.num_classes
+        self.testset = dataset.testset
+        N = len(dataset)
+        if isinstance(self.n_val, int):
+            n_val = self.n_val
+        elif isinstance(self.n_val, float):
+            n_val = int(N * self.n_val)
+
+        # sample labeled
+        categorized_idx = [list(np.where(np.array(dataset.trainset.targets) == i)[0])
+                           for i in range(dataset.num_classes)]  #[[], [],]
+
+        sample_distrib = np.array([len(idx_group) for idx_group in categorized_idx])
+        sample_distrib = sample_distrib / sample_distrib.max()
+
+        if kwargs['shuffle']:
+            for i in range(dataset.num_classes):
+                np.random.shuffle(categorized_idx[i])
+
+        # rerange indexs following the rule so that labels are ranged like: 0,1,....9,0,....9,...
+        # adopted from https://github.com/google-research/fixmatch/blob/79f9fd3e6267035d685864beaec40dd45408ecb0/scripts/create_split.py#L87
+        npos = np.zeros(dataset.num_classes, np.int64)
+        idx_val = []
+        for i in range(n_val):
+            c = np.argmax(sample_distrib - npos / max(npos.max(), 1))
+            idx_val.append(categorized_idx[c][npos[c]])  # the indexs of examples
+            npos[c] += 1
+
+        idx_train = np.setdiff1d(np.array(np.arange(N)), np.array(idx_val))
+
+        self.trainset = TransformedDataset(dataset.trainset, idx_train)
+        # *** stack augmented data ***
+        if 'use_aug' in kwargs.keys() and kwargs['use_aug']:
+            logger.info('********* apply data augmentation ***********')
+            mean = TRANSFORM['mean'][0]
+            std = TRANSFORM['std'][0]
+            transform = T.Compose([
+                T.RandomHorizontalFlip(p=kwargs['flip_p']),
+                T.RandomCrop(size=28, padding=int(28 * 0.125), padding_mode='reflect'),
+                T.ToTensor(),
+                T.Normalize(mean=mean, std=std)
+            ])
+            trainset_aug = TransformedDataset(dataset.trainset, idx_train, transform=transform)
+            self.trainset = [self.trainset, trainset_aug]
+
+        # self.trainset = Data.ConcatDataset([self.trainset, dataset_aug])
+        self.valset = TransformedDataset(dataset.trainset, idx_val)
+
+        self.noise_loader = self.sampling_to_plot_LR(noise_size=len(idx_train),
+                                                        h=28, w=28, stats=TRANSFORM,
+                                                        batch_size=self.batch_size,
+                                                        num_workers=self.num_workers,
+                                                        pin_memory=True,
+                                                        drop_last=False)
+
+    def sampling_to_plot_LR(self, noise_size, h, w, stats, channel_size=1, **kwargs):
+        # idx = np.random.permutation(len(self.data))
+        # subset = Data.Subset(self, idx[:noise_size])
+        noise = []
+        for i in range(channel_size):
+            noise.append(np.random.normal(stats['mean'][i], stats['std'][i], [noise_size, i, h, w]))
+        noise = np.concatenate(noise, axis=1)
+        noise_label = np.zeros(len(noise)) * -1  #np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
+        noise = torch.from_numpy(noise).float()
+        noise_label = torch.from_numpy(noise_label).long()
+        dataset = TensorDataset(noise, noise_label)
+        loader = DataLoader(dataset, **kwargs)
+        return loader
 
 
     def train_dataloader(self) -> Any:
@@ -182,7 +262,7 @@ class Dataset(pl.LightningDataModule):
                           drop_last=False)
 
 
-class TransformedDataset(Dataset):
+class TransformedDataset:
     def __init__(self, dataset, indexs, transform=None, target_transform=None):
         self.dataset = dataset
         self.data = dataset.data[indexs]
@@ -212,7 +292,7 @@ class TransformedDataset(Dataset):
 class BatchWeightedRandomSampler(Sampler):
     '''Samples elements for a batch with given probabilites of each element'''
     def __init__(self, data_source, batch_size, drop_last=True):
-        if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or \
+        if not isinstance(batch_size, int) or isinstance(batch_size, bool) or \
                 batch_size <= 0:
             raise ValueError("batch_size should be a positive integer value, "
                              "but got batch_size={}".format(batch_size))

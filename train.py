@@ -1,3 +1,4 @@
+from experiments.exp_mnist import ExperimentMnist
 import random
 import numpy as np
 import torch
@@ -70,8 +71,10 @@ def main(CFG: DictConfig) -> None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device=device)
 
-    if CFG.MODEL.name in ['resnet', 'sResnet']:
+    if CFG.DATASET.name == 'eurosat':
         experiment = ExperimentMulti(model, dataset, CFG)
+    elif CFG.DATASET.name == 'mnist':
+        experiment = ExperimentMnist(model, dataset, CFG)
     else:
         experiment = LitExperiment(model, dataset, CFG)
     experiment.run()
