@@ -16,12 +16,15 @@ from easydict import EasyDict as edict
 import logging
 from pathlib import Path
 import wandb
+import matplotlib.pyplot as plt
 
 from omegaconf import DictConfig, OmegaConf
 import hydra
 
 from datasets.dataset import Dataset
 from datasets.synthetic_data.spiral import Spiral
+from datasets.synthetic_data.moons import Moons
+from datasets.synthetic_data.circles import Circles
 from models.dnn import SimpleNet
 from experiments.litExperiment import LitExperiment
 from experiments.experiment_multiclass import ExperimentMulti
@@ -52,6 +55,8 @@ def main(CFG: DictConfig) -> None:
     cudnn.deterministic = True
     cudnn.benchmark = False
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     # W&B INIT
     config = edict()
     for value in CFG.values():
@@ -60,23 +65,40 @@ def main(CFG: DictConfig) -> None:
     
     # GET MODEL FROM W&B ARTIFACT
     api = wandb.Api()
-    artifact = api.artifact(f'{CFG.EXPERIMENT.wandb_project}/{CFG.MODEL.name}-{CFG.EXPERIMENT.name}:seed{CFG.Logging.seed}')
+    if CFG.EXPERIMENT.artifact_v is not None:
+        artifact_tag = CFG.EXPERIMENT.artifact_v
+    else: 
+        artifact_tag = f'seed{CFG.Logging.seed}'
+    artifact = api.artifact(f'{CFG.EXPERIMENT.wandb_project}/{CFG.MODEL.name}-{CFG.EXPERIMENT.name}:{artifact_tag}')
     model_dir = artifact.checkout()
     model = torch.load(model_dir + f'/{CFG.MODEL.name}-{CFG.EXPERIMENT.name}.pt')
     model.eval()
+    model = model.to(device)
 
     # GET DATA
+    DATA = {
+        'circles': Circles,
+        'moons': Moons,
+        'spiral': Spiral
+    }
     for traj_type in ['same_class', 'diff_class']:
-        trajectory, traj_len = Spiral.make_trajectory(type=traj_type)
+        trajectory, traj_len = DATA[CFG.DATASET.name].make_trajectory(type=traj_type)
 
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         _, sigs, _ = get_signatures(torch.tensor(trajectory).float().to(device), model)
         h_distance = hammingDistance(sigs.float(), device=device)
         avg_trans = torch.diag(h_distance[:, 1:])
         data = [[i, t] for i, t in enumerate(avg_trans)]
         table = wandb.Table(data=data, columns=['x', 'y'])
-        wandb.log({f"transitions-{traj_type}" : wandb.plot.line(table, "x", "y",
-            title="Custom Y vs X Line Plot")})
+        wandb.log({f"Transitions-pointwise-{traj_type}" : wandb.plot.line(table, "x", "y",
+            title=f"{traj_type}")})
+
+        xy, l = DATA[CFG.DATASET.name].make_data(**CFG.DATASET)
+        plt.figure()
+        plt.scatter(xy[:, 0], xy[:, 1], c=l)
+        plt.scatter(trajectory[:, 0], trajectory[:, 1])
+        wandb.log({f'line_{traj_type}': wandb.Image(plt)})
+
+        
 
     # # get datasets
     # dataset = Dataset(CFG.DATASET)

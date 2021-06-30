@@ -61,30 +61,30 @@ class Spiral:
         return X, y
 
     @classmethod
-    def sampling_to_plot_LR(self, X, y, h=0.01):
+    def sampling_to_plot_LR(self, X, y, res=200):
         # create grid to evaluate model
         minX, minY = X.min(0)
         maxX, maxY = X.max(0)
-        xx = np.arange(minX, maxX, h)
-        yy = np.arange(minY, maxY, h)
+        xx = np.linspace(minX, maxX, res)
+        yy = np.linspace(minY, maxY, res)
         YY, XX = np.meshgrid(yy, xx)
         xy = np.vstack([XX.ravel(), YY.ravel()]).T
 
-        w1 = xx.shape[0]
-        w2 = yy.shape[0]
+        w1 = res
+        w2 = res
         x1, x2 = np.split(X, 2)
         matrix = [[0.0 for i in range(w1)] for j in range(w2)]
         for x, y in x1:
             x = min(int(round(x * w1)), w1 - 1)
             y = min(int(round(y * w2)), w2 - 1)
-            matrix[1 - y][x] = 1
+            matrix[w2 -1 - y][x] = 1
         for x, y in x2:
             x = min(int(round(x * w1)), w1 - 1)
             y = min(int(round(y * w2)), w2 - 1)
-            matrix[1 - y][x] = -1
+            matrix[w2-1 - y][x] = -1
 
         matrix = np.array(matrix)
-        matrix = gaussian_filter(matrix, sigma=1)
+        matrix = gaussian_filter(matrix, sigma=5)
         TH = 0.01
         matrix[np.where(np.abs(matrix) < TH)] = 0
         matrix[np.where(matrix > TH)] = 1

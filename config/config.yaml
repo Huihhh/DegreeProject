@@ -28,6 +28,7 @@ EXPERIMENT:
   # wandb setting
   dryrun: False
   wandb_project: EuroSat
+  artifact_v:
 
   # regularization
   wdecay: 0.002

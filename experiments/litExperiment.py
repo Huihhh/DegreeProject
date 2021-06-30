@@ -296,11 +296,11 @@ class LitExperiment(pl.LightningModule):
         base_color_labels = base_color_labels.reshape(self.grid_labels.shape).T
 
         
-        input_points, labels = self.dataset.trainset.tensors
+        input_points, true_label = self.dataset.trainset.tensors
         _, sigs_train, _ = get_signatures(input_points.to(self.device), self.model)
 
         #Hamming distance
-        hdis_same, hdis_diff = self.hammingDistance_classwise(sigs_train, labels.squeeze().long())
+        hdis_same, hdis_diff = self.hammingDistance_classwise(sigs_train, true_label.squeeze().long())
         self.log(f'Avg Hamming distance/[training points] from same class', hdis_same)
         self.log(f'Avg Hamming distance/[training points] from different classes', hdis_diff)    
 
@@ -365,18 +365,22 @@ class LitExperiment(pl.LightningModule):
                     origin="lower",
                 )
                 c = 1
-                for lables, name in zip([pseudo_label.squeeze(), grid_labels], ['pseudo_label', 'true_label']):
-                    color_labels = np.zeros(lables.shape)
+                labels = [pseudo_label.squeeze(), grid_labels]
+                bounds = [[0.4, 0.6], bounds]
+                for j, name in enumerate(['pseudo_label', 'true_label']):
+                # for lables, name in zip([pseudo_label.squeeze(), grid_labels], ['pseudo_label', 'true_label']): 
+                    
+                    color_labels = np.zeros(labels[j].shape)
                     for i, key in enumerate(sigs_grid_dict):
                         idx = np.where(sigs_grid == key)
-                        region_labels = lables[idx]
+                        region_labels = labels[j][idx]
                         ratio = sum(region_labels) / region_labels.size
                         color_labels[idx] = ratio
 
                     color_labels = color_labels.reshape(self.grid_labels.shape).T
 
                     cmap = mpl.cm.bwr
-                    norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
+                    norm = mpl.colors.BoundaryNorm(bounds[j], cmap.N, extend='both')
                     ax[c].imshow(color_labels, cmap=cmap, norm=norm, alpha=1, **kwargs)
                     ax[c].imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.6, **kwargs)
                     ax[c].set_title(name)
@@ -386,7 +390,7 @@ class LitExperiment(pl.LightningModule):
                 # linear regions colored by true labels with sample points
                 ax[2].imshow(color_labels, cmap=cmap, norm=norm, alpha=0.8, **kwargs)
                 ax[2].imshow(base_color_labels, cmap=plt.get_cmap('Pastel2'), alpha=0.5, **kwargs)
-                ax[2].scatter(input_points[:, 0], input_points[:, 1], c=labels, s=1)
+                ax[2].scatter(input_points[:, 0], input_points[:, 1], c=true_label, s=1)
                 ax[2].set_title('true label')
                 ax[2].set(xlim=[xx.min(), xx.max()], ylim=[yy.min(), yy.max()], aspect=1)
 
