@@ -25,7 +25,7 @@ class WeightScaleOnLR:
         self.model = model
         self.grid_points, self.grid_labels = dataset.grid_data
         
-        self.device = torch.device('gpu' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         config = edict()
         for value in CFG.values():
             config.update(value)
