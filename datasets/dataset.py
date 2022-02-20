@@ -12,7 +12,7 @@ from .synthetic_data.moons import Moons
 from .synthetic_data.sphere import Sphere
 from .synthetic_data.spiral import Spiral
 from torch.utils.data.sampler import Sampler
-from torch._six import int_classes as _int_classes
+
 # from .iris import Iris
 from .eurosat import *
 
@@ -223,7 +223,7 @@ class TransformedDataset(Dataset):
 class BatchWeightedRandomSampler(Sampler):
     '''Samples elements for a batch with given probabilites of each element'''
     def __init__(self, data_source, batch_size, drop_last=True):
-        if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or \
+        if not isinstance(batch_size, int) or isinstance(batch_size, bool) or \
                 batch_size <= 0:
             raise ValueError("batch_size should be a positive integer value, "
                              "but got batch_size={}".format(batch_size))

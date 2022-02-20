@@ -7,7 +7,7 @@ from collections import Counter
 import os
 import zipfile
 import urllib.request as Request
-from numpy.core.fromnumeric import transpose
+
 
 import torch
 import torch.utils.data as Data

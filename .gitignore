@@ -16,3 +16,4 @@ note.md
 data/
 !data/titanic.dat
 debug/
+*.sh

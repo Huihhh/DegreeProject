@@ -88,13 +88,13 @@ class ExperimentMulti(pl.LightningModule):
     def forward(self, x):
         return self.model.forward(x)
 
-    def on_post_move_to_device(self):
-        super().on_post_move_to_device()
-        # used EWA or not
-        # init ema model after model moved to device
-        if self.CFG.ema_used:
-            self.ema_model = EMA(self.model, self.CFG.ema_decay)
-            logger.info("[EMA] initial ")
+    # def on_post_move_to_device(self):
+    #     super().on_post_move_to_device()
+    #     # used EWA or not
+    #     # init ema model after model moved to device
+    #     if self.CFG.ema_used:
+    #         self.ema_model = EMA(self.model, self.CFG.ema_decay)
+    #         logger.info("[EMA] initial ")
 
     #     features = []
     #     features_norm = []
@@ -144,7 +144,7 @@ class ExperimentMulti(pl.LightningModule):
             if param.requires_grad:
                 self.log(f'parameters/norm_{name}', LA.norm(param))
                 if self.CFG.log_weights:
-                    self.log(f'historgram/{name}', wandb.Histogram(param.detach().cpu().view(-1)))
+                    self.loger.experiment.log({f'historgram/{name}': wandb.Histogram(param.detach().cpu().view(-1))})
         if self.CFG.ema_used:
             logger.info(f'======== Validating on EMA model: epoch {self.current_epoch} ========')
             self.ema_model.update_buffer()
@@ -189,11 +189,12 @@ class ExperimentMulti(pl.LightningModule):
         return acc_test
 
     def run(self):
-        wandb_logger = WandbLogger(
+        self.wandb_logger = WandbLogger(
             project=self.CFG.wandb_project,
             name=self.CFG.name,
             config=self.config,
         )
+        
         # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
         checkpoint_callback = ModelCheckpoint(
             monitor='val.total_loss',
@@ -213,12 +214,12 @@ class ExperimentMulti(pl.LightningModule):
             # accelerator="ddp",  # if torch.cuda.is_available() else 'ddp_cpu',
             # gradient_clip_val=1,
             callbacks=callbacks,
-            logger=wandb_logger,
+            logger=self.wandb_logger,
             checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
             gpus=-1 if torch.cuda.is_available() else 0,
             max_epochs=self.CFG.n_epoch,
             gradient_clip_val=10,
-            progress_bar_refresh_rate=0)
+            enable_progress_bar = False)
         trainer.fit(self, self.dataset)
         if self.CFG.debug:
             trainer.test(self, datamodule=self.dataset)
@@ -266,8 +267,9 @@ class ExperimentMulti(pl.LightningModule):
             sigs_to_idx = dict(zip(sigs_unique, region_ids))
             region_counts = Counter(sigs)
             size_counts = Counter(region_counts.values())
-            np_histogram = (list(size_counts.values()), [0] + sorted(list(size_counts.keys())))
-            self.log(f'LR_count_distrib.{name}', wandb.Histogram(np_histogram=np_histogram))
+            # np_histogram = (list(size_counts.values()), [0] + sorted(list(size_counts.keys())))
+            np_histogram = (list(size_counts.values()), sorted(list(size_counts.keys()))) #? must have equal length?
+            self.logger.experiment.log({f'LR_count_distrib.{name}': wandb.Histogram(np_histogram)})
 
             for key in sigs_to_idx:
                 idx = np.where(sigs == key)

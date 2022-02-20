@@ -185,7 +185,7 @@ class LitExperiment(pl.LightningModule):
             self.ema_model.update_params()
         return loss
 
-    def on_train_epoch_end(self, outputs) -> None:
+    def on_train_epoch_end(self) -> None:
         for name, param in self.model.named_parameters():
             self.log(f'parameters/norm_{name}', LA.norm(param))
         
@@ -330,7 +330,7 @@ class LitExperiment(pl.LightningModule):
         self.log('boundary_regions', boundary_regions)
 
         if self.CFG.plot_LR:
-            if (self.current_epoch == 0) or (self.current_epoch + 1) % (self.CFG.plot_every * 10) == 0:
+            if (self.current_epoch == 0) or (self.current_epoch + 1) % (self.CFG.plot_every * 10 ) == 0:
                 # save confidence map
                 if self.CFG.plot_confidence:
                     fig, ax = plt.subplots(2, 2, sharex='col', sharey='row')
@@ -380,7 +380,8 @@ class LitExperiment(pl.LightningModule):
                     ax[-1].set_title('confidence map')
                     fig.colorbar(ax0, ax=ax.ravel().tolist())
 
-                self.log(f'LinearRegions/epoch{self.current_epoch}', wandb.Image(fig))
+                logger.info('********************************* log linear regions')
+                self.logger.experiment.log({f'LinearRegions/epoch{self.current_epoch}': wandb.Image(fig)})
                 plt.close(fig)
 
     def resume_model(self, train_loader, val_loader, test_loader):

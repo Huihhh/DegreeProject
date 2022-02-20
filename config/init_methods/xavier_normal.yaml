@@ -1,4 +1,4 @@
-# @package _group_._name_
+# @package xavier_normal
 params: 
   gain: 1
 name: xn

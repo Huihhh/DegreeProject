@@ -1,5 +1,6 @@
 #TODO: add available choices
 defaults:
+  - _self_
   - dataset: eurosat
   - model: resnet
   - init_methods@MODEL.fc_winit: normal_custom
