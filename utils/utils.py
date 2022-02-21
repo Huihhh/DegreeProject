@@ -4,6 +4,7 @@ from torch.utils.data.dataloader import DataLoader
 import numpy as np
 import torch.nn.functional as F
 import torch.nn as nn
+from omegaconf.dictconfig import DictConfig
 
 
 def accuracy(output, target):
@@ -70,6 +71,14 @@ def get_feature_loader(dataloader, net, device):
     feature_dataloader = DataLoader(feature_dataset, batch_size=64, num_workers=4, drop_last=False, pin_memory=True)
     return feature_dataloader
 
+def flat_omegadict(odict):
+    flat = {}
+    for key, value in odict.items():
+        if isinstance(value, DictConfig) or isinstance(value, dict):
+            flat |= flat_omegadict(value)
+        else:
+            flat |= {key: value}
+    return flat
 
 def hammingDistance(arr, device):
     '''

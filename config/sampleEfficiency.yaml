@@ -1,4 +1,5 @@
-#TODO: add available choices
+# * varying train size
+# * fixed test set (seed fixed, sized fixed)
 defaults:
   - _self_
   - dataset: spiral
@@ -19,6 +20,7 @@ DATASET:
   n_test: 0.2
   batch_size: 32
   num_workers: 4
+  fixed_valset: 20
 
 MODEL:
   seed: ${DATASET.seed}
@@ -35,7 +37,7 @@ EXPERIMENT:
   
 
   # regularization
-  wdecay: 0.001
+  wdecay: 0.002
   dis_reg: 0.00 # coefficient of distance reg term 
   reg_filter: composite_relu # or abs_relu, or sqrt_relu
   lambda_hreg: 0.3

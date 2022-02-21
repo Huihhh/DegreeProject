@@ -3,17 +3,12 @@ import wandb
 import torch.nn as nn
 from utils import get_signatures
 from easydict import EasyDict as edict
-
-import random
 import numpy as np
-import torch.backends.cudnn as cudnn
-import pytorch_lightning as pl
+
 
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
-import os
-import math
 
 from datasets.dataset import Dataset
 from models import *
@@ -31,9 +26,6 @@ class WeightScaleOnLR:
             config.update(value)
         wandb.init(project=CFG.EXPERIMENT.wandb_project, name=CFG.EXPERIMENT.name, config=config)
         self.xname = CFG.EXPERIMENT.comp_scale
-        # self.init_method = CFG.MODEL.fc_winit if self.xname == 'weight' else CFG.MODEL.fc_binit
-
-        # self.init_method = eval(self.init_method.func)
 
 
     # * STEP1. init model & calculate std
@@ -47,16 +39,8 @@ class WeightScaleOnLR:
                     nn.init.normal_(net.weight, std=std)
                 else:
                     nn.init.normal_(net.bias, std=std)
-                # fan_in = net.weight.shape[1]
-                # bound = std / math.sqrt(fan_in) if fan_in > 0 else 0
-                # nn.init.uniform_(net.bias, -bound, bound)
-        
+
         reinit_net(self.model)
-        weights = []
-        for name, param in self.model.named_parameters(): # ? include bias?
-            if self.xname in name:
-                weights.extend(param.reshape(-1).tolist())
-        return np.array(weights).std()
 
     def run(self):
         for gain in np.arange(0.001, 20, 0.01):

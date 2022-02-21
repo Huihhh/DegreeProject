@@ -74,7 +74,7 @@ class Dataset(pl.LightningDataModule):
         self.grid_data = dataset.sampling_to_plot_LR(*dataset.make_data(n_train, **kwargs))
         self.trainset = get_torch_dataset(dataset.make_data(n_train, **kwargs), self.name)
         self.valset = get_torch_dataset(dataset.make_data(n_val, **kwargs), self.name)
-        self.testset = get_torch_dataset(dataset.make_data(n_test, **kwargs), self.name)
+        self.testset = get_torch_dataset(dataset.make_data(n_test, **{**kwargs, 'seed': 20}), self.name)#!fixed seed 
 
     def gen_image_dataset(self, resnet, data_dir, **kwargs):
         dataset = DATA[self.name](data_dir)
@@ -176,21 +176,21 @@ class Dataset(pl.LightningDataModule):
             test_loader = DataLoader(self.testset,
                                      batch_sampler=BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size),
                                      **kwargs)
-            val_loader = DataLoader(self.trainset,
-                                    batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),
-                                    **kwargs)
+            # val_loader = DataLoader(self.trainset,
+            #                         batch_sampler=BatchWeightedRandomSampler(self.trainset, batch_size=self.batch_size),**kwargs)
         else:
             test_loader = DataLoader(self.testset,
                                      batch_size=self.batch_size,
                                      num_workers=self.num_workers,
                                      pin_memory=True,
                                      drop_last=False)
-            val_loader = DataLoader(self.trainset,
-                                    batch_size=self.batch_size,
-                                    num_workers=self.num_workers,
-                                    pin_memory=True,
-                                    drop_last=False)
-        return CombinedLoader({'test': test_loader, 'val': val_loader})
+            # val_loader = DataLoader(self.trainset,
+            #                         batch_size=self.batch_size,
+            #                         num_workers=self.num_workers,
+            #                         pin_memory=True,
+            #                         drop_last=False)
+        # return CombinedLoader({'test': test_loader, 'val': val_loader})
+        return test_loader
 
 
 class TransformedDataset(Dataset):

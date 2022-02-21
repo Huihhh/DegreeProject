@@ -19,9 +19,9 @@ class Spiral:
         noise_level: float, betwen 0-1, defines the level a point is diverging from the sample
         Returns
         -------
-        X : ndarray of shape (n_samples, 2)
+        * @param X : ndarray of shape (n_samples, 2)
             The generated samples.
-        y : ndarray of shape (n_samples,)
+        * @param y : ndarray of shape (n_samples,)
             The integer labels (0 or 1) for class membership of each sample.
         """
         generator = check_random_state(seed)
