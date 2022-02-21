@@ -8,10 +8,12 @@ from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
 import os
+import wandb
 from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from experiments.artifacts_logger import ArtifactLogger
+
 
 
 
@@ -101,6 +103,7 @@ def main(CFG: DictConfig) -> None:
     trainer.fit(experiment, dataset)
     logger.info("======= Testing =======")
     trainer.test(experiment, datamodule=dataset)
+    wandb.finish()
 
 
 
