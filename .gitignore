@@ -10,7 +10,6 @@ checkpoints/
 *.log
 *.png
 try*
-*.txt
 note.md
 
 data/
