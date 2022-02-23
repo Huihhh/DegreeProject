@@ -25,11 +25,12 @@ from experiments.sampl_efficiency import SampleEffi
 from experiments.base_trainer import Bicalssifier
 from utils import flat_omegadict
  
-@hydra.main(config_path='./config', config_name='config')
+@hydra.main(config_path='./config', config_name='sampleEfficiency')
 def main(CFG: DictConfig) -> None:
     # initial logging file
     logger = logging.getLogger(__name__)
     logger.info(OmegaConf.to_yaml(CFG))
+    config = flat_omegadict(CFG)
 
     # # For reproducibility, set random seed
     if CFG.Logging.seed == 'None':
@@ -66,11 +67,11 @@ def main(CFG: DictConfig) -> None:
     # else:
     #     experiment = LitExperiment(model, dataset, CFG)
     experiment = Bicalssifier(model, dataset, CFG)
-
+    
     wandb_logger = WandbLogger(
         project=CFG.EXPERIMENT.wandb_project,
         name=CFG.EXPERIMENT.name,
-        config=flat_omegadict(CFG),
+        config=config,
     )
     # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
     checkpoint_callback = ModelCheckpoint(

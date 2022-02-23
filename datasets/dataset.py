@@ -65,7 +65,7 @@ class Dataset(pl.LightningDataModule):
             assert (self.n_train + self.n_val + self.n_test - 1.0) < 1e-5, 'n_train + n_val + n_test must equal to 1!'
             n_train = math.ceil(n_samples * self.n_train)
             n_val = math.ceil(n_samples * self.n_val)
-            n_test = n_test = n_samples - n_train - n_val
+            n_test = n_samples - n_train - n_val
 
         dataset = DATA[self.name]()
         self.num_classes = 2
@@ -73,7 +73,7 @@ class Dataset(pl.LightningDataModule):
         self.make_data = dataset.make_data
         self.grid_data = dataset.sampling_to_plot_LR(*dataset.make_data(n_train, **kwargs))
         self.trainset = get_torch_dataset(dataset.make_data(n_train, **kwargs), self.name)
-        self.valset = get_torch_dataset(dataset.make_data(n_val, **kwargs), self.name)
+        self.valset = get_torch_dataset(dataset.make_data(n_val, **{**kwargs, 'seed': 21}), self.name)
         self.testset = get_torch_dataset(dataset.make_data(n_test, **{**kwargs, 'seed': 20}), self.name)#!fixed seed 
 
     def gen_image_dataset(self, resnet, data_dir, **kwargs):
@@ -182,7 +182,7 @@ class Dataset(pl.LightningDataModule):
             test_loader = DataLoader(self.testset,
                                      batch_size=self.batch_size,
                                      num_workers=self.num_workers,
-                                     pin_memory=True,
+                                     pin_memory=True, #?would it cost more mem?
                                      drop_last=False)
             # val_loader = DataLoader(self.trainset,
             #                         batch_size=self.batch_size,

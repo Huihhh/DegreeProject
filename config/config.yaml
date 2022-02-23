@@ -1,6 +1,5 @@
 #TODO: add available choices
 defaults:
-  - _self_
   - dataset: spiral
   - model: shallow_nn
   - init_methods@MODEL.fc_winit: normal_custom
@@ -8,9 +7,8 @@ defaults:
   - init_methods@MODEL.bn_winit: ones
   - init_methods@MODEL.bn_binit: zeros
 
-Logging:
-  name: "LR"
-  seed: ${DATASET.seed}
+Log: 
+  seed: 0
 
 DATASET:
   # data loader
@@ -19,9 +17,10 @@ DATASET:
   n_test: 0.2
   batch_size: 32
   num_workers: 4
+  seed: ${Log.seed}
 
 MODEL:
-  seed: ${DATASET.seed}
+  seed: ${Log.seed}
 
 debug: False # if debug, don't save checkpoints
 early_stop: False
@@ -64,7 +63,7 @@ EXPERIMENT:
 
   save_model: False
   save_every: 64
-  out_folder: ${EXPERIMENT.name}_${DATASET.name}_${MODEL.fc_winit.name}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
+  out_folder: ${EXPERIMENT.name}_${DATASET.name}_${MODEL.fc_winit.name}_seed${DATASET.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   resume: False
   resume_checkpoints: './checkpoints/ToyExperiment_epoch_0.pth.tar' # folder or file

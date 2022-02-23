@@ -1,7 +1,6 @@
 #@package _global_
 DATASET:
   name: 'sphere'
-  seed: 0
   # make data
   radius: 0.1
   width: 0.05

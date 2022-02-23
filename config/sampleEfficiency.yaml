@@ -1,7 +1,7 @@
 # * varying train size
 # * fixed test set (seed fixed, sized fixed)
 defaults:
-  - _self_
+  # - _self_
   - dataset: spiral
   - model: shallow_nn
   - init_methods@MODEL.fc_winit: normal_custom
@@ -61,7 +61,7 @@ EXPERIMENT:
   ema_decay: 0.999
 
   TH: 0.5
-  n_epoch: 1 # 1024
+  n_epoch: 500 # 1024
   plot_avg_distance: False
 
   save_model: False

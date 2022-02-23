@@ -1,7 +1,6 @@
 #@package _global_
 DATASET:
   name: 'iris'
-  seed: 0
   # make data
   species_id: [2,3] # [1,2,3]
 

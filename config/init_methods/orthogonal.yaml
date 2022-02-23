@@ -1,5 +1,5 @@
 #@package orthogonal
 params:
   gain: 1
-name: orth
+name: orthogonal
 func: torch.nn.init.orthogonal_

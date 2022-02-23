@@ -1,7 +1,6 @@
 #@package _global_
 DATASET:
   name: 'spiral'
-  seed: 0
   # make data
   n_samples: 50 # * The actuall trainsize will be n_samples*97*2 or n_samples*97*2*train_ratio if a train_ratio is specified
   width: 0.008 # band width

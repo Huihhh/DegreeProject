@@ -1,7 +1,6 @@
 #@package _global_
 DATASET:
   name: 'circles'
-  seed: 0
   # make data
   n_samples: 2000
   equal_density: False # only used for circles

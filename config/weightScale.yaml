@@ -1,6 +1,6 @@
 #TODO: add available choices
 defaults:
-  - _self_
+  # - _self_
   - dataset: spiral
   - model: shallow_nn
   - init_methods@MODEL.fc_winit: default
@@ -23,6 +23,7 @@ DATASET:
 
 MODEL:
   seed: ${DATASET.seed}
+  h_nodes: [32,32,32,32,32,32]
 
 EXPERIMENT:
   name: 'ToyExperiment'
