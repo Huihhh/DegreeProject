@@ -144,11 +144,8 @@ class Bicalssifier(pl.LightningModule):
         del grid_points
         del sigs_grid
         if self.CFG.ema_used:
-            logger.info(f'======== Validating on EMA model: epoch {self.current_epoch} ========')
             self.ema_model.update_buffer()
             self.ema_model.apply_shadow()
-        else:
-            logger.info(f'======== Validating on Raw model: epoch {self.current_epoch} ========')
 
     def validation_step(self, batch, batch_idx):
         x, y = batch[0], batch[1]

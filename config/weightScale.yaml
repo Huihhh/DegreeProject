@@ -1,17 +1,15 @@
 #TODO: add available choices
 defaults:
-  # - _self_
   - dataset: spiral
   - model: shallow_nn
   - init_methods@MODEL.fc_winit: default
   - init_methods@MODEL.fc_binit: default
   - init_methods@MODEL.bn_winit: ones
   - init_methods@MODEL.bn_binit: zeros
+  - _self_
 
 
-Logging:
-  name: "LR"
-  seed: ${DATASET.seed}
+seed: 0
 
 DATASET:
   # data loader
@@ -22,12 +20,11 @@ DATASET:
   num_workers: 4
 
 MODEL:
-  seed: ${DATASET.seed}
   h_nodes: [32,32,32,32,32,32]
 
 EXPERIMENT:
   name: 'ToyExperiment'
-  out_folder: ${EXPERIMENT.name}_${DATASET.name}_${MODEL.fc_winit.name}_seed${Logging.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
+  out_folder: ${EXPERIMENT.name}_${DATASET.name}_${MODEL.fc_winit.name}_seed${seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
 
   # * wandb setting
   dryrun: False

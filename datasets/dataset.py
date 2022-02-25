@@ -38,7 +38,7 @@ def get_torch_dataset(ndarray, name):
 
 
 class Dataset(pl.LightningDataModule):
-    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, resnet=None, **kwargs) -> None:
+    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, seed=0, resnet=None, **kwargs) -> None:
         super().__init__()
         self.name = name
         self.n_train = n_train
@@ -46,6 +46,7 @@ class Dataset(pl.LightningDataModule):
         self.n_test = n_test
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.seed = seed
         self.kwargs = kwargs
         if name == 'eurosat':
             self.gen_image_dataset(resnet, **kwargs)
@@ -71,8 +72,8 @@ class Dataset(pl.LightningDataModule):
         self.num_classes = 2
         #TODO: sampling_to_plot_LR
         self.make_data = dataset.make_data
-        self.grid_data = dataset.sampling_to_plot_LR(*dataset.make_data(n_train, **kwargs))
-        self.trainset = get_torch_dataset(dataset.make_data(n_train, **kwargs), self.name)
+        self.grid_data = dataset.sampling_to_plot_LR(*dataset.make_data(n_train, seed=self.seed, **kwargs))
+        self.trainset = get_torch_dataset(dataset.make_data(n_train, seed=self.seed, **kwargs), self.name)
         self.valset = get_torch_dataset(dataset.make_data(n_val, **{**kwargs, 'seed': 21}), self.name)
         self.testset = get_torch_dataset(dataset.make_data(n_test, **{**kwargs, 'seed': 20}), self.name)#!fixed seed 
 

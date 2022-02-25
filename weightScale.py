@@ -61,17 +61,17 @@ def main(CFG: DictConfig) -> None:
     logger.info(OmegaConf.to_yaml(CFG))
 
     # # For reproducibility, set random seed
-    set_random_seed(CFG.Logging.seed)
+    set_random_seed(CFG.seed)
 
     # * make sure right data and model have been chosen
     assert CFG.DATASET.name != 'eurosat', '! eurosat is not suitable for this experiment. Availabel datasets: spiral, circles, moons'
     assert CFG.MODEL.name not in ['resnet', 'sResnet'], f'! {CFG.MODEL.name} is not for this experiment, please use  shallow_nn'
     # get datasets
-    dataset = Dataset(**CFG.DATASET)
+    dataset = Dataset(seed=CFG.seed, **CFG.DATASET)
     input_dim = dataset.trainset[0][0].shape[0]
 
         # build model
-    model = MODEL[CFG.MODEL.name](input_dim=input_dim, **CFG.MODEL)
+    model = MODEL[CFG.MODEL.name](input_dim=input_dim, seed=CFG.seed, **CFG.MODEL)
     logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"
                                 .format(input_dim, CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 

@@ -72,13 +72,13 @@ def get_feature_loader(dataloader, net, device):
     feature_dataloader = DataLoader(feature_dataset, batch_size=64, num_workers=4, drop_last=False, pin_memory=True)
     return feature_dataloader
 
-def flat_omegadict(odict, parentKey=None):
+def flat_omegadict(odict, parentKey=None, connector='_'):
     flat = {}
     for key, value in odict.items():
         if isinstance(value, DictConfig) or isinstance(value, dict):
             flat |= flat_omegadict(value, key)
         else:
-            newKey = f'{parentKey}.{key}' if parentKey else key
+            newKey = f'{parentKey}{connector}{key}' if parentKey else key
             flat |= {newKey: value}
     return flat
 

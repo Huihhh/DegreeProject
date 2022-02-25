@@ -14,16 +14,11 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, Ea
 from pytorch_lightning.loggers import WandbLogger
 from experiments.artifacts_logger import ArtifactLogger
 
-
-
-
 from datasets.dataset import Dataset
 from models import *
-from experiments.experiment_multiclass import ExperimentMulti
-from experiments.litExperiment import LitExperiment
-from experiments.sampl_efficiency import SampleEffi
 from experiments.base_trainer import Bicalssifier
-from utils import flat_omegadict
+from utils import flat_omegadict, set_random_seed
+
  
 @hydra.main(config_path='./config', config_name='sampleEfficiency')
 def main(CFG: DictConfig) -> None:
@@ -33,28 +28,19 @@ def main(CFG: DictConfig) -> None:
     config = flat_omegadict(CFG)
 
     # # For reproducibility, set random seed
-    if CFG.Logging.seed == 'None':
-        CFG.Logging.seed = random.randint(1, 10000)
-    random.seed(CFG.Logging.seed)
-    os.environ['PYTHONHASHSEED'] = str(CFG.Logging.seed)
-    np.random.seed(CFG.Logging.seed)
-    torch.manual_seed(CFG.Logging.seed)
-    torch.cuda.manual_seed_all(CFG.Logging.seed)
-    pl.seed_everything(CFG.Logging.seed)
-    cudnn.deterministic = True
-    cudnn.benchmark = False
+    set_random_seed(CFG.seed)
 
     if CFG.DATASET.name == 'eurosat':
-        model = MODEL[CFG.MODEL.name](**CFG.MODEL)
-        dataset = Dataset(resnet=model.resnet, **CFG.DATASET)
+        model = MODEL[CFG.MODEL.name](seed=CFG.seed, **CFG.MODEL)
+        dataset = Dataset(resnet=model.resnet, seed=CFG.seed, **CFG.DATASET)
         input_dim = model.fcs[0].fc.in_features
     else:
         # get datasets
-        dataset = Dataset(**CFG.DATASET)
+        dataset = Dataset(seed=CFG.seed, **CFG.DATASET)
         input_dim = dataset.trainset[0][0].shape[0]
 
         # build model
-        model = MODEL[CFG.MODEL.name](input_dim=input_dim, **CFG.MODEL)
+        model = MODEL[CFG.MODEL.name](input_dim=input_dim,seed=CFG.seed, **CFG.MODEL)
     logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"
                                 .format(input_dim, CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 

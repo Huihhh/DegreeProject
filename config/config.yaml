@@ -6,9 +6,11 @@ defaults:
   - init_methods@MODEL.fc_binit: default
   - init_methods@MODEL.bn_winit: ones
   - init_methods@MODEL.bn_binit: zeros
+  - _self_
 
-Log: 
-  seed: 0
+seed: 0
+debug: False # if debug, don't save checkpoints
+early_stop: False
 
 DATASET:
   # data loader
@@ -17,13 +19,7 @@ DATASET:
   n_test: 0.2
   batch_size: 32
   num_workers: 4
-  seed: ${Log.seed}
 
-MODEL:
-  seed: ${Log.seed}
-
-debug: False # if debug, don't save checkpoints
-early_stop: False
 
 EXPERIMENT:
   name: 'ToyExperiment'
