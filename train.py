@@ -38,7 +38,6 @@ def main(CFG: DictConfig) -> None:
         # get datasets
         dataset = Dataset(seed=CFG.seed, **CFG.DATASET)
         input_dim = dataset.trainset[0][0].shape[0]
-
         # build model
         model = MODEL[CFG.MODEL.name](input_dim=input_dim,seed=CFG.seed, **CFG.MODEL)
     logger.info("[Model] Building model -- input dim: {}, hidden nodes: {}, out dim: {}"

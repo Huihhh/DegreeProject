@@ -6,7 +6,7 @@ from .base import Base
 
 class Circles(Base):
     NUM_CLASSES = 2
-    
+
     @classmethod
     def make_data(cls,
                   n_samples,
@@ -46,14 +46,11 @@ class Circles(Base):
             The integer labels (0 or 1) for class membership of each sample.
         """
         if gap >= 1 or gap < 0:
-            raise ValueError(
-                "the width of the gap between circles has to be between 0 and 1."
-            )
+            raise ValueError("the width of the gap between circles has to be between 0 and 1.")
 
         # each class has the same density
         if equal_density:
-            ratio = ((1 + width)**2 - (1 - width)**2) / ((gap + width)**2 -
-                                                         (gap - width)**2)
+            ratio = ((1 + width)**2 - (1 - width)**2) / ((gap + width)**2 - (gap - width)**2)
             n_samples_inner = int(1 / (1 + ratio) * n_samples)
         else:
             # each class has the same number of points
@@ -63,10 +60,7 @@ class Circles(Base):
 
         # so as not to have the first point = last point, we set endpoint=False
         linspace_out = np.linspace(0, 2 * np.pi, n_samples_out, endpoint=False)
-        linspace_in = np.linspace(0,
-                                  2 * np.pi,
-                                  n_samples_inner,
-                                  endpoint=False)
+        linspace_in = np.linspace(0, 2 * np.pi, n_samples_inner, endpoint=False)
         outer_circ_x = np.cos(linspace_out)
         outer_circ_y = np.sin(linspace_out)
         inner_circ_x = np.cos(linspace_in) * gap
@@ -85,3 +79,20 @@ class Circles(Base):
         if noise_ratio:
             X = cls.add_noise(X, noise_ratio, noise_level, seed)
         return X, y[:, None]
+
+    @classmethod
+    def make_trajectory(cls, type='same_class', interval=0.001):
+        '''
+        return the trajectory and its length
+        '''
+        if type == 'same_class':
+            # linspace_out = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
+            linspace_out = np.arange(0, 2 * np.pi, interval)
+            outer_circ_x = np.cos(linspace_out)
+            outer_circ_y = np.sin(linspace_out)
+            xy = np.vstack([outer_circ_x, outer_circ_y]).T
+            traj_len = np.sqrt( np.ediff1d(xy[:, 0], to_begin=0)**2 + np.ediff1d(xy[:, 1], to_begin=0)**2).sum()
+            return xy, traj_len
+        else:
+            x = np.arange(-1, 1, interval)
+            return np.array([x, x]).T, np.sqrt(2 * (x[0] - x[-1])**2)

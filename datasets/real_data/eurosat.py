@@ -12,6 +12,7 @@ import urllib.request as Request
 import torch
 import torch.utils.data as Data
 from torchvision.datasets.vision import VisionDataset
+from torchvision.datasets import ImageFolder
 from torchvision import transforms as T
 from typing import Any, Callable, Optional, Tuple
 
@@ -52,7 +53,7 @@ class EuroSat(VisionDataset):
         self.targets = []
         class_counter = Counter()
 
-        # load images
+        # # load images
         rootdir = hydra.utils.get_original_cwd()
         if not os.path.exists(rootdir + data_dir):
             download_data(rootdir + '/data/EuroSAT_RGB.zip', 'http://madm.dfki.de/files/sentinel/EuroSAT.zip')
@@ -67,6 +68,7 @@ class EuroSat(VisionDataset):
 
         self.data = np.concatenate(self.data)
         self.class_to_idx = {_class: i for i, _class in enumerate(class_counter.keys())}
+        self.classes = list(self.class_to_idx.keys())
         self.targets = [self.class_to_idx[x] for x in self.targets]
         self.num_classes = len(class_counter.keys())
 

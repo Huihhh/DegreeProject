@@ -68,11 +68,12 @@ class ResNet(Module):
         
 
     def forward(self, x):
-        x = self.resnet(x).squeeze()
+        x = self.resnet(x).reshape(x.shape[0], -1)
         x = self.fcs(x)
         return x
     
     def feature_forward(self, x):
+        features = x = self.resnet(x).reshape(x.shape[0], -1)
         pre_ac = []
         for net in self.fcs[:-1]:
             x = net.fc(x)
@@ -80,7 +81,7 @@ class ResNet(Module):
             x = net.ac(x) #TODO: if use bn
         x = self.fcs[-1](x)
         pre_ac = torch.cat(pre_ac, dim=1)
-        return x, pre_ac
+        return x, pre_ac, features
 
 if __name__ == "__main__":
     import hydra

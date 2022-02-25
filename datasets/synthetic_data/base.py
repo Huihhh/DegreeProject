@@ -29,12 +29,12 @@ class Base(object):
         return X
 
     @classmethod
-    def sampling_to_plot_LR(cls, X, y, h=0.01):
+    def sampling_to_plot_LR(cls, X, y, res=200):
         # create grid to evaluate model
         minX, minY = X.min(0)
         maxX, maxY = X.max(0)
-        xx = np.arange(minX, maxX, h)
-        yy = np.arange(minY, maxY, h)
+        xx = np.linspace(minX, maxX, res)
+        yy = np.linspace(minY, maxY, res)
         YY, XX = np.meshgrid(yy, xx)
         xy = np.vstack([XX.ravel(), YY.ravel()]).T
 
