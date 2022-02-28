@@ -12,7 +12,7 @@ import wandb
 from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
-from experiments.artifacts_logger import ArtifactLogger
+from experiments.hDistance_logger import HDistanceLogger
 
 from datasets.dataset import Dataset
 from models import *
@@ -57,6 +57,7 @@ def main(CFG: DictConfig) -> None:
         project=CFG.EXPERIMENT.wandb_project,
         name=CFG.EXPERIMENT.name,
         config=config,
+        job_type='train'
     )
     # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
     checkpoint_callback = ModelCheckpoint(
@@ -67,10 +68,14 @@ def main(CFG: DictConfig) -> None:
         mode='min',
     )
 
-    # artifact_logger = ArtifactLogger()
+    log_every = np.hstack([np.arange(1, 10), np.arange(19, 100, 10), np.arange(199, 1000, 100)])
+    
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
     callbacks = [lr_monitor]
+    if CFG.log_hdistance:
+        hdis_logger = HDistanceLogger(log_every, dataset, CFG, input_dim)
+        callbacks.append(hdis_logger)
     if CFG.early_stop:
         callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
 

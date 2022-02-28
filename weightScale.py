@@ -1,7 +1,7 @@
 import torch
 import wandb
 import torch.nn as nn
-from utils import get_signatures
+from utils import get_signatures, visualize_signatures
 from easydict import EasyDict as edict
 import numpy as np
 
@@ -21,10 +21,10 @@ class WeightScaleOnLR:
         self.grid_points, self.grid_labels = dataset.grid_data
         
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        config = edict()
-        for value in CFG.values():
-            config.update(value)
-        wandb.init(project=CFG.EXPERIMENT.wandb_project, name=CFG.EXPERIMENT.name, config=config)
+        # config = edict()
+        # for value in CFG.values():
+        #     config.update(value)
+        # wandb.init(project=CFG.EXPERIMENT.wandb_project, name=CFG.EXPERIMENT.name, config=config)
         self.xname = CFG.EXPERIMENT.comp_scale
 
 
@@ -44,11 +44,13 @@ class WeightScaleOnLR:
 
     def run(self):
         for gain in np.arange(0.001, 20, 0.01):
-            scale = self.reinit_model(gain)
+            # scale = self.reinit_model(gain)
             # * STEP2. get signatures and count
-            _, sigs_grid, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
-            num_lr = len(set([''.join(str(x) for x in s.tolist()) for s in sigs_grid])) 
-            wandb.log({'weight_std': gain, '#Linear regions': num_lr})
+            _, grid_sigs, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
+            # num_lr = len(set([''.join(str(x) for x in s.tolist()) for s in grid_sigs])) 
+            grid_sigs = np.array([''.join(str(x) for x in s.tolist()) for s in grid_sigs])
+            visualize_signatures(grid_sigs, self.grid_labels, self.grid_points)
+            # wandb.log({'weight_std': gain, '#Linear regions': num_lr})
 
         
 

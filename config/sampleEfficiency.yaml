@@ -12,6 +12,8 @@ defaults:
 seed: 0
 debug: False # if debug, don't save checkpoints
 early_stop: False
+log_hdistance: True
+
 
 DATASET:
   # data loader
@@ -21,6 +23,9 @@ DATASET:
   batch_size: 32
   num_workers: 4
   fixed_valset: 20
+
+MODEL:
+  h_nodes: [16,16,16,16]
 
 EXPERIMENT:
   name: 'ToyExperiment'

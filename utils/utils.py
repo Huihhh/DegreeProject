@@ -1,4 +1,3 @@
-from joblib import parallel_backend
 import torch
 import torch.utils.data as Data
 from torch.utils.data.dataloader import DataLoader
@@ -6,6 +5,7 @@ import numpy as np
 import torch.nn.functional as F
 import torch.nn as nn
 from omegaconf.dictconfig import DictConfig
+import dask.array as da
 
 
 def accuracy(output, target):
@@ -84,26 +84,28 @@ def flat_omegadict(odict, parentKey=None, connector='_'):
 
 def hammingDistance(arr, device):
     '''
-  arr: 0,1 2d array or a list of 0,1 2d array
-  '''
+    compute the hamming distance of two arrays with same size, 
+    arr: binary 2d array or a list of binary 2d array, each row of the array is the signature code of a sample
+    return: 
+    '''
     if isinstance(arr, list):
         arr1, arr2 = arr
+        arr1 = arr1.float()
+        arr2 = arr2.float()
     else:
-        arr1 = arr2 = arr
-    n1, m = arr1.shape  ## n1 is the sample size of arr1, m is the feature size
+        # compute the hamming distance of any two rows (any two regions) in the array
+        arr1 = arr2 = arr.float()
+    n1, m = arr1.shape  ## n1 is the sample size of arr1, m is the feature size (number of nodes)
     n2, _ = arr2.shape
+    if n1 > 10000:
+        arr1 = da.from_array(arr1)
+        arr2 = da.from_array(arr2)
     arr_not1 = torch.ones((n1, m), device=device) - arr1
     arr_not2 = torch.ones((n2, m), device=device) - arr2
-    arr_ones = arr1.mm(arr2.T)  # count the positions of both ones of each two rows
-    arr_zeros = arr_not1.mm(arr_not2.T)  # count the positions of both zeros of each two rows
+    arr_ones = arr1 @ (arr2.T)  # count the positions of both ones of each two rows
+    arr_zeros = arr_not1 @ (arr_not2.T)  # count the positions of both zeros of each two rows
     h_distance = m * torch.ones((n1, n2), device=device) - arr_zeros - arr_ones
-    return h_distance
-
-    # if isinstance(arr, list):
-    #     return h_distance.mean()
-    # else:
-    #     return h_distance.sum() / ((n1 * n2 - len(h_distance.diagonal())) + 1e-6)
-    # #   return h_distance[np.triu_indices(n1, k=1)]
+    return h_distance #/ m # divided by the number of nodes, for comparison between different architectures
 
 
 def get_hammingdis(p=1, m=1):

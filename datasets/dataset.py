@@ -41,7 +41,7 @@ def get_torch_dataset(ndarray, name):
 
 
 class Dataset(pl.LightningDataModule):
-    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, seed=0, resnet=None, **kwargs) -> None:
+    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, seed=0, **kwargs) -> None:
         super().__init__()
         self.name = name
         self.n_train = n_train
@@ -77,10 +77,16 @@ class Dataset(pl.LightningDataModule):
         self.num_classes = 2
         #TODO: sampling_to_plot_LR
         self.make_data = dataset.make_data
-        self.grid_data = dataset.sampling_to_plot_LR(*dataset.make_data(n_train, seed=self.seed, **kwargs))
-        self.trainset = get_torch_dataset(dataset.make_data(n_train, seed=self.seed, **kwargs), self.name)
-        self.valset = get_torch_dataset(dataset.make_data(n_val, **{**kwargs, 'seed': 21}), self.name)
-        self.testset = get_torch_dataset(dataset.make_data(n_test, **{**kwargs, 'seed': 20}), self.name)#!fixed seed 
+        train_arr = dataset.make_data(n_train, seed=self.seed, **kwargs)
+        val_arr = dataset.make_data(n_val, **{**kwargs, 'seed': 21})
+        test_arr = dataset.make_data(n_test, **{**kwargs, 'seed': 20})#!fixed seed 
+        # update the exact number of train, val test size
+        self.n_train, self.n_val, self.n_test = len(train_arr), len(val_arr), len(test_arr)
+
+        self.grid_data = dataset.sampling_to_plot_LR(*train_arr)
+        self.trainset = get_torch_dataset(train_arr, self.name)
+        self.valset = get_torch_dataset(val_arr, self.name)
+        self.testset = get_torch_dataset(test_arr, self.name)
 
     def gen_image_dataset(self, data_dir, **kwargs):
         TRANSFORM = {

@@ -106,9 +106,6 @@ class LitExperiment(pl.LightningModule):
         self.model_name = CFG.MODEL.name
         self.dataset = dataset
         self.CFG = CFG.EXPERIMENT
-        self.config = edict()
-        for value in CFG.values():
-            self.config.update(value)
 
         self.init_criterion()
 
@@ -235,43 +232,6 @@ class LitExperiment(pl.LightningModule):
         with model_artifact.new_file(f'{self.model_name}-{self.CFG.name}.pt', mode='wb') as file:
             torch.save(self.model, file)
         self.logger.experiment.log_artifact(model_artifact, aliases=[f'seed{wandb.config.seed}'])
-
-    def run(self):
-        wandb_logger = WandbLogger(
-            project=self.CFG.wandb_project,
-            name=self.CFG.name,
-            config=self.config,
-        )
-        # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
-        checkpoint_callback = ModelCheckpoint(
-            monitor='val.acc',
-            dirpath='checkpoints/',
-            filename='degree-project-{epoch:02d}-{val_loss:.2f}',
-            save_top_k=3,
-            mode='max',
-        )
-
-        lr_monitor = LearningRateMonitor(logging_interval='step')
-        callbacks = [lr_monitor]
-        if self.CFG.early_stop:
-            callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
-
-        trainer = pl.Trainer(
-            accelerator="ddp",  # if torch.cuda.is_available() else 'ddp_cpu',
-            callbacks=callbacks,
-            logger=wandb_logger,
-            checkpoint_callback=False if self.CFG.debug else checkpoint_callback,
-            gpus=-1 if torch.cuda.is_available() else 0,
-            max_epochs=self.CFG.n_epoch,
-            # gradient_clip_val=1,
-            progress_bar_refresh_rate=0)
-        logger.info("======= Training =======")
-        trainer.fit(self, self.dataset)
-        logger.info("======= Testing =======")
-        if self.CFG.debug:
-            trainer.test(self, datamodule=self.dataset)
-        else:
-            trainer.test(datamodule=self.dataset)
 
     def plot_signatures(self):
         xx, yy = self.grid_points[:, 0], self.grid_points[:, 1]
