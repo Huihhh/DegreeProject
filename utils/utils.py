@@ -5,7 +5,6 @@ import numpy as np
 import torch.nn.functional as F
 import torch.nn as nn
 from omegaconf.dictconfig import DictConfig
-import dask.array as da
 
 
 def accuracy(output, target):
@@ -97,9 +96,6 @@ def hammingDistance(arr, device):
         arr1 = arr2 = arr.float()
     n1, m = arr1.shape  ## n1 is the sample size of arr1, m is the feature size (number of nodes)
     n2, _ = arr2.shape
-    if n1 > 10000:
-        arr1 = da.from_array(arr1)
-        arr2 = da.from_array(arr2)
     arr_not1 = torch.ones((n1, m), device=device) - arr1
     arr_not2 = torch.ones((n2, m), device=device) - arr2
     arr_ones = arr1 @ (arr2.T)  # count the positions of both ones of each two rows
