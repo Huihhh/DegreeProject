@@ -8,7 +8,6 @@ import os
 import zipfile
 import urllib.request as Request
 
-
 import torch
 import torch.utils.data as Data
 from torchvision.datasets.vision import VisionDataset
