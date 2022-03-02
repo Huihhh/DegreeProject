@@ -1,0 +1,50 @@
+#TODO: add available choices
+defaults:
+  - dataset: spiral
+  - model: shallow_nn
+  - init_methods@MODEL.fc_winit: default
+  - init_methods@MODEL.fc_binit: default
+  - init_methods@MODEL.bn_winit: ones
+  - init_methods@MODEL.bn_binit: zeros
+  - _self_
+
+
+seed: 0
+
+DATASET:
+  # data loader
+  n_train: 0.7
+  n_val: 0.1
+  n_test: 0.2
+  batch_size: 32
+  num_workers: 4
+
+MODEL:
+  h_nodes: [32,32,32,32,32,32]
+
+EXPERIMENT:
+  name: 'ToyExperiment'
+  out_folder: ${EXPERIMENT.name}_${DATASET.name}_${MODEL.fc_winit.name}_seed${seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
+
+  # * wandb setting
+  dryrun: False
+  wandb_project: degree-project-spiral
+
+  # *
+  comp_scale: weight
+
+  # * wandb logs
+  plot_avg_distance: False
+  log_weights: False
+  plot_dim: [0,1]
+  plot_LR: False
+  plot_every: 10
+  plot_confidence: False
+
+  # * train
+  use_gpu: True
+
+
+hydra:
+  run:
+    dir: ./outputs/${EXPERIMENT.out_folder}

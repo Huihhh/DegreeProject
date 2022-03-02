@@ -1,0 +1,4 @@
+#@package tanh
+params: {}
+name: tanh
+func: tanh

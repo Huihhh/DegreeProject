@@ -1,0 +1,15 @@
+#@package _global_
+DATASET:
+    name: eurosat
+    data_dir: '/data/EuroSAT_RGB/2750'
+    shuffle: False
+    use_aug: False
+    flip_p: 0.2
+
+# plot linear regions
+EXPERIMENT:
+  plot_LR: False
+  plot_every: 10 # not plot linear regions
+  plotted_axis: [0,1]
+  plot_confidence: True # works only when plot_every > 0
+  TH_bounds: [0.45, 0.55] # used to tell if a lr is in the boundary

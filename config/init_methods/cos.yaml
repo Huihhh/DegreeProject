@@ -1,0 +1,4 @@
+#@package cos
+params: {}
+name: cos
+func: cos
