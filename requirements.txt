@@ -53,7 +53,7 @@ packaging==21.3
 pandas==1.4.1
 partd==1.2.0
 pathtools==0.1.2
-Pillow==8.4.0
+Pillow==9.0.0
 pip==21.2.4
 plotly==5.6.0
 promise==2.3
