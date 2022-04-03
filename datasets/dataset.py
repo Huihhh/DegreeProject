@@ -14,7 +14,6 @@ from collections import defaultdict
 from .synthetic_data.circles import Circles
 from .synthetic_data.moons import Moons
 from .synthetic_data.spiral import Spiral
-from torch.utils.data.sampler import Sampler
 
 # from .iris import Iris
 from datasets.real_data.eurosat import *

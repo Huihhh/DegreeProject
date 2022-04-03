@@ -1,122 +1,135 @@
-
-""" 
-Get test accuracy of checkpoints
-run: 
-python test.py hydra.run.dir="outputs/output_folder"
-
-example: 
-python test.py hydra.run.dir="outputs/circles_fill_xu_ru_seed0_2021-03-03_10-47-32"
-"""
-
+from distutils.command.config import config
 import numpy as np
+import pandas as pd
 import torch
-import torch.backends.cudnn as cudnn
-import random, yaml
-from easydict import EasyDict as edict
-import logging
-from pathlib import Path
-import wandb
-import matplotlib.pyplot as plt
 
 from omegaconf import DictConfig, OmegaConf
 import hydra
+from pathlib import Path
+import logging
+import os
+import wandb
+import yaml
+from plotly.subplots import make_subplots
+import plotly.express as px
+from sklearn.preprocessing import LabelEncoder
 
 from datasets.dataset import Dataset
-from datasets.synthetic_data.spiral import Spiral
-from datasets.synthetic_data.moons import Moons
-from datasets.synthetic_data.circles import Circles
-from models.dnn import SimpleNet
-from experiments.litExperiment import LitExperiment
-from experiments.experiment_multiclass import ExperimentMulti
-from utils.utils import hammingDistance
-from utils.get_signatures import get_signatures
+from models import *
+from experiments._base_trainer import Bicalssifier
+from utils import flat_omegadict, set_random_seed
+from utils import get_signatures, visualize_signatures
 
-@hydra.main(config_path='./config', config_name='config')
+#  * set cuda
+os.environ['CUDA_VISIBLE_DEVICES'] = '9'
+
+
+@hydra.main(config_path='./config', config_name='test')
 def main(CFG: DictConfig) -> None:
     # initial logging file
     logger = logging.getLogger(__name__)
-
-    with open('./.hydra/config.yaml', 'r') as file:
-        try:
-            config_file = yaml.safe_load(file)
-        except yaml.YAMLError as exc:
-            print(exc)
-    TRAIN_CFG = edict(config_file)
-    CFG.MODEL.h_nodes = TRAIN_CFG.MODEL.h_nodes
     logger.info(OmegaConf.to_yaml(CFG))
+    config = flat_omegadict(CFG)
+    label_encoder = LabelEncoder()
 
-    # # For reproducibility, set random seed
-    if CFG.Logging.seed == 'None':
-        CFG.Logging.seed = random.randint(1, 10000)
-    random.seed(CFG.Logging.seed)
-    np.random.seed(CFG.Logging.seed)
-    torch.manual_seed(CFG.Logging.seed)
-    torch.cuda.manual_seed_all(CFG.Logging.seed)
-    cudnn.deterministic = True
-    cudnn.benchmark = False
+    device = torch.device('cuda' if torch.cuda.is_available() and CFG.use_gpu else 'cpu')
+    root = Path(hydra.utils.get_original_cwd())
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    num_lr = pd.DataFrame(columns=['seed', '#linear_regions', 'h_nodes'])
+    for name in ['circles', 'moons', 'spiral']:
+        filename = name+'.yaml'
+        with open(root / 'config'/'dataset'/filename, 'r') as stream:
+            try:
+                DATASET = yaml.safe_load(stream)['DATASET']
+            except yaml.YAMLError as exc:
+                print(exc)
+        # get datasets
+        dataset = Dataset(seed=100, n_train=0.7, n_val=0.1, n_test= 0.2, **DATASET)
+        input_dim = dataset.trainset[0][0].shape[0]
+        grid_points, grid_labels = dataset.grid_data
+        xrange = np.unique(grid_points[:, 0])
+        yrange = np.unique(grid_points[:, 1])
 
-    # W&B INIT
-    config = edict()
-    for value in CFG.values():
-        config.update(value)
-    run = wandb.init(project=CFG.EXPERIMENT.wandb_project, job_type="test", config=config, name=CFG.EXPERIMENT.name)   
-    
-    # GET MODEL FROM W&B ARTIFACT
-    api = wandb.Api()
-    if CFG.EXPERIMENT.artifact_v is not None:
-        artifact_tag = CFG.EXPERIMENT.artifact_v
-    else: 
-        artifact_tag = f'seed{CFG.Logging.seed}'
-    artifact = api.artifact(f'{CFG.EXPERIMENT.wandb_project}/{CFG.MODEL.name}-{CFG.EXPERIMENT.name}:{artifact_tag}')
-    model_dir = artifact.checkout()
-    model = torch.load(model_dir + f'/{CFG.MODEL.name}-{CFG.EXPERIMENT.name}.pt')
-    model.eval()
-    model = model.to(device)
+        set_random_seed(0)
+        subplots = []
+        for n, h_nodes in enumerate(CFG.archs[name]):
+            for seed in range(CFG.num_seeds):
+                # build model 
+                model = MODEL[CFG.MODEL.name](input_dim=input_dim,seed=seed, h_nodes=h_nodes, **CFG.MODEL)
+                logger.info("[Model] Building model -- input dim: {}, hidden layers: {}, out dim: {}"
+                                            .format(input_dim, h_nodes, CFG.MODEL.out_dim))
+                model = model.to(device=device)
 
-    # GET DATA
-    DATA = {
-        'circles': Circles,
-        'moons': Moons,
-        'spiral': Spiral
-    }
-    for traj_type in ['same_class', 'diff_class']:
-        trajectory, traj_len = DATA[CFG.DATASET.name].make_trajectory(type=traj_type)
+                _, grid_sigs, _ = get_signatures(torch.tensor(grid_points).float().to(device), model, device)
 
-        _, sigs, _ = get_signatures(torch.tensor(trajectory).float().to(device), model)
-        h_distance = hammingDistance(sigs.float(), device=device)
-        avg_trans = torch.diag(h_distance[:, 1:])
-        data = [[i, t] for i, t in enumerate(avg_trans)]
-        table = wandb.Table(data=data, columns=['x', 'y'])
-        wandb.log({f"Transitions-pointwise-{traj_type}" : wandb.plot.line(table, "x", "y",
-            title=f"{traj_type}")})
+                row = {
+                    'seed': seed, 
+                    'linear region density': len(torch.unique(grid_sigs, dim=0))/DATASET['input_volume'],
+                    'hidden layers': str(h_nodes),
+                    'data': name,
+                }
+                num_lr = num_lr.append(row, ignore_index=True)    
 
-        xy, l = DATA[CFG.DATASET.name].make_data(**CFG.DATASET)
-        plt.figure()
-        plt.scatter(xy[:, 0], xy[:, 1], c=l)
-        plt.scatter(trajectory[:, 0], trajectory[:, 1])
-        wandb.log({f'line_{traj_type}': wandb.Image(plt)})
-
+            # * visaulize linear regions from last seed
+            grid_sigs = np.array([''.join(str(x) for x in s.tolist()) for s in grid_sigs])
+            #  * categorial to numerical
+            region_labels = label_encoder.fit_transform(grid_sigs).reshape(grid_labels.shape)
+            # shuffle labels to visualy differentiate adjacent regions
+            random_labels = np.random.permutation(region_labels.max() +1)
+            for i, label in enumerate(random_labels):
+                region_labels[np.where(region_labels==i)] = label
+            subplot = visualize_signatures(region_labels, grid_labels, xrange, yrange, 
+                                    showscale= n==0,
+                                    colorbar_len=1,
+                                    colorbary=0.5
+                                    )
+            subplots.append(subplot)
+                
+        # fig = make_subplots(
+        #     cols=len(CFG.MODEL.archs), 
+        #     rows=1,
+        #     shared_xaxes=True, 
+        #     shared_yaxes=True, 
+        #     vertical_spacing = 0.01,
+        #     horizontal_spacing = 0.01,
+        #     subplot_titles=[str(arch) for arch in CFG.MODEL.archs],#confidence map
+        #     # column_widths=[0.51, 0.49],
+        #     # row_heights=[0.5, 0.5]
+        #     )
         
+        # for i, subplot in enumerate(subplots):
+        #     for layer in subplot:
+        #         fig.add_trace(layer, 1, i+1)
 
-    # # get datasets
-    # dataset = Dataset(CFG.DATASET)
-    # dataset.plot('./')
+        # fig.update_layout(
+        #     # yaxis=dict(scaleanchor='x', scaleratio=1),  # set aspect ratio to 1, actually done by width and column_widths
+        #     paper_bgcolor='rgba(0,0,0,0)',
+        #     # plot_bgcolor='rgba(0,0,0,0)',
+        #     width=1800 if dataset.name=='moons' else 1200,
+        #     height=400,
+        #     showlegend=False,
+        # )
+        # fig.show()  
+    fig2 = px.box(num_lr, x='data', y='linear region density', color='hidden layers')
+    fig2.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+    )
+    fig2.show()
+        
+    
+    wandb.init(project=CFG.wandb_project, name=CFG.run_name, config=config )
+    
 
-    # # build model
-    # model = SimpleNet(CFG.MODEL)
-    # logger.info("[Model] Building model {} out dim: {}".format(CFG.MODEL.h_nodes, CFG.MODEL.out_dim))
 
-    # if CFG.EXPERIMENT.use_gpu:
-    #     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #     model = model.to(device=device)
 
-    # experiment = Experiment(model, dataset, CFG, plot_sig=True)
-    # experiment.load_model(Path(CFG.EXPERIMENT.resume_checkpoints))
-    # experiment.testing()
-    # logger.info("======= test done =======")
+    wandb.finish()
+
+
+
 
 if __name__ == '__main__':
+    # ### Error: Initializing libiomp5.dylib, but found libiomp5.dylib already initialized.###
+    # import os
+    # os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
     main()
-

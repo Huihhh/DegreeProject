@@ -1,39 +1,35 @@
 import torch
 import torch.nn as nn
 import logging
-import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib as mpl
 import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
 
 logger = logging.getLogger(__name__)
 
-gpu = True
-device = torch.device('cuda' if gpu and torch.cuda.is_available() else 'cpu')
 
+def get_signatures(data, net, device):
+    '''
+    Compute activation pattens of the provided data.
 
-##
-# Compute activation pattens of the provided data.
-# Input:
-#  * data: Nx? matrix of N data points
-#  * net: pytorch network,
-#    supported layers: Sequential, Linear, Relu, LeakyReLu
-# Output:
-#  * data_out: net(data)
-#  * signatures: Nx(Q1+Q2+..+Ql) binary matrix,
-#    where l is the number of layers
-#    and Qi is the number of nonlinearities on the ith layer
-#  * sizes: all Qi with the preserved structure of the network
-##
-def get_signatures(data, net):
+    Perameters
+    ----------
+    Input:
+      * data: Nx? matrix of N data points
+      * net: pytorch network,
+      supported layers: Sequential, Linear, Relu, LeakyReLu
+    Output:
+      * data_out: net(data)
+      * signatures: Nx(Q1+Q2+..+Ql) binary matrix,
+        where l is the number of layers
+        and Qi is the number of nonlinearities on the ith layer
+      * sizes: all Qi with the preserved structure of the network
+    '''
     if type(net) is nn.Sequential or issubclass(type(net), nn.Sequential):
         # Sequential: go over each layer and record activation patterns
         signatures = []
         sizes = []
         for op in net:
-            data, op_sig, sz = get_signatures(data, op)
+            data, op_sig, sz = get_signatures(data, op, device)
             signatures.append(op_sig)
             sizes.append(sz)
         return data, torch.cat(signatures, dim=1), sizes
@@ -45,61 +41,93 @@ def get_signatures(data, net):
         signatures = (data > 0).type(torch.int8)
         # print(signatures.shape)
         return net(data), signatures, signatures.shape[1]
-    elif type(net) is nn.Dropout: #TODO: currently use net.eval() when plot linear regions
+    elif type(net) is nn.Dropout:  # TODO: currently use net.eval() when plot linear regions
         return data, torch.zeros(data.shape[0], 0, device=device, dtype=torch.int8), 0
     else:
         raise Exception('Unknown operation: ' + str(net))
 
-COLOR_Pastel2 = ('rgb(179,226,205)', 'rgb(253,205,172)', 'rgb(203,213,232)', 'rgb(244,202,228)', 'rgb(230,245,201)', 'rgb(255,242,174)', 'rgb(241,226,204)', 'rgb(204,204,204)')
-def visualize_signatures(grid_sigs,grid_labels, grid_points): # ? is confidence map meaningfull to visualize?
-    # * signatures:activation patterns
-    # * grid_sigs: signatures of grid points
-    xx, yy = grid_points[:, 0], grid_points[:, 1]
-    region_sigs = list(np.unique(grid_sigs)) # signatures of regions
-    total_regions = {}
-    total_regions['density'] = len(region_sigs)
-    region_ids = np.random.permutation(total_regions['density'])
 
-    sigs_grid_dict = dict(zip(region_sigs, region_ids))
-    base_color_labels = np.array([sigs_grid_dict[sig] for sig in grid_sigs])
-    base_color_labels = base_color_labels.reshape(grid_labels.shape).T
+COLOR_Pastel2 = ('rgb(179,226,205)', 'rgb(253,205,172)', 'rgb(203,213,232)', 'rgb(244,202,228)',
+                 'rgb(230,245,201)', 'rgb(255,242,174)', 'rgb(241,226,204)', 'rgb(204,204,204)')
+BWR = ['rgb(0,0,255)', 'rgb(255,255,255)', 'rgb(255,0,0)']
+def visualize_signatures(region_labels, grid_labels, xvalues, yvalues, data=None, showscale=False, colorbary=0.765, colorbar_len=0.51):
+    '''
+    Visualize linear regions over the input space. 
+    Coloring linear regions by random colors (to differentiate from each other) 
+    and gradual colors (to correlate to the classification regions )
 
-    grid_labels_vec = grid_labels.reshape(-1)
-    color_labels = np.zeros(grid_labels_vec.shape)
-    for i, key in enumerate(region_sigs): # loop through key, for each region, calculate the ratio of positive samples
-        idx = np.where(grid_sigs == key)
-        region_labels = grid_labels_vec[idx]
-        ratio = sum(region_labels) / region_labels.size 
-        color_labels[idx] = ratio
+    Perameters
+    ----------
+     * grid_sigs: signatures of grid points
+     * region_labels: region labels of grid points, tell each point in which region
+     * grid_labels: labels of grid points, can be groud truth or predictions
+     * xvalues: unique x values (xaxis range)
+     * yvalues: unique y values (yaxis range)
+     * data: data points and labels, to stack on the top
+    '''
+    classified_region_labels = np.zeros(grid_labels.shape)
+    region_labels_unique = np.unique(region_labels)
+    # loop through key, for each region, calculate the ratio of positive/negative samples
+    for i, key in enumerate(region_labels_unique):
+        idx = np.where(region_labels == key)
+        region_i_labels = grid_labels[idx]
+        ratio = sum(region_i_labels) / region_i_labels.size
+        classified_region_labels[idx] = ratio
 
-    color_labels = color_labels.reshape(grid_labels.shape).T
-    # color_labels[np.where(color_labels>=0.2)] = 1
-    # color_labels[np.where(color_labels<=-0.2)] = -1
-    # color_labels[np.where((color_labels>-0.2) & (color_labels<0.2))] = 0
-    fig = make_subplots(rows=1, cols=1)
-    layer1 = go.Heatmap(z=base_color_labels,  opacity=0.6, colorscale=COLOR_Pastel2)
-    layer2 = go.Heatmap(z=color_labels, opacity=0.6, colorscale=['rgb(255,0,0)', 'rgb(255,255,255)', 'rgb(0,0,250)'])
-    fig.add_trace(layer1, 1, 1)
-    fig.add_trace(layer2, 1, 1)
-    fig.update_layout(
-        yaxis = dict(scaleanchor = 'x'), # set aspect ratio to 1
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
-    ) 
-    fig.show()
-    return fig
+    # classified_region_labels = classified_region_labels.reshape(grid_labels.shape).T
+    # classified_region_labels[np.where(classified_region_labels>=0.2)] = 1
+    # classified_region_labels[np.where(classified_region_labels<=-0.2)] = -1
+    # classified_region_labels[np.where((classified_region_labels>-0.2) & (classified_region_labels<0.2))] = 0
+    layers = []
+    l1 = go.Heatmap(
+        z=classified_region_labels,
+        x=xvalues,
+        y=yvalues,
+        opacity=1,
+        transpose=True,
+        colorscale=BWR,  # * coloring by the ratio of negtative/positive points
+        colorbar={'title': '', 'titleside': 'right', 'len': colorbar_len, 'y':colorbary},
+        showscale=showscale)
+    l2 = go.Heatmap(
+        z=region_labels,
+        x=xvalues,
+        y=yvalues,
+        opacity=0.4,
+        transpose=True,
+        colorscale=COLOR_Pastel2,  # * random color
+        showscale=False,)
+
+    layers.append(l1)
+    layers.append(l2)
+    if data is not None:
+        input_points, true_label = data
+        l3 = go.Scatter(
+            x=input_points[:, 0], 
+            y=input_points[:, 1], 
+            mode='markers',
+            marker=dict(
+                size=3,
+                color= torch.squeeze(true_label), 
+                colorscale='Viridis')
+        )
+        layers.append(l3)
+
+    return layers
 
 
 def compute_distance(data, net, min_distance=None):
-        ##
-    # Compute the distance of a point to its nearest linear region.
-    # Input:
-    #  * data: Nx? matrix of N data points
-    #  * net: pytorch network,
-    # Output:
-    #  * data_out: net(data)
-    #  * min_distance: Nx(Q1+Q2+..+Ql) binary matrix,
-    ##
+    '''
+    Compute the distance of a point to its nearest linear region.
+    
+    Perameters
+    ----------
+    Input:
+      * data: Nx? matrix of N data points
+      * net: pytorch network,
+    Output:
+      * data_out: net(data)
+      * min_distance: Nx(Q1+Q2+..+Ql) binary matrix,
+    '''
     if min_distance is None:
         min_distance = torch.ones(
             (data.shape[0]),
@@ -110,11 +138,10 @@ def compute_distance(data, net, min_distance=None):
             data, min_distance = compute_distance(data, op, min_distance)
         return data, min_distance
     elif (type(net) is nn.Linear):
-        # #TODO: the numerator is z(x) - b in the paper 'Complexity of Linear Regions in Deep Networks'
+        ## TODO: the numerator is z(x) - b in the paper 'Complexity of Linear Regions in Deep Networks'
         net_out = net(data)
         min_d, _ = torch.min(torch.abs(net_out) / torch.norm(net.weight), 1)
         min_distance = torch.min(min_distance, min_d)
         return net_out, min_distance
     else:
         return net(data), min_distance
-

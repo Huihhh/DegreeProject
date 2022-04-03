@@ -1,16 +1,14 @@
+# not used
 import random
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 import hydra
-import ignite
 import logging
 
 from models import *
-from experiments.experiment_multiclass import ExperimentMulti
-from experiments.litExperiment import LitExperiment
 
 
 @hydra.main(config_path='./config', config_name='config')
@@ -26,7 +24,6 @@ def main(CFG: DictConfig) -> None:
     np.random.seed(CFG.Logging.seed)
     torch.manual_seed(CFG.Logging.seed)
     torch.cuda.manual_seed_all(CFG.Logging.seed)
-    ignite.utils.manual_seed(CFG.Logging.seed)
     cudnn.deterministic = True
     cudnn.benchmark = False
 

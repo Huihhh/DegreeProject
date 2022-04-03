@@ -1,5 +1,5 @@
 # Example run: 
-# python log_final_res.py EXPERIMENT.wandb_project=degree-project-Spiral EXPERIMENT.name=sample-efficiency-summary init_methods@MODEL.fc_winit=normal_custom 
+# python log_final_res.py EXPERIMENT.wandb_project=degree-project-Spiral EXPERIMENT.name=sample-efficiency-summary init_methods@MODEL.fc_winit=he_normal 
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
@@ -8,6 +8,8 @@ from utils import flat_omegadict
 import wandb
 
 api = wandb.Api()
+run = api.run('ahui/degree-project-Spiral/xys6y86w')
+his = run.history()
 
 @hydra.main(config_path='./config', config_name='sampleEfficiency')
 def main(CFG: DictConfig) -> None:
@@ -24,7 +26,8 @@ def main(CFG: DictConfig) -> None:
                     filters={
                         "config.EXPERIMENT_name": 'sample-efficiency', 
                         'config.seed': seed, 
-                        "config.fc_winit_name": config['fc_winit_name']
+                        "config.fc_winit_name": config['fc_winit_name'],
+                        'createdAt':{"$gt": "2022-03-01"} # * filter for runs after specific date
                     }
         )
 

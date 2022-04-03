@@ -11,7 +11,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from datasets.dataset import Dataset
 from models import *
-from experiments.base_trainer import Bicalssifier
+from experiments._base_trainer import Bicalssifier
 from utils import flat_omegadict, set_random_seed
 
 

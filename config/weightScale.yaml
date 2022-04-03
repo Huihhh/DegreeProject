@@ -2,7 +2,7 @@
 defaults:
   - dataset: spiral
   - model: shallow_nn
-  - init_methods@MODEL.fc_winit: default
+  - init_methods@MODEL.fc_winit: normal_custom
   - init_methods@MODEL.fc_binit: default
   - init_methods@MODEL.bn_winit: ones
   - init_methods@MODEL.bn_binit: zeros
@@ -28,7 +28,7 @@ EXPERIMENT:
 
   # * wandb setting
   dryrun: False
-  wandb_project: degree-project-spiral
+  wandb_project: degree-project-Spiral
 
   # *
   comp_scale: weight

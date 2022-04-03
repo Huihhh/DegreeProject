@@ -108,14 +108,6 @@ class Bicalssifier(pl.LightningModule):
         # TODO: wandb watch model
         # for name, param in self.model.named_parameters():
         #     self.log(f'parameters/norm_{name}', LA.norm(param))
-        # if self.current_epoch == self.CFG.n_epoch - 1: # log last epoch
-                    # init grid points to plot linear regions
-        grid_points, _ = self.dataset.grid_data
-        _, sigs_grid, _ = get_signatures(torch.tensor(grid_points).float().to(self.device), self.model)
-        num_lr = len(set([''.join(str(x) for x in s.tolist()) for s in sigs_grid])) 
-        self.log(f'#linear regions', num_lr)
-        del grid_points
-        del sigs_grid
         if self.CFG.ema_used:
             self.ema_model.update_buffer()
             self.ema_model.apply_shadow()

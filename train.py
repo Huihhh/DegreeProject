@@ -1,8 +1,5 @@
-import random
 import numpy as np
 import torch
-import torch.backends.cudnn as cudnn
-import pytorch_lightning as pl
 
 from omegaconf import DictConfig, OmegaConf
 import hydra
@@ -13,13 +10,16 @@ from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from experiments.hDistance_logger import HDistanceLogger
+from experiments.linearRegion_logger import LinearRegionLogger
 
 from datasets.dataset import Dataset
 from models import *
-from experiments.base_trainer import Bicalssifier
+from experiments._base_trainer import Bicalssifier
 from utils import flat_omegadict, set_random_seed
 
- 
+#  * set cuda
+os.environ['CUDA_VISIBLE_DEVICES'] = '9'
+
 @hydra.main(config_path='./config', config_name='sampleEfficiency')
 def main(CFG: DictConfig) -> None:
     # initial logging file
@@ -68,16 +68,18 @@ def main(CFG: DictConfig) -> None:
         mode='min',
     )
 
-    log_every = np.hstack([np.arange(1, 10), np.arange(19, 100, 10), np.arange(199, 1000, 100)])
-    
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
     callbacks = [lr_monitor]
-    if CFG.log_hdistance:
-        hdis_logger = HDistanceLogger(log_every, dataset, CFG, input_dim)
-        callbacks.append(hdis_logger)
-    if CFG.early_stop:
-        callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
+    # if CFG.log_hdistance:
+    #     log_every = np.hstack([np.arange(1, 10), np.arange(19, 100, 10), np.arange(199, 1000, 100)])
+    #     hdis_logger = HDistanceLogger(log_every, dataset, CFG, input_dim)
+    #     callbacks.append(hdis_logger)
+    # if CFG.early_stop:
+    #     callbacks.append(EarlyStopping('val.total_loss', min_delta=0.0001, patience=10, mode='min', strict=True))
+    if CFG.plot_LR:
+        lr_logger = LinearRegionLogger(10, dataset.grid_data, 'start', dataset.trainset.tensors)
+        callbacks.append(lr_logger)
 
     trainer = Trainer(
         # accelerator="ddp",  # if torch.cuda.is_available() else 'ddp_cpu',
@@ -90,7 +92,6 @@ def main(CFG: DictConfig) -> None:
         progress_bar_refresh_rate=0
     )
     logger.info("======= Training =======")
-
     trainer.fit(experiment, dataset)
     logger.info("======= Testing =======")
     trainer.test(experiment, datamodule=dataset)

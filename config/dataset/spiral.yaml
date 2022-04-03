@@ -9,6 +9,7 @@ DATASET:
   noise_level: 0.2 # guassian std noise
   shuffle: True
   fixed_valset: 0 # if fixed_valset==0, the size of valset will decided by n_val
+  input_volume: 1
 
 # plot linear regions
 EXPERIMENT:
