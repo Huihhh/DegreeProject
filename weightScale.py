@@ -1,4 +1,3 @@
-from matplotlib.pyplot import subplot
 import torch
 import torch.nn as nn
 from utils import get_signatures
@@ -20,15 +19,15 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 class WeightScaleOnLR:
     def __init__(self, model, dataset, CFG) -> None:
         self.model = model
-        self.dataset = dataset # TODO: remove later
         self.grid_points, self.grid_labels = dataset.grid_data
         
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        wandb.init(project=CFG.EXPERIMENT.wandb_project, name=CFG.EXPERIMENT.name, config=flat_omegadict(CFG))
+        config = flat_omegadict(CFG)
+        wandb.init(project=CFG.EXPERIMENT.wandb_project, name=CFG.EXPERIMENT.name, config=config)
         self.xname = CFG.EXPERIMENT.comp_scale
 
 
-    # * STEP1. init model
+    # * STEP1. init model & calculate std
     def reinit_model(self, std):
         def reinit_net(net):
             if type(net) is nn.Sequential or issubclass(type(net), nn.Sequential):
@@ -43,12 +42,16 @@ class WeightScaleOnLR:
         reinit_net(self.model)
 
     def run(self):
-        for gain in np.arange(1, 20, 0.01): #0.001
-            self.reinit_model(gain)
+        for gain in np.arange(0.001, 20, 0.01):
+            # scale = self.reinit_model(gain)
             # * STEP2. get signatures and count
-            _, grid_sigs, _ = get_signatures(torch.tensor(self.grid_points).float(), self.model) # TODO: bring .to(self.device) back later
+            _, grid_sigs, _ = get_signatures(torch.tensor(self.grid_points).float().to(self.device), self.model)
             num_lr = len(torch.unique(grid_sigs, dim=0)) 
             wandb.log({'weight_std': gain, '#Linear regions': num_lr})
+
+        
+
+
     
 @hydra.main(config_path='./config', config_name='weightScale')
 def main(CFG: DictConfig) -> None:

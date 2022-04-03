@@ -1,0 +1,19 @@
+#@package _global_
+DATASET:
+  name: 'sphere'
+  # make data
+  radius: 0.1
+  width: 0.05
+  center0: [0.5,0.5,0.5]
+  center1: [0.3,0.3,0.3]
+  n_samples: 50 # the total #samples will be 50*50*2
+  fixed_valset: 20
+  shuffle: True
+
+# plot linear regions
+EXPERIMENT:
+  plot_LR: False
+  plot_every: 10 # not plot linear regions
+  plotted_axis: [0,1]
+  plot_confidence: True # works only when plot_every > 0
+  TH_bounds: [0.45, 0.55] # used to tell if a lr is in the boundary
