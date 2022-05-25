@@ -5,6 +5,7 @@ import logging
 import pytorch_lightning as pl
 import torch
 from torch import optim
+import torch.nn.functional as F
 import numpy as np
 import wandb
 
@@ -12,16 +13,15 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
 from utils.ema import EMA
-from utils.utils import accuracy
+from utils.utils import accuracy, acc_topk
 from utils.lr_schedulers import get_cosine_schedule_with_warmup
 from utils.get_signatures import get_signatures
 
 logger = logging.getLogger(__name__)
 
-class Bicalssifier(pl.LightningModule):
+class Multicalssifier(pl.LightningModule):
     def __init__(self, model: Any, dataset: 'pl.LightningDataModule',
         n_epoch: int=100,
-        th: float=0.5, 
         lr: float=0.01,
         use_scheduler: bool=True,
         warmup: int=0,
@@ -51,15 +51,13 @@ class Bicalssifier(pl.LightningModule):
         super().__init__()
         self.model = model
         self.dataset = dataset
-        self.grid_points, self.grid_labels = dataset.grid_data
-        self.N_EPOCH = n_epoch
-        self.LR = lr
-        self.USE_SCHEDULER = use_scheduler
-        self.WDECAY = wdecay
-        self.BATCH_SIZE=batch_size
-        self.WARMUP = warmup
-        self.TH = th
-        
+        self.n_epoch = n_epoch
+        self.lr = lr
+        self.use_scheduler = use_scheduler
+        self.wdecay = wdecay
+        self.batch_size=batch_size
+        self.warmup = warmup
+
         self.init_criterion()
         # used EWA or not
         self.EMA = ema_used
@@ -74,7 +72,7 @@ class Bicalssifier(pl.LightningModule):
         Generate loss function
         '''
         def compute_loss(y_pred, y):
-            total_loss = torch.nn.BCELoss()(y_pred, y)
+            total_loss = F.cross_entropy(y_pred, y)
             return {'total_loss': total_loss}
         self.criterion = compute_loss
 
@@ -83,17 +81,16 @@ class Bicalssifier(pl.LightningModule):
         no_decay = ['bias', 'bn']
         grouped_parameters = [
             {'params': [p for n, p in self.model.named_parameters() if not any(
-                nd in n for nd in no_decay)], 'weight_decay': self.WDECAY},
+                nd in n for nd in no_decay)], 'weight_decay': self.wdecay},
             {'params': [p for n, p in self.model.named_parameters() if any(
                 nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
-        # optimizer = optim.Adam(self.model.parameters(), lr=self.LR, weight_decay=self.WDECAY)
-        optimizer = optim.Adam(grouped_parameters, lr=self.LR)
-        #    momentum=self.CFG.optim_momentum, nesterov=self.CFG.used_nesterov)
-        if self.USE_SCHEDULER:
-            steps_per_epoch = np.ceil(len(self.dataset.trainset) / self.BATCH_SIZE)  # eval(self.CFG.steps_per_epoch)
-            total_training_steps = self.N_EPOCH * steps_per_epoch
-            warmup_steps = self.WARMUP * steps_per_epoch
+        optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.wdecay)
+        
+        if self.use_scheduler:
+            steps_per_epoch = np.ceil(len(self.dataset.trainset) / self.batch_size)  # eval(self.CFG.steps_per_epoch)
+            total_training_steps = self.n_epoch * steps_per_epoch
+            warmup_steps = self.warmup * steps_per_epoch
             scheduler = {
                 'scheduler': get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_training_steps),
                 'interval': 'step',
@@ -113,22 +110,12 @@ class Bicalssifier(pl.LightningModule):
             self.ema_model = EMA(self.model, self.EMA_DECAY)
             logger.info("[EMA] initial ")
 
-    def on_fit_start(self) -> None:
-        self.grid_points = self.grid_points.to(self.device)
-
-
-    def on_train_epoch_start(self) -> None:
-        self.net_out, self.grid_sigs, _ = get_signatures(self.grid_points, self.model, self.device)
-        if self.current_epoch == 0:
-            self.grid_sigs0 = torch.unique(self.grid_sigs, dim=0)
-        self.log('#Linear regions', len(torch.unique(self.grid_sigs, dim=0)), on_epoch=True)
 
     def training_step(self, batch, batch_idx):
-        x, y = batch[0], batch[1].float()
-        y_pred, _ = self.model.forward(x)
-        losses = self.criterion(y_pred, y)
-        y_pred = torch.where(y_pred > self.TH, 1.0, 0.0)
-        acc = accuracy(y_pred, y)
+        x, y = batch
+        out = self.model.forward(x)
+        losses = self.criterion(out, y)
+        acc, = acc_topk(out, y)
         for name, metric in losses.items():
             self.log(f'train.{name}', metric.item(), on_step=False, on_epoch=True)
         self.log('train.acc', acc, on_step=False, on_epoch=True)
@@ -145,11 +132,10 @@ class Bicalssifier(pl.LightningModule):
             self.ema_model.apply_shadow()
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch[0], batch[1]
-        y_pred, _ = self.model.forward(x)
-        losses = self.criterion(y_pred, y)
-        y_pred = torch.where(y_pred > self.TH, 1.0, 0.0)
-        acc = accuracy(y_pred, y)
+        x, y = batch
+        out = self.model.forward(x)
+        losses = self.criterion(out, y)
+        acc, = acc_topk(out, y)
         for name, metric in losses.items():
             self.log(f'val.{name}', metric.item(), on_step=False, on_epoch=True)
         self.log('val.acc', acc, on_step=False, on_epoch=True)
@@ -160,11 +146,10 @@ class Bicalssifier(pl.LightningModule):
             self.ema_model.restore()
 
     def test_step(self, batch, batch_idx):
-        x, y = batch[0], batch[1].float()
-        y_pred, _ = self.model.forward(x)
-        losses = self.criterion(y_pred, y)
-        y_pred = torch.where(y_pred > self.TH, 1.0, 0.0)
-        acc = accuracy(y_pred, y)
+        x, y = batch
+        out = self.model.forward(x)
+        losses = self.criterion(out, y)
+        acc, = acc_topk(out, y)
         self.log('test', {**losses, 'acc': acc})
         return acc
 

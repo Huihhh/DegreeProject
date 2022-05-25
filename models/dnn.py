@@ -9,16 +9,14 @@ ACT_METHOD = {'relu': nn.ReLU(), 'leaky_relu': nn.LeakyReLU()}
 
 class SimpleNet(nn.Sequential):
     def __init__(self,
-                 input_dim,
-                 h_nodes,
-                 out_dim,
-                 activation,
-                 fc_winit,
-                 fc_binit,
-                 bn_winit,
-                 bn_binit,
-                 use_bn=False,
-                 seed=0, **kwargs) -> None:
+                 input_dim: int,
+                 h_nodes: list[int],
+                 out_dim: int,
+                 activation: str,
+                 fc_winit: dict,
+                 fc_binit: dict,
+                 use_bn: bool=False,
+                 seed: int=0, **kwargs) -> None:
         self.use_bn = use_bn
         h_nodes = [input_dim] + list(h_nodes)
         self.n_neurons = sum(h_nodes)
@@ -36,12 +34,7 @@ class SimpleNet(nn.Sequential):
             ac = ACT_METHOD[activation]
             s.add_module('ac', ac)
             if self.use_bn:
-                bn = nn.BatchNorm1d(h_nodes[i + 1])
-                if bn_winit.name != 'default':
-                    eval(bn_winit.func)(bn.weight, **bn_winit.params)
-                if bn_binit.name != 'default':
-                    eval(bn_binit.func)(bn.bias, **bn_binit.params)
-                s.add_module('bn', bn)            
+                s.add_module('bn', nn.BatchNorm1d(h_nodes[i + 1]))            
             self.layers.append(s)
 
         predict = nn.Linear(h_nodes[-1], out_dim)
@@ -83,20 +76,11 @@ if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.append(BASE_DIR)
     from utils.get_signatures import get_signatures
-    from utils.compute_distance import compute_distance
 
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG.MODEL), '\n')
         net = SimpleNet(**CFG.MODEL)
-        h = 0.01
-        xx, yy = np.meshgrid(np.arange(-1, 1, h), np.arange(-1, 1, h))
-        grid_points = np.concatenate([xx.reshape(-1, 1), yy.reshape(-1, 1)], 1)
-        out, min_distance = compute_distance(
-            torch.tensor([[0.1, 0.2], [0.5, 0.7]]), net)
-        sigs_grid, net_out, _ = get_signatures(
-            torch.tensor(grid_points).float(), net)
-
         print(net)
 
     main()

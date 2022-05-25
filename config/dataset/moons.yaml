@@ -11,10 +11,3 @@ DATASET:
   shuffle: True
   fixed_valset: 0 # if fixed_valset==0, the size of valset will decided by n_val
   input_volume: 6
-  
-# plot linear regions
-EXPERIMENT:
-  plot_LR: True
-  plot_every: 10
-  plot_confidence: True
-  TH_bounds: [-0.2, 0.2] # used to tell if a lr is in the boundary

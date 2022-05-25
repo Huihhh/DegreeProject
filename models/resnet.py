@@ -1,7 +1,12 @@
+import re
+import os
+import sys
 from torch import nn
 from torch.nn.modules import Module
 import torchvision.models as models
 import torch
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
 from utils.init_methods import *
 
 ACT_METHOD = {'relu': nn.ReLU(), 'leaky_relu': nn.LeakyReLU()}
@@ -9,16 +14,14 @@ ACT_METHOD = {'relu': nn.ReLU(), 'leaky_relu': nn.LeakyReLU()}
 
 class ResNet(Module):
     def __init__(self,
-                 h_nodes,
-                 out_dim,
-                 activation,
-                 use_bn,
-                 dropout,
-                 fc_winit,
-                 fc_binit,
-                 bn_winit,
-                 bn_binit,
-                 seed=0,
+                 h_nodes: list[int],
+                 out_dim: int,
+                 activation: str,
+                 dropout: float,
+                 fc_winit: dict,
+                 fc_binit: dict,
+                 use_bn: bool=False,
+                 seed: int=0,
                  *args,
                  **kwargs) -> None:
         super().__init__()
@@ -33,39 +36,46 @@ class ResNet(Module):
             s = nn.Sequential()
             torch.random.manual_seed(i + seed)
             s.add_module('fc', nn.Linear(h_nodes[i], h_nodes[i + 1]))
-            if fc_winit.name != 'default':  # TODO: more elegant way
-                eval(fc_winit.func)(s[0].weight, **fc_winit.params)
-            if fc_binit.name != 'default':
-                eval(fc_binit.func)(s[0].bias, **fc_binit.params)
-
             s.add_module('ac', ACT_METHOD[activation])
             if use_bn:
                 bn = nn.BatchNorm1d(h_nodes[i + 1])
-                if bn_winit.name != 'default':
-                    eval(bn_winit.func)(bn.weight, **bn_winit.params)
-                if bn_binit.name != 'default':
-                    eval(bn_binit.func)(bn.bias, **bn_binit.params)
                 s.add_module('bn', bn)
             if dropout != 0:
-                dp = nn.Dropout(p=dropout)
-                s.add_module('dropout', dp)
+                s.add_module('dropout', nn.Dropout(p=dropout))
             self.layers.append(s)
 
-
-        predict = nn.Linear(h_nodes[-1], out_dim)
-        if fc_winit.name != 'default':
-            eval(fc_winit.func)(predict.weight, **fc_winit.params)
-        if fc_binit.name != 'default':
-            eval(fc_binit.func)(predict.bias, **fc_binit.params)
-        self.layers.append(predict)
+        self.layers.append(nn.Linear(h_nodes[-1], out_dim))
         self.fcs = torch.nn.Sequential(*self.layers)
 
+        if fc_winit.name != 'default' or fc_binit.name != 'default':
+            self.reset_parameters(fc_winit, fc_binit)
         # *** ResNet ***
         self.resnet = torch.nn.Sequential(*(list(resnet.children())[:-1]))
         # freeze the pretrained model
-        for params in self.resnet[:kwargs['freeze_layers']].parameters():
-            params.requires_grad = False
+        # for params in self.resnet[:kwargs['freeze_layers']].parameters():
+        #     params.requires_grad = False
         
+
+        
+    def reset_parameters(self, winit: dict, binit: dict, seed: int=0) -> None:
+        '''
+        reinit the model's weights and bias (batchnorm weights excluded)
+
+        Parameter
+        ---------
+        * winit: dict, init method for weights
+        * binit: dict, init method for bias
+        * seed: random seed
+        '''
+        p1 = re.compile(r'^((?!bn).)*weight') #find conv weight
+        p2 = re.compile(r'^((?!bn).)*bias') # excluding bn bias
+        for i, (name, param) in enumerate(self.named_parameters()):
+            torch.random.manual_seed(i + seed)
+            if winit.name != 'default' and p1.search(name):
+                eval(winit.func)(param, **winit.params)
+                continue
+            if binit.name != 'default' and p2.search(param):
+                eval(binit.func)(param, **binit.params)
 
     def forward(self, x):
         x = self.resnet(x).reshape(x.shape[0], -1)
@@ -98,7 +108,7 @@ if __name__ == "__main__":
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG.MODEL), '\n')
-        net = ResNet(**CFG.MODEL)
+        net = ResNet(**CFG.MODEL, dropout=0)
         print(net)
 
     main()

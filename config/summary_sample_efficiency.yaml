@@ -1,0 +1,26 @@
+# * varying train size
+# * fixed test set (seed fixed, sized fixed)
+defaults:
+  - dataset: spiral
+  - model: shallow_nn
+  - init_methods@MODEL.fc_winit: default
+  - init_methods@MODEL.fc_binit: default
+  - _self_
+
+# wandb setting
+dryrun: False
+wandb_project: degree-project-init-method
+run_name: summary
+
+
+num_seeds: 6
+use_gpu: True
+CUDA_VISIBLE_DEVICES: # for local test runs
+
+MODEL:
+  h_nodes: [16,16,16,16]
+
+
+hydra:
+  run:
+    dir: ./outputs/${run_name}_${DATASET.name}_${MODEL.fc_winit.name}_${now:%Y-%m-%d_%H-%M-%S}

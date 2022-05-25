@@ -1,5 +1,5 @@
+from typing import Tuple
 import numpy as np
-from sklearn import svm
 from sklearn.utils import check_random_state
 from .base import Base
 
@@ -9,15 +9,15 @@ class Circles(Base):
 
     @classmethod
     def make_data(cls,
-                  n_samples,
-                  width,
-                  gap,
-                  equal_density=False,
-                  seed=0,
-                  noise_ratio=0,
-                  noise_level=0,
+                  n_samples: int,
+                  width: float,
+                  gap: float,
+                  equal_density: bool=False,
+                  seed: int=0,
+                  noise_ratio: float=0,
+                  noise_level: float=0,
                   *args,
-                  **kwargs):
+                  **kwargs) -> Tuple['np.array', 'np.array']:
         """Make a large circle containing a smaller circle in 2d.
         A simple toy dataset to visualize clustering and classification
         algorithms.
@@ -81,9 +81,19 @@ class Circles(Base):
         return X, y[:, None]
 
     @classmethod
-    def make_trajectory(cls, type='same_class', interval=0.001):
+    def make_trajectory(cls, type='same_class', interval=0.001) -> Tuple['np.array', 'np.array']:
         '''
-        return the trajectory and its length
+        Generate a circle trajectory(outer circle of the train data) if type=same_class else a diagonal trajectory and its length
+
+        Parameters
+        ---------
+        * type : the type of the trajectory, diagonal or circle
+        * interval : the interval between points
+
+        Return
+        --------
+        * np.array: generated trajectory, size (2/0.001, 2)
+        * np.array: length of the trajectory, size (1,)
         '''
         if type == 'same_class':
             # linspace_out = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)

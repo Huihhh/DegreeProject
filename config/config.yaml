@@ -2,16 +2,24 @@
 defaults:
   - dataset: spiral
   - model: shallow_nn
-  - init_methods@MODEL.fc_winit: normal_custom
+  - init_methods@MODEL.fc_winit: default
   - init_methods@MODEL.fc_binit: default
-  - init_methods@MODEL.bn_winit: ones
-  - init_methods@MODEL.bn_binit: zeros
   - _self_
 
+# wandb setting
+dryrun: False
+wandb_project: test
+run_name: test
+log_LRimg_every: 
+log_artifact_every: #int or list of int, if -1, log the last epoch
+log_hdistance_every:
+log_weight_every: 
+
 seed: 0
+use_gpu: True
 debug: False # if debug, don't save checkpoints
+CUDA_VISIBLE_DEVICES: # for local test runs
 early_stop: False
-log_hdistance: True
 
 DATASET:
   # data loader
@@ -22,54 +30,25 @@ DATASET:
   num_workers: 4
 
 
-EXPERIMENT:
-  name: 'EuroSat'
-
-  # wandb setting
-  dryrun: False
-  wandb_project: test
-  
-
-  # regularization
-  wdecay: 0.002
-  dis_reg: 0.00 # coefficient of distance reg term 
-  reg_filter: composite_relu # or abs_relu, or sqrt_relu
-  lambda_hreg: 0
-  hreg_start: 0
+TRAIN: 
+  n_epoch: 500 # 1024
+  th: 0.5 # for sigmoid prediction
 
   # optimizer
-  optim_lr: 0.001
-  optim_momentum: 0.9
+  lr: 0.001
+  use_scheduler: True
   warmup: 0
-  used_nesterov: True
+  # regularization
+  wdecay: 0.002
+
   # scheduler
   scheduler: steplr
   step_size: 30
   steplr_gamma: 0.4
-  
 
-  batch_size: ${DATASET.batch_size}
-
-  use_gpu: True
   ema_used: False
   ema_decay: 0.999
 
-  TH: 0.5
-  n_epoch: 1 # 1024
-  plot_avg_distance: False
-
-  save_model: False
-  save_every: 64
-  out_folder: ${EXPERIMENT.name}_${DATASET.name}_${MODEL.fc_winit.name}_seed${DATASET.seed}_${now:%Y-%m-%d_%H-%M-%S} # log & tfevents under ./outputs, checkpoints under ./checkpoints
-
-  resume: False
-  resume_checkpoints: './checkpoints/ToyExperiment_epoch_0.pth.tar' # folder or file
-  resumed_epochs: [0,1023]
-
-  log_weights: False
-  plot_dim: [0,1]
-
-
 hydra:
   run:
-    dir: ./outputs/${EXPERIMENT.out_folder}
+    dir: ./outputs/${run_name}_${DATASET.name}_${MODEL.fc_winit.name}_${now:%Y-%m-%d_%H-%M-%S}

@@ -1,6 +1,6 @@
-from .dnn import SimpleNet
-from .resnet import ResNet
-from .sResnet import SResNet
+from models.dnn import SimpleNet
+from models.resnet import ResNet
+from models.sResnet import SResNet
 
 MODEL = {
     'shallow_nn': SimpleNet,

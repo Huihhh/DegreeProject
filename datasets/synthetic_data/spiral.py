@@ -1,4 +1,6 @@
 import math
+from typing import Tuple
+import torch
 import numpy as np
 from sklearn.utils import check_random_state
 from scipy.ndimage import gaussian_filter
@@ -10,12 +12,15 @@ class Spiral:
 
     @classmethod
     def spiral_xy(cls, i, spiral_num, n_samples=1):
-        """
+        '''
         Create the data for a spiral.
-        Arguments:
-            i runs from 0 to 96
-            spiral_num is 1 or -1
-        """
+
+        Parameter
+        ----------
+        * i: runs from 0 to 96
+        * spiral_num: 1 or -1
+        * n_samples: number of samples to be generated
+        '''
         φ = i / (16 * n_samples) * math.pi
         r = 6.5 * ((104 * n_samples - i) / (104 * n_samples))
         x = (r * math.cos(φ) * spiral_num) / 13 + 0.5
@@ -61,7 +66,21 @@ class Spiral:
         return X, y
 
     @classmethod
-    def sampling_to_plot_LR(self, X, y, res=200):
+    def sampling_to_plot_LR(self, X: 'np.array', y: 'np.array', res: int=200) -> Tuple['np.array', 'np.array']:
+        '''
+        Generate a grid of point set for the visualization of linear regions.
+
+        Parameters
+        ----------
+        * X: the point data, has size (n, 2)
+        * y: used to generate the label (label mask) for the grid points by svm.
+        * res: defines the number of points in the grid, res * res
+
+        Returns
+        ----------
+        * torch.Tensor: the grid points, size (200*200, 2)
+        * np.array: label of grid points, size (200*200,)
+        '''
         # create grid to evaluate model
         minX, minY = X.min(0)
         maxX, maxY = X.max(0)
@@ -90,12 +109,22 @@ class Spiral:
         matrix[np.where(matrix > TH)] = 1
         matrix[np.where(matrix < -TH)] = -1
 
-        return xy, np.rot90(matrix, k=-1)
+        return torch.tensor(xy).float(), np.rot90(matrix, k=-1)
     
     @classmethod
-    def make_trajectory(cls, type='same_class', interval=0.001):
+    def make_trajectory(cls, type: str='same_class', interval: float=0.001) -> Tuple['np.array', 'np.array']:
         '''
-        return the trajectory and its length
+        Generate a moon trajectory(outer moon of the train data) if type=same_class else a diagonal trajectory and its length
+
+        Parameters
+        ---------
+        * type : the type of the trajectory, spiral
+        * interval : the interval between points
+
+        Return
+        --------
+        * np.array: generated trajectory
+        * np.array: length of the trajectory, size (1,)
         '''
         if type == 'same_class':
             xy = np.array(Spiral.spiral(1, 100))

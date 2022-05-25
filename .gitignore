@@ -16,3 +16,6 @@ data/
 !data/titanic.dat
 debug/
 *.sh
+artifacts/
+*log.md
+test*

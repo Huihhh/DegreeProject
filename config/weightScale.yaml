@@ -10,6 +10,7 @@ defaults:
 
 
 seed: 0
+CUDA_VISIBLE_DEVICES:
 
 DATASET:
   # data loader
@@ -28,10 +29,11 @@ EXPERIMENT:
 
   # * wandb setting
   dryrun: False
-  wandb_project: degree-project-Spiral
+  wandb_project: degree-project-init-method
 
   # *
   comp_scale: weight
+  comp_method: 
 
   # * wandb logs
   plot_avg_distance: False

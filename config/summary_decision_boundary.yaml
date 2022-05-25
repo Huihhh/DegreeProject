@@ -1,0 +1,47 @@
+# * varying train size
+# * fixed test set (seed fixed, sized fixed)
+defaults:
+  # - dataset: circles
+  # - model: shallow_nn
+  - init_methods@MODEL.fc_winit: default
+  - init_methods@MODEL.fc_binit: default
+  - init_methods@MODEL.bn_winit: ones
+  - init_methods@MODEL.bn_binit: zeros
+  - _self_
+
+num_seeds: 20
+use_gpu: True
+
+# wandb setting
+dryrun: False
+wandb_project: test
+run_name: test
+
+TH: 0.5 # for predict on sigmoid
+
+
+archs: 
+  circles: [[32], [16,16], [8,8,8,8],[32,32], [16,16,16,16]]
+  moons: [[64], [32,32], [16,16,16,16],[8,8,8,8,8,8,8,8]]
+  spiral: [[32,32], [16,16,16,16],[96],[32,32,32], [16,16,16,16,16,16]]
+
+DATASET:
+  # data loader
+  n_train: 0.7
+  n_val: 0.1
+  n_test: 0.2
+  batch_size: 32
+  num_workers: 4
+  fixed_valset: 20
+
+MODEL:
+  name: shallow_nn
+  out_dim: 1
+  activation: 'relu' # or leakyRelU
+  use_bn: False
+
+ 
+
+hydra:
+  run:
+    dir: ./outputs/${run_name}_${now:%Y-%m-%d_%H-%M-%S}

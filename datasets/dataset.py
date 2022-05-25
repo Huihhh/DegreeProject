@@ -9,7 +9,6 @@ from torch.utils.data.sampler import Sampler
 import pytorch_lightning as pl
 from pytorch_lightning.trainer.supporters import CombinedLoader
 import numpy as np
-import wandb
 from collections import defaultdict
 from .synthetic_data.circles import Circles
 from .synthetic_data.moons import Moons
@@ -40,7 +39,20 @@ def get_torch_dataset(ndarray, name):
 
 
 class Dataset(pl.LightningDataModule):
-    def __init__(self, name, n_train, n_val, n_test, batch_size=32, num_workers=4, seed=0, **kwargs) -> None:
+    def __init__(self, name: str, n_train: float, n_val: float, n_test: float, batch_size: int=32, num_workers: int=4, seed: int=0, **kwargs) -> None:
+        '''
+        Lightning Data Module
+
+        Parameter
+        ----------
+        * name
+        * n_train: float, 0-1.0
+        * n_val: float, 0-1.0
+        * n_test: float, 0-1.0
+        * batch_size: default 32
+        * num_workers: default 4
+        * seed: default 0
+        '''
         super().__init__()
         self.name = name
         self.n_train = n_train
@@ -62,7 +74,15 @@ class Dataset(pl.LightningDataModule):
         logger.info(f'>>> #valset = {len(self.valset)}')
         logger.info(f'>>> #testset = {len(self.testset)}')
 
-    def gen_point_dataset(self, fixed_valset=0, n_samples=1000, **kwargs):
+    def gen_point_dataset(self, fixed_valset: int=0, n_samples: int=1000, **kwargs) -> None:
+        '''
+        Generate point torch dataset
+
+        Parameter
+        ----------
+        * fixed_valset: optional, the size of valset and testset
+        * n_samples: the number of samples for Circles and Moons, the number for Spiral will be 2*97*n_samples
+        '''
         if fixed_valset:
             n_train = n_samples
             n_val = n_test = fixed_valset
@@ -87,7 +107,14 @@ class Dataset(pl.LightningDataModule):
         self.valset = get_torch_dataset(val_arr, self.name)
         self.testset = get_torch_dataset(test_arr, self.name)
 
-    def gen_image_dataset(self, data_dir, **kwargs):
+    def gen_image_dataset(self, data_dir: str, **kwargs) -> None:
+        '''
+        Generate image torch dataset
+
+        Parameter
+        ---------
+        * data_dir: folder for the dataset
+        '''
         TRANSFORM = {
             'mean': (0.3444, 0.3803, 0.4078),  #(0.4914, 0.4822, 0.4465),  #
             'std': (0.2037, 0.1366, 0.1148)  #}, # (0.2471, 0.2435, 0.2616),  # 
@@ -155,10 +182,10 @@ class Dataset(pl.LightningDataModule):
                                                         # h=64, w=64, stats=TRANSFORM,
                                                         batch_size=self.batch_size,
                                                         num_workers=self.num_workers,
-                                                        pin_memory=True,
+                                                        pin_memory=False,
                                                         drop_last=False)
 
-    def gen_mnist_dataset(self, data_dir, **kwargs):
+    def gen_mnist_dataset(self, data_dir: str, **kwargs) -> None:
         TRANSFORM = {
             'mean': (0.1307, 0.1307, 0.1307),  #(0.4914, 0.4822, 0.4465),  #
             'std': (0.3081, 0.3081, 0.3081)  #}, # (0.2471, 0.2435, 0.2616),  # 
@@ -217,7 +244,7 @@ class Dataset(pl.LightningDataModule):
                                                         h=28, w=28, stats=TRANSFORM,
                                                         batch_size=self.batch_size,
                                                         num_workers=self.num_workers,
-                                                        pin_memory=True,
+                                                        pin_memory=False,
                                                         drop_last=False)
 
     def sampling_to_plot_LR(self, noise_size, h, w, stats, channel_size=1, **kwargs):
@@ -237,7 +264,7 @@ class Dataset(pl.LightningDataModule):
 
     def train_dataloader(self) -> Any:
         if self.name == 'eurosat':
-            kwargs = dict(num_workers=self.num_workers, pin_memory=True)
+            kwargs = dict(num_workers=self.num_workers, pin_memory=False)
             if isinstance(self.trainset, list):
                 train_loader = [DataLoader(trainset, shuffle=True, **kwargs) for trainset in self.trainset]
             else:
@@ -247,7 +274,7 @@ class Dataset(pl.LightningDataModule):
                                           **kwargs)
 
         else:
-            kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=False)
+            kwargs = dict(batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=False, drop_last=False)
             train_loader = DataLoader(self.trainset, shuffle=True, **kwargs)
         return train_loader
 
@@ -255,12 +282,12 @@ class Dataset(pl.LightningDataModule):
         return DataLoader(self.valset,
                           batch_size=self.batch_size,
                           num_workers=self.num_workers,
-                          pin_memory=True,
+                          pin_memory=False,
                           drop_last=False)
 
     def test_dataloader(self):
         if self.name == 'eurosat':
-            kwargs = dict(num_workers=self.num_workers, pin_memory=True)
+            kwargs = dict(num_workers=self.num_workers, pin_memory=False)
             test_loader = DataLoader(self.testset,
                                      batch_sampler=BatchWeightedRandomSampler(self.testset, batch_size=self.batch_size),
                                      **kwargs)
@@ -270,12 +297,12 @@ class Dataset(pl.LightningDataModule):
             test_loader = DataLoader(self.testset,
                                      batch_size=self.batch_size,
                                      num_workers=self.num_workers,
-                                     pin_memory=True, #?would it cost more mem?
+                                     pin_memory=False, #?would it cost more mem?
                                      drop_last=False)
             # val_loader = DataLoader(self.trainset,
             #                         batch_size=self.batch_size,
             #                         num_workers=self.num_workers,
-            #                         pin_memory=True,
+            #                         pin_memory=False,
             #                         drop_last=False)
         # return CombinedLoader({'test': test_loader, 'val': val_loader})
         return test_loader

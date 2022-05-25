@@ -1,23 +1,26 @@
+from typing import List
 import torch
 import torch.nn as nn
 import logging
 import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px
 
 logger = logging.getLogger(__name__)
 
 
-def get_signatures(data, net, device):
+def get_signatures(data: 'torch.Tensor', net: 'nn.Module', device) -> List:
     '''
     Compute activation pattens of the provided data.
 
     Perameters
     ----------
-    Input:
       * data: Nx? matrix of N data points
       * net: pytorch network,
       supported layers: Sequential, Linear, Relu, LeakyReLu
-    Output:
+    
+    Return
+    ----------
       * data_out: net(data)
       * signatures: Nx(Q1+Q2+..+Ql) binary matrix,
         where l is the number of layers
@@ -49,7 +52,10 @@ def get_signatures(data, net, device):
 
 COLOR_Pastel2 = ('rgb(179,226,205)', 'rgb(253,205,172)', 'rgb(203,213,232)', 'rgb(244,202,228)',
                  'rgb(230,245,201)', 'rgb(255,242,174)', 'rgb(241,226,204)', 'rgb(204,204,204)')
-BWR = ['rgb(0,0,255)', 'rgb(255,255,255)', 'rgb(255,0,0)']
+
+# * set opacity here to keep it consistent with the colorbar
+opacity = 0.5
+BWR = [f'rgba(0,0,255,{opacity})', f'rgba(255,255,255,{opacity})', f'rgba(255,0,0,{opacity})'] 
 def visualize_signatures(region_labels, grid_labels, xvalues, yvalues, data=None, showscale=False, colorbary=0.765, colorbar_len=0.51):
     '''
     Visualize linear regions over the input space. 
@@ -74,7 +80,7 @@ def visualize_signatures(region_labels, grid_labels, xvalues, yvalues, data=None
         ratio = sum(region_i_labels) / region_i_labels.size
         classified_region_labels[idx] = ratio
 
-    # classified_region_labels = classified_region_labels.reshape(grid_labels.shape).T
+
     # classified_region_labels[np.where(classified_region_labels>=0.2)] = 1
     # classified_region_labels[np.where(classified_region_labels<=-0.2)] = -1
     # classified_region_labels[np.where((classified_region_labels>-0.2) & (classified_region_labels<0.2))] = 0
@@ -92,13 +98,14 @@ def visualize_signatures(region_labels, grid_labels, xvalues, yvalues, data=None
         z=region_labels,
         x=xvalues,
         y=yvalues,
-        opacity=0.4,
+        opacity=1,
         transpose=True,
         colorscale=COLOR_Pastel2,  # * random color
+        hoverinfo='skip',
         showscale=False,)
 
-    layers.append(l1)
     layers.append(l2)
+    layers.append(l1)
     if data is not None:
         input_points, true_label = data
         l3 = go.Scatter(

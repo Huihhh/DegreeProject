@@ -1,7 +1,6 @@
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import logging
-from pyparsing import col
 import wandb
 from utils import flat_omegadict, set_random_seed
 

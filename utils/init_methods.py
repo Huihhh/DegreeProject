@@ -36,12 +36,12 @@ def _no_grad_normal_(tensor, mean, std):
 
 
 def normal_custom(w):
-    fan_out, fan_in = w.shape
-    std = np.sqrt(1/2 * float(fan_in + fan_out) / float(fan_in * fan_out))
+    fan_out, fan_in = w.shape[:2]
+    std = np.sqrt(float(fan_in + fan_out) / float(fan_in * fan_out))                                                      
     return _no_grad_normal_(w, 0., std)
 
 def normal_custom1(w):
-    fan_out, fan_in = w.shape
+    fan_out, fan_in = w.shape[:2]
     g = max(fan_in, fan_out) / min(fan_out, fan_in)
     std = np.sqrt(0.5**g * float(fan_in + fan_out) / (float(fan_in * fan_out)))
     return _no_grad_normal_(w, 0., std)

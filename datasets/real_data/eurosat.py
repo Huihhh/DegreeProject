@@ -1,19 +1,17 @@
+import os
+from collections import Counter
+from typing import Any, Callable, Optional, Tuple
+import glob
+import zipfile
 from PIL import Image
 import numpy as np
-
 import hydra
-import glob
-from collections import Counter
-import os
-import zipfile
 import urllib.request as Request
-
 import torch
 import torch.utils.data as Data
 from torchvision.datasets.vision import VisionDataset
-from torchvision.datasets import ImageFolder
 from torchvision import transforms as T
-from typing import Any, Callable, Optional, Tuple
+
 
 TRANSFORM = {
     'mean': (0.3444, 0.3803, 0.4078),  #(0.4914, 0.4822, 0.4465),  #
@@ -21,7 +19,15 @@ TRANSFORM = {
 }
 
 
-def unzip_file(zip_src, dst_dir):
+def unzip_file(zip_src: str, dst_dir: str) -> None:
+    '''
+    Unzip .zip file to specific folder
+
+    Parameter
+    ---------
+    * zip_src: path of the zip file
+    * dst_dir: destination directory
+    '''
     r = zipfile.is_zipfile(zip_src)
     if r:
         fz = zipfile.ZipFile(zip_src, 'r')
@@ -31,7 +37,15 @@ def unzip_file(zip_src, dst_dir):
         print('This is not zip')
 
 
-def download_data(_save_path, _url):
+def download_data(_save_path: str, _url: str) -> None:
+    '''
+    download data from url
+
+    Parameter
+    ---------
+    * _save_path: path to save the downloaded file
+    * _url: url for download
+    '''
     try:
         Request.urlretrieve(_url, _save_path)
         return True
@@ -41,12 +55,22 @@ def download_data(_save_path, _url):
 
 
 class EuroSat(VisionDataset):
+
     def __init__(
         self,
         data_dir,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
     ) -> None:
+        '''
+        EuroSat
+
+        Parameter
+        ----------
+        * data_dir: data folder directory 
+        * transform: Optional, if none, standard normalization will be applied.
+        * target_transform: Optional
+        '''
         super(EuroSat, self).__init__(data_dir, transform=transform, target_transform=target_transform)
         self.data = []
         self.targets = []
@@ -57,7 +81,7 @@ class EuroSat(VisionDataset):
         if not os.path.exists(rootdir + data_dir):
             download_data(rootdir + '/data/EuroSAT_RGB.zip', 'http://madm.dfki.de/files/sentinel/EuroSAT.zip')
             unzip_file(rootdir + '/data/EuroSAT_RGB.zip', rootdir + '/data/EuroSAT_RGB')
-        filepaths = sorted(glob.glob(rootdir + data_dir + '/*/*.jpg')) ##!!for reproducibility, sort them!
+        filepaths = sorted(glob.glob(rootdir + data_dir + '/*/*.jpg'))  ##!!for reproducibility, sort them!
         for filepath in filepaths:
             class_name = filepath.split('/')[-1].split('_')[0]
             class_counter[class_name] += 1
@@ -71,12 +95,12 @@ class EuroSat(VisionDataset):
         self.targets = [self.class_to_idx[x] for x in self.targets]
         self.num_classes = len(class_counter.keys())
 
-        self.mean = TRANSFORM['mean']
-        self.std = TRANSFORM['std']
+        self.MEAN = TRANSFORM['mean']
+        self.STD = TRANSFORM['std']
         if transform is not None:
             self.transform = transform
         else:
-            self.transform = T.Compose([T.ToTensor(), T.Normalize(mean=self.mean, std=self.std)])
+            self.transform = T.Compose([T.ToTensor(), T.Normalize(mean=self.MEAN, std=self.STD)])
 
     def __len__(self) -> int:
         return len(self.data)
@@ -103,17 +127,27 @@ class EuroSat(VisionDataset):
 
         return img, target
 
-    def sampling_to_plot_LR(self, noise_size, **kwargs):
+    def sampling_to_plot_LR(self, noise_size, **kwargs) -> 'Data.DataLoader':
+        '''
+        Intended for the visualization of linear regions. Not used...
+
+        '''
         # idx = np.random.permutation(len(self.data))
         # subset = Data.Subset(self, idx[:noise_size])
         noise = []
+        generator = torch.Generator()
+        generator.manual_seed(10) # fix the grid data for lr counting
         for i in range(3):
-            noise.append(np.random.normal(TRANSFORM['mean'][i], TRANSFORM['std'][i], [noise_size, i, 64, 64]))
-        noise = np.concatenate(noise, axis=1)
+            noise.append(torch.normal(
+                mean=TRANSFORM['mean'][i], 
+                std=TRANSFORM['std'][i], 
+                size=(noise_size, 1, 64, 64),
+                generator=generator))
+        noise = torch.cat(noise, dim=1)
 
-        noise_label = np.zeros(len(noise)) * -1  #np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
-        noise = torch.from_numpy(noise).float()
-        noise_label = torch.from_numpy(noise_label).long()
+        noise_label = torch.zeros(
+            len(noise)) * -1  #np.random.randint(0, 9, size=len(noise))  #TODO: how to set the label of noise?
+        noise_label = noise_label.long()
         dataset = Data.TensorDataset(noise, noise_label)
         loader = Data.DataLoader(dataset, **kwargs)
         return loader
@@ -125,7 +159,8 @@ if __name__ == '__main__':
     import sys
     sys.path.append(os.getcwd())
     import matplotlib.pyplot as plt
-    def restore_stats(img): 
+
+    def restore_stats(img):
         mean = TRANSFORM['mean']
         mean = torch.tensor(mean).unsqueeze(dim=1).unsqueeze(dim=1)
         std = TRANSFORM['std']
@@ -146,7 +181,7 @@ if __name__ == '__main__':
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG), '\n')
-        dataset = EuroSat(data_dir = '/data/EuroSAT_RGB/2750')
+        dataset = EuroSat(data_dir='/data/EuroSAT_RGB/2750')
         dataloader = iter(dataset.sampling_to_plot_LR(2))
         noise = dataloader.next()[0].squeeze()
         img = dataset[1][0]
@@ -159,7 +194,7 @@ if __name__ == '__main__':
         plt.imshow(img)
         plt.subplot(132)
         plt.gca().set_title('image + Gaussian noise')
-        plt.imshow(img_noise)        
+        plt.imshow(img_noise)
         plt.subplot(133)
         plt.gca().set_title('Gaussian noise')
         plt.imshow(noise)

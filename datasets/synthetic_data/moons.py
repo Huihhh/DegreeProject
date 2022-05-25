@@ -1,3 +1,4 @@
+from typing import Tuple
 import numbers
 import numpy as np
 from sklearn.utils import check_random_state
@@ -8,7 +9,15 @@ class Moons(Base):
     NUM_CLASSES = 2
 
     @classmethod
-    def make_data(cls, n_samples, width, gap, noise_ratio=0, noise_level=0, seed=0, *args, **kwargs):
+    def make_data(cls,
+                  n_samples: int,
+                  width: float,
+                  gap: float,
+                  noise_ratio: float=0,
+                  noise_level: float=0,
+                  seed: int=0,
+                  *args,
+                  **kwargs) -> Tuple['np.array', 'np.array']:
         """ Adapted from sklearn.datasets.make_moons
         Make two interleaving half circles.
         A simple toy dataset to visualize clustering and classification
@@ -46,7 +55,8 @@ class Moons(Base):
             try:
                 n_samples_out, n_samples_inner = n_samples
             except ValueError as e:
-                raise ValueError('`n_samples` can be either an int or ' 'a two-element tuple.') from e
+                raise ValueError('`n_samples` can be either an int or '
+                                 'a two-element tuple.') from e
 
         outer_circ_x = np.cos(np.linspace(0, np.pi, n_samples_out))
         outer_circ_y = np.sin(np.linspace(0, np.pi, n_samples_out))
@@ -62,9 +72,19 @@ class Moons(Base):
         return X, y[:, None]
 
     @classmethod
-    def make_trajectory(cls, type='same_class', interval=0.001):
+    def make_trajectory(cls, type: str='same_class', interval: float=0.001) -> Tuple['np.array', 'np.array']:
         '''
-        return the trajectory and its length
+        Generate a moon trajectory(outer moon of the train data) if type=same_class else a diagonal trajectory and its length
+
+        Parameters
+        ---------
+        * type : the type of the trajectory, diagonal or moon
+        * interval : the interval between points
+
+        Return
+        --------
+        * np.array: generated trajectory
+        * np.array: length of the trajectory, size (1,)
         '''
         if type == 'same_class':
             # outer_circ_x = np.cos(np.linspace(0, np.pi, n_samples))
@@ -72,9 +92,10 @@ class Moons(Base):
             outer_circ_x = np.cos(np.arange(0, np.pi, interval))
             outer_circ_y = np.sin(np.arange(0, np.pi, interval))
             xy = np.vstack([outer_circ_x, outer_circ_y]).T
-            traj_len = np.sqrt( np.ediff1d(xy[:, 0], to_begin=0)**2 + np.ediff1d(xy[:, 1], to_begin=0)**2).sum()
+            traj_len = np.sqrt(np.ediff1d(xy[:, 0], to_begin=0)**2 + np.ediff1d(xy[:, 1], to_begin=0)**2).sum()
             return xy, traj_len
         else:
-            x = np.arange(-1, 2, 3*interval/np.sqrt(13))
-            y = np.arange(-1, 1, 2*interval/np.sqrt(13))[::-1]
+            x = np.arange(-1, 2, 3 * interval /
+                          np.sqrt(13))  # to keep the density between points same as when it is within the same class.
+            y = np.arange(-1, 1, 2 * interval / np.sqrt(13))[::-1]
             return np.array([x, y]).T, np.sqrt((x[0] - x[-1])**2 + (y[0] - y[-1])**2)

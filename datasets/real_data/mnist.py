@@ -1,13 +1,11 @@
+import os
+from typing import Callable, Optional
 from torchvision.datasets.vision import VisionDataset
 from torchvision.datasets import MNIST
 from torchvision import transforms as T
 import torch
-import numpy as np
-import torch.utils.data as Data
-
 import hydra
-import os
-from typing import Any, Callable, Optional, Tuple
+
 
 TRANSFORM = {
     'mean': (0.1307, 0.1307, 0.1307),  #(0.4914, 0.4822, 0.4465),  #
@@ -16,7 +14,15 @@ TRANSFORM = {
 
 
 class Mnist(VisionDataset):
-    def __init__(self, data_dir, transform=None) -> None:
+    def __init__(self, data_dir: str, transform: Optional[Callable]=None) -> None:
+        '''
+        Minist dataset
+
+        Parameters
+        -----------
+        * data_dir: data folder directory
+        * transform: optional
+        '''
         rootdir = hydra.utils.get_original_cwd()
         data_dir = os.path.join(rootdir, data_dir)
         downloadFlag = not os.path.exists(data_dir + '/MNIST/raw')

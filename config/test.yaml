@@ -1,29 +1,27 @@
-# * varying train size
-# * fixed test set (seed fixed, sized fixed)
+#TODO: add available choices
 defaults:
-  # - dataset: circles
-  # - model: shallow_nn
-  - init_methods@MODEL.fc_winit: default
+  - dataset: spiral
+  - model: shallow_nn
+  - init_methods@MODEL.fc_winit: normal
   - init_methods@MODEL.fc_binit: default
-  - init_methods@MODEL.bn_winit: ones
-  - init_methods@MODEL.bn_binit: zeros
   - _self_
 
-num_seeds: 20
-use_gpu: True
-
+MODEL:
+  h_nodes: [16,16,16,16]
 # wandb setting
 dryrun: False
 wandb_project: test
 run_name: test
+log_LRimg_every: 
+log_artifact_every:
+log_hdistance_every:
+log_weight_every: 
 
-TH: 0.5 # for predict on sigmoid
-
-
-archs: 
-  circles: [[8,8,8,8], [16,16], [32], [32,32]]
-  moons: [[8,8,8,8,8,8,8,8], [16,16,16,16], [32,32], [64]]
-  spiral: [[32,32], [16,16,16,16], [32,32,32], [96]]
+seed: 0
+use_gpu: True
+debug: False # if debug, don't save checkpoints
+CUDA_VISIBLE_DEVICES: # for local test runs
+early_stop: False
 
 DATASET:
   # data loader
@@ -32,16 +30,27 @@ DATASET:
   n_test: 0.2
   batch_size: 32
   num_workers: 4
-  fixed_valset: 20
 
-MODEL:
-  name: shallow_nn
-  out_dim: 1
-  activation: 'relu' # or leakyRelU
-  use_bn: False
 
- 
+TRAIN: 
+  n_epoch: 500 # 1024
+  th: 0.5 # for sigmoid prediction
+
+  # optimizer
+  lr: 0.001
+  use_scheduler: True
+  warmup: 0
+  # regularization
+  wdecay: 0.0000
+
+  # scheduler
+  scheduler: steplr
+  step_size: 30
+  steplr_gamma: 0.4
+
+  ema_used: False
+  ema_decay: 0.999
 
 hydra:
   run:
-    dir: ./outputs/${run_name}_${now:%Y-%m-%d_%H-%M-%S}
+    dir: ./outputs/${run_name}_${DATASET.name}_${MODEL.fc_winit.name}_${now:%Y-%m-%d_%H-%M-%S}
