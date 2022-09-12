@@ -15,8 +15,8 @@ import plotly.express as px
 from sklearn.preprocessing import LabelEncoder
 
 from datasets.dataset import Dataset
-from models import *
-from experiments._base_trainer import Bicalssifier
+from nn_models import *
+from trainer._base_trainer import Bicalssifier
 from utils import flat_omegadict, set_random_seed
 from utils import get_signatures, visualize_signatures
 

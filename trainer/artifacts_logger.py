@@ -1,5 +1,6 @@
 from typing import Union
 import os
+
 from pytorch_lightning.callbacks import Callback
 import pytorch_lightning as pl
 from omegaconf.listconfig import ListConfig
@@ -9,7 +10,7 @@ import hydra
 import numpy as np
 
 class ArtifactLogger(Callback):
-    LOCAL_MODEL_DIR = '/outputs/checkpoints'
+    LOCAL_MODEL_DIR = 'checkpoints'
 
     def __init__(self, log_every: Union[int, list[int]]) -> None:
         '''
@@ -22,9 +23,9 @@ class ArtifactLogger(Callback):
         super().__init__()
         self.log_every = log_every
         assert isinstance(log_every, (int, list, ListConfig, np.ndarray)), 'invalid type of log_every, must be list or int'
-        self.LOCAL_MODEL_DIR = hydra.utils.get_original_cwd() + self.LOCAL_MODEL_DIR
-        os.makedirs(self.LOCAL_MODEL_DIR, exist_ok=True)
-        self.LOCAL_MODEL_FILE = self.LOCAL_MODEL_DIR + '/model.h5'
+        # self.LOCAL_MODEL_DIR = hydra.utils.get_original_cwd() + self.LOCAL_MODEL_DIR
+        # os.makedirs(self.LOCAL_MODEL_DIR, exist_ok=True)
+        self.LOCAL_MODEL_FILE = 'model.h5'
 
     def on_train_epoch_end(self, trainer: 'pl.trainer', pl_module: 'pl.LightningModule') -> None:
         current_epoch = trainer.current_epoch

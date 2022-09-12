@@ -47,8 +47,8 @@ class ResNet(Module):
         self.layers.append(nn.Linear(h_nodes[-1], out_dim))
         self.fcs = torch.nn.Sequential(*self.layers)
 
-        if fc_winit.name != 'default' or fc_binit.name != 'default':
-            self.reset_parameters(fc_winit, fc_binit)
+        # if fc_winit.name != 'default' or fc_binit.name != 'default':
+        self.reset_parameters(fc_winit, fc_binit)
         # *** ResNet ***
         self.resnet = torch.nn.Sequential(*(list(resnet.children())[:-1]))
         # freeze the pretrained model
@@ -68,17 +68,16 @@ class ResNet(Module):
         * seed: random seed
         '''
         p1 = re.compile(r'^((?!bn).)*weight') #find conv weight
-        p2 = re.compile(r'^((?!bn).)*bias') # excluding bn bias
+        # p2 = re.compile(r'^((?!bn).)*bias') # excluding bn bias
         for i, (name, param) in enumerate(self.named_parameters()):
             torch.random.manual_seed(i + seed)
-            if winit.name != 'default' and p1.search(name):
+            if p1.search(name):
                 eval(winit.func)(param, **winit.params)
                 continue
-            if binit.name != 'default' and p2.search(param):
-                eval(binit.func)(param, **binit.params)
 
     def forward(self, x):
-        x = self.resnet(x).reshape(x.shape[0], -1)
+        x = self.resnet(x)
+        x= x.reshape(x.shape[0], -1)
         x = self.fcs(x)
         return x
     

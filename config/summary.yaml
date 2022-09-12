@@ -1,7 +1,7 @@
 # * varying train size
 # * fixed test set (seed fixed, sized fixed)
 defaults:
-  - dataset: spiral
+  - dataset: eurosat
   - model: shallow_nn
   - init_methods@MODEL.fc_winit: default
   - init_methods@MODEL.fc_binit: default
@@ -9,13 +9,27 @@ defaults:
 
 # wandb setting
 dryrun: False
-wandb_project: degree-project-init-method
+wandb_project: degree-project-EuroSAT
 run_name: summary
 
 
 num_seeds: 6
 use_gpu: True
 CUDA_VISIBLE_DEVICES: # for local test runs
+
+# * #linear regions at init and after train
+# num_seeds has to be 20
+archs: 
+  # circles: [[32], [16,16], [8,8,8,8],[32,32], [16,16,16,16]]
+  # moons: [[64], [32,32], [16,16,16,16],[8,8,8,8,8,8,8,8]]
+  # spiral: [[32,32], [16,16,16,16],[96],[32,32,32], [16,16,16,16,16,16]]
+
+
+DATASET:
+  n_train: 0.7
+  n_val: 0.1
+  n_test: 0.2
+  fixed_valset: 20
 
 MODEL:
   h_nodes: [16,16,16,16]

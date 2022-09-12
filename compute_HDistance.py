@@ -10,7 +10,7 @@ from datasets.dataset import Dataset
 from utils import flat_omegadict, set_random_seed
 from utils.get_signatures import get_signatures
 from utils.utils import hammingDistance
-from models import *
+from nn_models import *
 
  
 @hydra.main(config_path='./config', config_name='sampleEfficiency')

@@ -7,15 +7,13 @@ import torch
 from torch import optim
 import torch.nn.functional as F
 import numpy as np
-import wandb
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
 from utils.ema import EMA
-from utils.utils import accuracy, acc_topk
+from utils.utils import acc_topk
 from utils.lr_schedulers import get_cosine_schedule_with_warmup
-from utils.get_signatures import get_signatures
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +64,7 @@ class Multicalssifier(pl.LightningModule):
             self.ema_model = EMA(self.model, ema_decay)
             logger.info("[EMA] initial ")
         
-
+    
     def init_criterion(self) -> Callable:
         '''
         Generate loss function
@@ -88,7 +86,8 @@ class Multicalssifier(pl.LightningModule):
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.wdecay)
         
         if self.use_scheduler:
-            steps_per_epoch = np.ceil(len(self.dataset.trainset) / self.batch_size)  # eval(self.CFG.steps_per_epoch)
+            trainsize = len(self.dataset.trainset)
+            steps_per_epoch = np.ceil(trainsize / self.batch_size)  # eval(self.CFG.steps_per_epoch)
             total_training_steps = self.n_epoch * steps_per_epoch
             warmup_steps = self.warmup * steps_per_epoch
             scheduler = {
@@ -111,14 +110,19 @@ class Multicalssifier(pl.LightningModule):
             logger.info("[EMA] initial ")
 
 
-    def training_step(self, batch, batch_idx):
-        x, y = batch
+    def training_step(self, batch, batch_idx=None):
+        if hasattr(self.dataset, 'aug_times'):
+            batch0, batch1 = batch
+            x = torch.cat([batch0[0], batch1[0]])
+            y = torch.cat([batch0[1], batch1[1]])
+        else:
+            x, y = batch
         out = self.model.forward(x)
         losses = self.criterion(out, y)
         acc, = acc_topk(out, y)
         for name, metric in losses.items():
-            self.log(f'train.{name}', metric.item(), on_step=False, on_epoch=True)
-        self.log('train.acc', acc, on_step=False, on_epoch=True)
+            self.log(f'train.{name}', metric.item(), on_step=False, on_epoch=True, batch_size=self.batch_size, prog_bar=True, logger=True)
+        self.log('train.acc', acc.item(), on_step=False, on_epoch=True, batch_size=self.batch_size)
         return losses['total_loss']
 
     def training_step_end(self, loss, *args, **kwargs):
@@ -131,25 +135,28 @@ class Multicalssifier(pl.LightningModule):
             self.ema_model.update_buffer()
             self.ema_model.apply_shadow()
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx=None):
         x, y = batch
         out = self.model.forward(x)
         losses = self.criterion(out, y)
         acc, = acc_topk(out, y)
         for name, metric in losses.items():
-            self.log(f'val.{name}', metric.item(), on_step=False, on_epoch=True)
-        self.log('val.acc', acc, on_step=False, on_epoch=True)
+            self.log(f'val.{name}', metric.item(), on_step=False, on_epoch=True, batch_size=self.batch_size)
+        self.log('val.acc', acc.item(), on_step=False, on_epoch=True, batch_size=self.batch_size)
         return acc
 
     def validation_epoch_end(self, *args, **kwargs):
         if self.EMA:
             self.ema_model.restore()
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_idx=None):
         x, y = batch
         out = self.model.forward(x)
         losses = self.criterion(out, y)
         acc, = acc_topk(out, y)
-        self.log('test', {**losses, 'acc': acc})
+        self.log('test', {**losses, 'acc': acc.item()})
         return acc
+    
+        
+
 

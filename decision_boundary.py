@@ -15,7 +15,7 @@ import plotly.express as px
 from sklearn.preprocessing import LabelEncoder
 
 from datasets.dataset import Dataset
-from models import *
+from nn_models import *
 from utils import flat_omegadict, set_random_seed
 from utils import get_signatures, visualize_signatures
 

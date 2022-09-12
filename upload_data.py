@@ -10,8 +10,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, Ea
 from pytorch_lightning.loggers import WandbLogger
 
 from datasets.dataset import Dataset
-from models import *
-from experiments._base_trainer import Bicalssifier
+from nn_models import *
+from trainer._base_trainer import Bicalssifier
 from utils import flat_omegadict, set_random_seed
 
 

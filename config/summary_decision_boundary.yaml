@@ -5,8 +5,6 @@ defaults:
   # - model: shallow_nn
   - init_methods@MODEL.fc_winit: default
   - init_methods@MODEL.fc_binit: default
-  - init_methods@MODEL.bn_winit: ones
-  - init_methods@MODEL.bn_binit: zeros
   - _self_
 
 num_seeds: 20

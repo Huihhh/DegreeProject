@@ -1,7 +1,8 @@
 #@package _global_
 DATASET:
     name: eurosat
-    data_dir: '/data/EuroSAT_RGB/2750'
+    data_dir: 'data/EuroSAT_RGB/2750'
     shuffle: False
     use_aug: False
     flip_p: 0.2
+    aug_times: 1
