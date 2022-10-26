@@ -107,7 +107,7 @@ if __name__ == "__main__":
     @hydra.main(config_name='config', config_path='../config')
     def main(CFG: DictConfig):
         print('==> CONFIG is \n', OmegaConf.to_yaml(CFG.MODEL), '\n')
-        net = ResNet(**CFG.MODEL, dropout=0)
+        net = ResNet(**CFG.MODEL)
         print(net)
 
     main()

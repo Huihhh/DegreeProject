@@ -307,7 +307,7 @@ if __name__ == '__main__':
     import os
     import sys
     sys.path.append(os.getcwd())
-    from nn_models.dnn import SimpleNet
+    from models.dnn import SimpleNet
     from datasets.dataset import Dataset
 
     @hydra.main(config_name='config', config_path='../config')

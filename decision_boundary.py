@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, './artifacts')
+sys.path.insert(0, './models')
 import logging
 import io
 
@@ -15,7 +18,7 @@ import plotly.express as px
 from sklearn.preprocessing import LabelEncoder
 
 from datasets.dataset import Dataset
-from nn_models import *
+from models import *
 from utils import flat_omegadict, set_random_seed
 from utils import get_signatures, visualize_signatures
 
@@ -117,6 +120,7 @@ def visualize_LR_group(cfg_data: dict, cfg_model: dict, archs: list[list[int]], 
         # column_widths=[0.51, 0.49],
         # row_heights=[0.5, 0.5]
     )
+    fig.update_annotations(font_size=28) # subplot titles are annotations
 
     for c, col in enumerate(subplots):
         for layer in col[0]:
@@ -131,7 +135,10 @@ def visualize_LR_group(cfg_data: dict, cfg_model: dict, archs: list[list[int]], 
         width=1800 if cfg_data['name'] == 'moons' else 1600,
         height=700,
         showlegend=False,
-        yaxis_title=stage,
+        # yaxis_title=stage,
+        font=dict(
+            size=24
+        )
     )
     for row in range(2):
         for col in range(len(subplots)):
@@ -144,7 +151,7 @@ def visualize_LR_group(cfg_data: dict, cfg_model: dict, archs: list[list[int]], 
     return html, num_lr
 
 
-@hydra.main(config_path='./config', config_name='decision_boundary')
+@hydra.main(config_path='./config', config_name='summary_decision_boundary')
 def main(CFG: DictConfig) -> None:
     # initial logging file
     logger.info(OmegaConf.to_yaml(CFG))
@@ -188,10 +195,13 @@ def main(CFG: DictConfig) -> None:
     #     wandb.log({f'linear region density - {stage}': wandb.Html(html)})
     fig = px.box(num_lr, x='data-stage', y='linear region density',
                 color='hidden layers')
-    # fig.update_layout(
-    #     paper_bgcolor='rgba(0,0,0,0)',
-    #     plot_bgcolor='rgba(0,0,0,0)',
-    # )
+    fig.update_layout(
+        # paper_bgcolor='rgba(0,0,0,0)',
+        # plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(
+            size=30
+        )
+    )
     # fig2.show()
     buffer = io.StringIO()
     fig.write_html(buffer)

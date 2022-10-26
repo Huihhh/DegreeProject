@@ -10,7 +10,7 @@ from omegaconf import DictConfig, OmegaConf
 import hydra
 
 from datasets.dataset import Dataset
-from nn_models import *
+from models import *
 from utils import set_random_seed, flat_omegadict, get_signatures
 from utils.init_methods import normal_custom
 

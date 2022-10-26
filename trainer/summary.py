@@ -16,7 +16,7 @@ from plotly.subplots import make_subplots
 import plotly.express as px
 from sklearn.preprocessing import LabelEncoder
 from utils import get_signatures, visualize_signatures
-from nn_models import *
+from models import *
 
 from datasets.dataset import Dataset
 
@@ -155,6 +155,11 @@ class Summary:
             wandb.log({f"LinearRegions/{DATASET['name']}_trained": wandb.Html(html)})
 
         fig = px.box(num_lr, x='data-stage', y='linear region density', color='hidden layers')
+        fig.update_layout(
+            font=dict(
+                size=28
+            )
+        )
         html = fig2html(fig)
         wandb.log({f'linear region density': wandb.Html(html)})
         wandb.finish()
@@ -366,6 +371,9 @@ def visualize_LR_group(data_cfg: dict,
         height=700,
         showlegend=False,
         yaxis_title=stage,
+        font=dict(
+            size=28
+        )
     )
     for row in range(2):
         for col in range(len(subplots)):

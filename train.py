@@ -14,7 +14,7 @@ from trainer.artifacts_logger import ArtifactLogger
 
 from datasets.dataset import Dataset
 from trainer.weight_logger import WeightLogger
-from nn_models import *
+from models import *
 from trainer._base_trainer import Bicalssifier
 from trainer._base_trainer_multiclass import Multicalssifier
 from utils import flat_omegadict, set_random_seed
